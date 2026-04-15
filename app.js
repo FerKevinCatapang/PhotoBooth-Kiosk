@@ -32,7 +32,13 @@ let appConfig = {
     printMode: 'dialog',
     printServer: '',     // e.g. "http://192.168.1.50:3000"
     selectedCameraId: '', // deviceId chosen in Capture Settings
-    facingMode: 'user'    // 'user' = front cam, 'environment' = rear cam, '' = specific device
+    facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
+    // Google Drive (Method A - browser OAuth)
+    driveUpload: false,
+    driveClientId: '',
+    driveFolderName: 'Photo Booth Captures',
+    _driveAccessToken: null,
+    _driveFolderId: null
 };
 
 // --- Filename generator: eventName_YYYYMMDD_HHMMSS.png ---
@@ -468,6 +474,164 @@ $(document).ready(function() {
         });
     }
 
+    // =====================================================================
+    // GOOGLE DRIVE — Method A (Browser OAuth via Google Identity Services)
+    // =====================================================================
+
+    const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+    function _driveSetStatus(msg, isError) {
+        const el = document.getElementById('drive-auth-status');
+        if (!el) return;
+        el.textContent = msg;
+        el.style.color = isError ? '#ef4444' : '#16a34a';
+    }
+
+    // Request an access token via the GIS token client
+    function _driveRequestToken() {
+        return new Promise((resolve, reject) => {
+            if (!appConfig.driveClientId) {
+                reject(new Error('No Client ID configured. Enter it in the Google Drive panel.'));
+                return;
+            }
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: appConfig.driveClientId,
+                scope: DRIVE_SCOPES,
+                callback: (resp) => {
+                    if (resp.error) { reject(new Error(resp.error)); return; }
+                    appConfig._driveAccessToken = resp.access_token;
+                    appConfig._driveFolderId = null; // reset folder cache on new token
+                    resolve(resp.access_token);
+                }
+            });
+            client.requestAccessToken({ prompt: '' });
+        });
+    }
+
+    // Ensure we have a valid token (re-request silently if missing)
+    async function _driveEnsureToken() {
+        if (appConfig._driveAccessToken) return appConfig._driveAccessToken;
+        return _driveRequestToken();
+    }
+
+    // Find or create the target folder; returns folderId
+    async function _driveEnsureFolder(token) {
+        if (appConfig._driveFolderId) return appConfig._driveFolderId;
+        const folderName = appConfig.driveFolderName || 'Photo Booth Captures';
+        // Search for existing folder
+        const query = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${folderName.replace(/'/g,"\\'")}' and trashed=false`);
+        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
+            headers: { Authorization: 'Bearer ' + token }
+        });
+        const searchData = await searchResp.json();
+        if (searchData.files && searchData.files.length > 0) {
+            appConfig._driveFolderId = searchData.files[0].id;
+            return appConfig._driveFolderId;
+        }
+        // Create the folder
+        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder' })
+        });
+        const folder = await createResp.json();
+        appConfig._driveFolderId = folder.id;
+        return folder.id;
+    }
+
+    // Upload a Blob to Drive inside the configured folder
+    async function uploadToDrive(blob, filename) {
+        try {
+            const token = await _driveEnsureToken();
+            const folderId = await _driveEnsureFolder(token);
+            const meta = JSON.stringify({ name: filename, parents: [folderId] });
+            const form = new FormData();
+            form.append('metadata', new Blob([meta], { type: 'application/json' }));
+            form.append('file', blob, filename);
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + token },
+                body: form
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                // Token may have expired — clear and retry once
+                if (resp.status === 401) {
+                    appConfig._driveAccessToken = null;
+                    const token2 = await _driveEnsureToken();
+                    const form2 = new FormData();
+                    form2.append('metadata', new Blob([meta], { type: 'application/json' }));
+                    form2.append('file', blob, filename);
+                    const resp2 = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
+                        method: 'POST',
+                        headers: { Authorization: 'Bearer ' + token2 },
+                        body: form2
+                    });
+                    if (!resp2.ok) throw new Error('Drive upload failed after retry');
+                    return resp2.json();
+                }
+                throw new Error((err.error && err.error.message) || 'Drive upload failed');
+            }
+            return resp.json();
+        } catch (e) {
+            console.warn('[Drive] Upload error:', e.message);
+            throw e;
+        }
+    }
+
+    // UI: toggle
+    $('#toggle-drive-upload').on('change', function() {
+        appConfig.driveUpload = this.checked;
+        $('#toggle-drive-label').text(this.checked ? 'ON' : 'OFF');
+        $(this.closest('label')).toggleClass('is-on', this.checked);
+    });
+
+    // UI: Client ID input
+    $('#drive-client-id').on('input', function() {
+        appConfig.driveClientId = this.value.trim();
+        appConfig._driveAccessToken = null;
+        appConfig._driveFolderId = null;
+    });
+
+    // UI: Folder name input
+    $('#drive-folder-name').on('input', function() {
+        appConfig.driveFolderName = this.value.trim() || 'Photo Booth Captures';
+        appConfig._driveFolderId = null; // reset folder cache
+    });
+
+    // UI: Sign in button
+    $('#btn-drive-signin').on('click', async function() {
+        const btn = $(this);
+        if (!appConfig.driveClientId) {
+            _driveSetStatus('Enter your Client ID first.', true);
+            return;
+        }
+        btn.prop('disabled', true).text('Signing in…');
+        _driveSetStatus('');
+        try {
+            await _driveRequestToken();
+            _driveSetStatus('✓ Connected — photos will upload automatically', false);
+            btn.hide();
+            $('#btn-drive-signout').show();
+        } catch (e) {
+            _driveSetStatus('Sign-in failed: ' + e.message, true);
+        } finally {
+            btn.prop('disabled', false).text('Sign in with Google');
+        }
+    });
+
+    // UI: Sign out button
+    $('#btn-drive-signout').on('click', function() {
+        if (appConfig._driveAccessToken) {
+            google.accounts.oauth2.revoke(appConfig._driveAccessToken, () => {});
+        }
+        appConfig._driveAccessToken = null;
+        appConfig._driveFolderId = null;
+        $(this).hide();
+        $('#btn-drive-signin').show();
+        _driveSetStatus('Signed out', false);
+    });
+
     // --- Camera selection ---
     async function populateCameraList() {
         try {
@@ -822,6 +986,18 @@ $(document).ready(function() {
         const photoDataUrl = canvas.toDataURL('image/png', 0.8);
         capturedPhotos.unshift(photoDataUrl);
         updateDashboardGallery();
+
+        // AUTO-UPLOAD TO GOOGLE DRIVE (Method A) — fire-and-forget, non-blocking
+        if (appConfig.driveUpload && appConfig.driveClientId) {
+            canvas.toBlob(async function(blob) {
+                try {
+                    await uploadToDrive(blob, filename);
+                    console.log('[Drive] Uploaded:', filename);
+                } catch (e) {
+                    console.warn('[Drive] Upload failed:', e.message);
+                }
+            }, 'image/jpeg', 0.92);
+        }
 
         $('#processing-overlay').fadeOut(200);
 
