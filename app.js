@@ -44,9 +44,16 @@ let appConfig = {
 // 1. Go to console.cloud.google.com → APIs & Services → Credentials
 // 2. Create OAuth 2.0 Client ID → Web application
 // 3. Add your site URL (or http://localhost) as an Authorized JS Origin
-// 4. Paste the Client ID below — users will only ever see "Sign in with Google"
+// 4. Paste the Client ID below — users can also override it in the Drive panel UI
 const GOOGLE_DRIVE_CLIENT_ID = '1005976603326-rdevbnd8dgg3dd7844cgrkuv07hf1o05.apps.googleusercontent.com';
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Returns the active Client ID: UI input field takes priority, falls back to the hardcoded constant
+function _getDriveClientId() {
+    const el = document.getElementById('drive-client-id');
+    const inputVal = el ? el.value.trim() : '';
+    return inputVal || GOOGLE_DRIVE_CLIENT_ID;
+}
 
 // --- Filename generator: eventName_YYYYMMDD_HHMMSS.png ---
 function makeFilename() {
@@ -497,12 +504,13 @@ $(document).ready(function() {
     // Request an access token via the GIS token client
     function _driveRequestToken() {
         return new Promise((resolve, reject) => {
-            if (!GOOGLE_DRIVE_CLIENT_ID || GOOGLE_DRIVE_CLIENT_ID.startsWith('YOUR_CLIENT')) {
-                reject(new Error('No Client ID configured. Open app.js and set GOOGLE_DRIVE_CLIENT_ID.'));
+            const clientId = _getDriveClientId();
+            if (!clientId || clientId.startsWith('YOUR_CLIENT')) {
+                reject(new Error('No Client ID configured.'));
                 return;
             }
             const client = google.accounts.oauth2.initTokenClient({
-                client_id: GOOGLE_DRIVE_CLIENT_ID,
+                client_id: clientId,
                 scope: DRIVE_SCOPES,
                 callback: (resp) => {
                     if (resp.error) { reject(new Error(resp.error)); return; }
@@ -602,8 +610,9 @@ $(document).ready(function() {
     // UI: Sign in button
     $('#btn-drive-signin').on('click', async function() {
         const btn = $(this);
-        if (!GOOGLE_DRIVE_CLIENT_ID || GOOGLE_DRIVE_CLIENT_ID.startsWith('YOUR_CLIENT')) {
-            _driveSetStatus('App not configured. Set GOOGLE_DRIVE_CLIENT_ID in app.js.', true);
+        const clientId = _getDriveClientId();
+        if (!clientId || clientId.startsWith('YOUR_CLIENT')) {
+            _driveSetStatus('Enter your Client ID above first.', true);
             return;
         }
         btn.prop('disabled', true).text('Signing in…');
@@ -988,7 +997,7 @@ $(document).ready(function() {
         updateDashboardGallery();
 
         // AUTO-UPLOAD TO GOOGLE DRIVE (Method A) — fire-and-forget, non-blocking
-        if (appConfig.driveUpload && GOOGLE_DRIVE_CLIENT_ID && !GOOGLE_DRIVE_CLIENT_ID.startsWith('YOUR_CLIENT')) {
+        if (appConfig.driveUpload && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
                     await uploadToDrive(blob, filename);
