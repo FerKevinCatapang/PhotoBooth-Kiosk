@@ -16,6 +16,8 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="manifest" href="manifest.json">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Google Identity Services (for Drive OAuth) -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -387,6 +389,7 @@
                 <a href="#" class="nav-item" data-target="panel-welcome"><span class="icon">📱</span> Welcome screen</a>
                 <a href="#" class="nav-item" data-target="panel-template"><span class="icon">🖼️</span> Photo Template</a>
                 <a href="#" class="nav-item" data-target="panel-printer"><span class="icon">🖨️</span> Printer Setup</a>
+                <a href="#" class="nav-item" data-target="panel-drive"><span class="icon">☁️</span> Google Drive</a>
             </nav>
             
             <div class="sidebar-footer">
@@ -1212,12 +1215,105 @@
 
             </div>
 
+            <!-- PANEL: GOOGLE DRIVE -->
+            <div id="panel-drive" class="admin-panel" style="display: none;">
+                <div class="content-header">
+                    <h1>Google Drive</h1>
+                </div>
+
+                <!-- Auto-upload toggle -->
+                <div class="settings-section">
+                    <div class="settings-card feature-toggle-row">
+                        <div class="feature-toggle-left">
+                            <div class="feature-icon">
+                                <svg width="26" height="26" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg" fill="none">
+                                    <path d="M6.6 66.85l3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8H0c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                                    <path d="M43.65 25L29.9 1.2C28.55 2 27.4 3.1 26.6 4.5L1.2 48.5C.4 49.9 0 51.45 0 53h27.5z" fill="#00ac47"/>
+                                    <path d="M73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5H59.8L73.55 76.8z" fill="#ea4335"/>
+                                    <path d="M43.65 25L57.4 1.2C56.05.4 54.5 0 52.9 0H34.4c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                                    <path d="M59.8 53H27.5L13.75 76.8c1.35.8 2.9 1.2 4.5 1.2h50.3c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                                    <path d="M73.4 26.5l-12.8-22.2C59.8 2.9 58.65 1.8 57.3 1l-13.65 24L59.9 53h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="feature-title">Auto-upload to Google Drive</div>
+                                <div class="feature-subtitle">Save every captured photo to a folder in your Google Drive automatically</div>
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-drive-upload">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label" id="toggle-drive-label">OFF</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Method A: Browser OAuth (tablet/phone) -->
+                <div class="settings-section">
+                    <h3 class="section-title">Method A — Browser Sign-In <span style="font-size:0.78rem; font-weight:500; color:#9ca3af;">(recommended for tablets &amp; phones)</span></h3>
+                    <p style="color:#6b7280; font-size:0.88rem; margin-bottom:1rem;">Sign in once with your Google account. Photos upload directly from the browser — no server needed.</p>
+
+                    <div class="settings-card" style="gap:1rem;">
+                        <div>
+                            <label class="form-label">Google OAuth Client ID</label>
+                            <input type="text" id="drive-client-id" class="text-input" placeholder="123456789-xxxx.apps.googleusercontent.com" autocomplete="off" spellcheck="false">
+                            <p style="font-size:0.76rem; color:#9ca3af; margin-top:0.3rem;">Create this at <strong>console.cloud.google.com</strong> → Credentials → OAuth 2.0 Client ID → Web application. Add your site URL as an Authorized JS Origin.</p>
+                        </div>
+                        <div>
+                            <label class="form-label">Drive folder name <span style="font-weight:400; color:#9ca3af;">(will be created if it doesn't exist)</span></label>
+                            <input type="text" id="drive-folder-name" class="text-input" placeholder="Photo Booth Captures" value="Photo Booth Captures">
+                        </div>
+                        <div style="display:flex; gap:0.75rem; align-items:center; flex-wrap:wrap;">
+                            <button id="btn-drive-signin" class="btn-primary" style="min-width:160px;">
+                                Sign in with Google
+                            </button>
+                            <button id="btn-drive-signout" class="btn-outline" style="display:none;">
+                                Sign out
+                            </button>
+                            <span id="drive-auth-status" style="font-size:0.85rem; color:#6b7280;"></span>
+                        </div>
+                    </div>
+
+                    <details style="margin-top:0.75rem;">
+                        <summary style="cursor:pointer; font-weight:600; font-size:0.9rem; color:#374151; padding:0.5rem 0;">How to get a Client ID (step by step)</summary>
+                        <div class="info-box" style="margin-top:0.5rem; flex-direction:column; align-items:flex-start; gap:0.25rem; font-size:0.82rem;">
+                            <ol style="padding-left:1.25rem; line-height:1.9;">
+                                <li>Go to <strong>console.cloud.google.com</strong> and create a new project.</li>
+                                <li>Left menu → <strong>APIs &amp; Services</strong> → <strong>Library</strong> → search and enable <strong>Google Drive API</strong>.</li>
+                                <li>Left menu → <strong>Credentials</strong> → <strong>Create Credentials</strong> → <strong>OAuth 2.0 Client ID</strong>.</li>
+                                <li>Application type: <strong>Web application</strong>.</li>
+                                <li>Under <em>Authorized JavaScript origins</em> add: <code>http://localhost</code> (for local), plus your hosted URL if applicable (e.g. <code>https://yoursite.netlify.app</code>).</li>
+                                <li>Click <strong>Create</strong>, copy the <strong>Client ID</strong> and paste it above.</li>
+                                <li>You may also need to add yourself as a Test User under <strong>OAuth consent screen</strong> while the app is in testing mode.</li>
+                            </ol>
+                        </div>
+                    </details>
+                </div>
+
+                <!-- Method B: Print server service account (laptop) -->
+                <div class="settings-section">
+                    <h3 class="section-title">Method B — Laptop Print Server <span style="font-size:0.78rem; font-weight:500; color:#9ca3af;">(silent, automatic)</span></h3>
+                    <p style="color:#6b7280; font-size:0.88rem; margin-bottom:1rem;">Your laptop runs the print server, which also uploads photos to Drive silently using a service account — no login popup, perfect for a kiosk. Enable <strong>Local Print Server</strong> mode in Printer Setup first.</p>
+
+                    <details>
+                        <summary style="cursor:pointer; font-weight:600; font-size:0.9rem; color:#374151; padding:0.5rem 0;">Setup guide for print server Drive upload</summary>
+                        <div class="info-box" style="margin-top:0.5rem; flex-direction:column; align-items:flex-start; gap:0.25rem; font-size:0.82rem;">
+                            <ol style="padding-left:1.25rem; line-height:1.9;">
+                                <li>In Google Cloud Console, go to <strong>IAM &amp; Admin</strong> → <strong>Service Accounts</strong> → create a service account.</li>
+                                <li>Click the service account → <strong>Keys</strong> → <strong>Add Key</strong> → <strong>JSON</strong>. Download the file.</li>
+                                <li>Copy it to your <code>print-server/</code> folder and name it <code>service-account.json</code>.</li>
+                                <li>In Google Drive, create a folder (e.g. <em>Photo Booth Captures</em>). Right-click → <strong>Share</strong> → paste the service account email (found in the JSON file under <code>client_email</code>) and give it <strong>Editor</strong> access.</li>
+                                <li>In <code>print-server/server.js</code>, set the <code>DRIVE_FOLDER_ID</code> variable to the folder's ID (the string after <code>/folders/</code> in the Drive URL).</li>
+                                <li>Run <code>npm install</code> inside <code>print-server/</code> to install the <code>googleapis</code> package, then restart the server.</li>
+                            </ol>
+                        </div>
+                    </details>
+                </div>
+            </div>
+
         </main>
     </div>
 
-    <!-- ========================================== -->
-    <!-- 2. KIOSK MODE (Welcome -> Booth Loop)      -->
-    <!-- ========================================== -->
     <div id="kiosk-mode" class="kiosk-wrapper" style="display: none;">
         
         <div id="guest-welcome" class="welcome-overlay">
