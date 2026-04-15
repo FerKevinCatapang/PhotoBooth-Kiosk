@@ -266,7 +266,7 @@
                                         <span style="font-size:1.5rem;">🎬</span>
                                         <p style="font-weight:600; margin:0; color:#374151; font-size:0.9rem;">Click or drag image / video</p>
                                         <p style="margin:0; color:#9ca3af; font-size:0.78rem;">JPG, PNG &middot; MP4, MOV, WEBM</p>
-                                        <button class="btn-outline btn-upload" onclick="event.stopPropagation(); $('#wiz-ws-media-input').trigger('click');">Choose File</button>
+                                        <button class="btn-outline btn-upload" id="wiz-btn-pick-media">Choose File</button>
                                     </div>
                                     <div id="wiz-ws-media-filled" style="display:none; padding:0.75rem;">
                                         <div id="wiz-ws-thumb-wrap" style="width:100%; border-radius:6px; overflow:hidden; aspect-ratio:16/9; background:#000;"></div>
@@ -821,7 +821,7 @@
                                     <span style="font-size:2rem;">🖼️</span>
                                     <p style="font-weight:600; margin:0; color:#374151;">Click or drag image / video</p>
                                     <p style="margin:0; color:#9ca3af; font-size:0.8rem;">JPG, PNG, GIF &middot; MP4, MOV, WEBM</p>
-                                    <button class="btn-outline btn-upload" onclick="event.stopPropagation(); $('#ws-media-input').trigger('click');">Choose File</button>
+                                        <button class="btn-outline btn-upload" id="btn-pick-ws-media">Choose File</button>
                                 </div>
                                 <div id="ws-media-filled" style="display:none; padding:0.75rem;">
                                     <div id="ws-media-thumb-wrap" style="width:100%; border-radius:6px; overflow:hidden; aspect-ratio:16/9; background:#000;"></div>
