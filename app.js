@@ -475,7 +475,11 @@ $(document).ready(function() {
             let selectedDeviceId = externalCam ? externalCam.deviceId : (videoInputs.length > 0 ? videoInputs[0].deviceId : undefined);
 
             const constraints = {
-                video: { deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined, width: { ideal: 1920 }, height: { ideal: 1080 } }
+                video: {
+                    deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+                    width:  { ideal: 4096 },
+                    height: { ideal: 3072 }
+                }
             };
 
             currentStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -623,7 +627,7 @@ $(document).ready(function() {
             triggerFlash();
             await new Promise(r => setTimeout(r, 150)); // let flash peak before capture
             const slot = photoSlots[i];
-            drawPhoto(stripCtx, video, slot.x, slot.y, slot.w, slot.h);
+            await drawPhoto(stripCtx, video, slot.x, slot.y, slot.w, slot.h);
         }
 
         previewCanvas.width = cWidth;
@@ -671,20 +675,49 @@ $(document).ready(function() {
         return { cWidth: pW, cHeight: pH, photoSlots };
     }
 
-    function drawPhoto(ctx, video, x, y, slotW, slotH) {
-        const fW = video.videoWidth;
-        const fH = video.videoHeight;
-        // Cover-fit with center crop so photos always fill the slot correctly
+    /**
+     * Capture one photo into the layout slot.
+     * Tries ImageCapture.takePhoto() first (full camera sensor resolution — Chrome/Android).
+     * Falls back to drawing the current video frame (Safari, Firefox, older browsers).
+     */
+    async function drawPhoto(ctx, video, x, y, slotW, slotH) {
+        let source = null;
+        let usedImageCapture = false;
+
+        if (currentStream && typeof ImageCapture !== 'undefined') {
+            try {
+                const track = currentStream.getVideoTracks()[0];
+                const ic = new ImageCapture(track);
+                const blob = await ic.takePhoto();
+                source = await createImageBitmap(blob);
+                usedImageCapture = true;
+            } catch (e) {
+                console.warn('[drawPhoto] ImageCapture failed, using video frame:', e.message);
+                source = null;
+            }
+        }
+
+        const src = source || video;
+        const fW = src.width  || src.videoWidth;
+        const fH = src.height || src.videoHeight;
+
         const scale = Math.max(slotW / fW, slotH / fH);
-        const srcW = Math.round(slotW / scale);
-        const srcH = Math.round(slotH / scale);
-        const srcX = Math.max(0, Math.round((fW - srcW) / 2));
-        const srcY = Math.max(0, Math.round((fH - srcH) / 2));
+        const srcW  = Math.round(slotW / scale);
+        const srcH  = Math.round(slotH / scale);
+        const srcX  = Math.max(0, Math.round((fW - srcW) / 2));
+        const srcY  = Math.max(0, Math.round((fH - srcH) / 2));
+
         ctx.save();
+        // Mirror horizontally — video feed is shown mirrored (selfie UX);
+        // the saved photo is also mirrored so text / pose reads naturally in prints.
         ctx.translate(x + slotW, y);
         ctx.scale(-1, 1);
-        ctx.drawImage(video, srcX, srcY, srcW, srcH, 0, 0, slotW, slotH);
+        ctx.drawImage(src, srcX, srcY, srcW, srcH, 0, 0, slotW, slotH);
         ctx.restore();
+
+        if (usedImageCapture && source instanceof ImageBitmap) {
+            source.close(); // free GPU memory immediately
+        }
     }
 
     async function processAndSaveImage(canvas) {
