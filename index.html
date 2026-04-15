@@ -373,10 +373,7 @@
         
         <aside class="sidebar">
             <div class="sidebar-header">
-                <a href="#" class="back-link">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
-                    Back to events
-                </a>
+                <button id="btn-launch-booth" class="btn-primary w-100">🚀 Launch Kiosk Mode</button>
             </div>
             
             <nav class="nav-menu">
@@ -393,7 +390,6 @@
             </nav>
             
             <div class="sidebar-footer">
-                <button id="btn-launch-booth" class="btn-primary w-100">Launch Kiosk Mode</button>
             </div>
         </aside>
 
@@ -1251,6 +1247,11 @@
                 <!-- Sign in section -->
                 <div class="settings-section">
                     <div class="settings-card" style="gap:1rem;">
+                        <div>
+                            <label class="form-label">Google OAuth Client ID</label>
+                            <input type="text" id="drive-client-id" class="text-input" placeholder="123456789-xxxx.apps.googleusercontent.com" autocomplete="off" spellcheck="false">
+                            <p style="font-size:0.76rem; color:#9ca3af; margin-top:0.3rem;">Paste your Client ID from <strong>console.cloud.google.com</strong> → Credentials. Leave blank to use the built-in default.</p>
+                        </div>
                         <div>
                             <label class="form-label">Save photos to folder <span style="font-weight:400; color:#9ca3af;">(created automatically if it doesn't exist)</span></label>
                             <input type="text" id="drive-folder-name" class="text-input" placeholder="Photo Booth Captures" value="Photo Booth Captures" style="max-width:340px;">
