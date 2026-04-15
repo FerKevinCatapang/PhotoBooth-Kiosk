@@ -480,13 +480,35 @@
                 <!-- Camera Selection -->
                 <div class="settings-section">
                     <h3 class="section-title">Camera</h3>
+
+                    <!-- Facing mode (mobile/tablet) -->
+                    <div class="settings-card" style="margin-bottom:0.75rem;">
+                        <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.6rem;">Camera Side <span style="font-weight:400; color:#9ca3af;">(phone / tablet)</span></label>
+                        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                            <label class="facing-btn" id="facing-user-lbl">
+                                <input type="radio" name="facing-mode" value="user" checked>
+                                <span>&#128100; Front (Selfie)</span>
+                            </label>
+                            <label class="facing-btn" id="facing-env-lbl">
+                                <input type="radio" name="facing-mode" value="environment">
+                                <span>&#128247; Rear (Main)</span>
+                            </label>
+                            <label class="facing-btn" id="facing-any-lbl">
+                                <input type="radio" name="facing-mode" value="">
+                                <span>&#128250; Use Specific Camera</span>
+                            </label>
+                        </div>
+                        <p style="margin:0.45rem 0 0; font-size:0.78rem; color:#9ca3af;">Select <em>Front</em> or <em>Rear</em> to let the device pick automatically. Choose <em>Use Specific Camera</em> to manually select from the list below.</p>
+                    </div>
+
+                    <!-- Specific device dropdown -->
                     <div class="settings-card" style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
                         <div style="flex:1; min-width:0;">
-                            <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Active Camera</label>
+                            <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Specific Camera Device</label>
                             <select id="camera-select" class="text-input" style="width:100%; max-width:420px; cursor:pointer;">
                                 <option value="">— detecting cameras… —</option>
                             </select>
-                            <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Only cameras connected at the time of this page loading appear here. Plug in a camera and click Refresh.</p>
+                            <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Only relevant when <em>Use Specific Camera</em> is selected above. Plug in a camera and click Refresh.</p>
                         </div>
                         <button id="btn-refresh-cameras" class="btn-outline" style="white-space:nowrap; flex-shrink:0;">
                             ↺ Refresh
