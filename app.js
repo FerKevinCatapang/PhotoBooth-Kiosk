@@ -35,11 +35,18 @@ let appConfig = {
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
     // Google Drive (Method A - browser OAuth)
     driveUpload: false,
-    driveClientId: '',
     driveFolderName: 'Photo Booth Captures',
     _driveAccessToken: null,
     _driveFolderId: null
 };
+
+// ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
+// 1. Go to console.cloud.google.com → APIs & Services → Credentials
+// 2. Create OAuth 2.0 Client ID → Web application
+// 3. Add your site URL (or http://localhost) as an Authorized JS Origin
+// 4. Paste the Client ID below — users will only ever see "Sign in with Google"
+const GOOGLE_DRIVE_CLIENT_ID = '1005976603326-rdevbnd8dgg3dd7844cgrkuv07hf1o05.apps.googleusercontent.com';
+// ─────────────────────────────────────────────────────────────────────────────
 
 // --- Filename generator: eventName_YYYYMMDD_HHMMSS.png ---
 function makeFilename() {
@@ -490,12 +497,12 @@ $(document).ready(function() {
     // Request an access token via the GIS token client
     function _driveRequestToken() {
         return new Promise((resolve, reject) => {
-            if (!appConfig.driveClientId) {
-                reject(new Error('No Client ID configured. Enter it in the Google Drive panel.'));
+            if (!GOOGLE_DRIVE_CLIENT_ID || GOOGLE_DRIVE_CLIENT_ID.startsWith('YOUR_CLIENT')) {
+                reject(new Error('No Client ID configured. Open app.js and set GOOGLE_DRIVE_CLIENT_ID.'));
                 return;
             }
             const client = google.accounts.oauth2.initTokenClient({
-                client_id: appConfig.driveClientId,
+                client_id: GOOGLE_DRIVE_CLIENT_ID,
                 scope: DRIVE_SCOPES,
                 callback: (resp) => {
                     if (resp.error) { reject(new Error(resp.error)); return; }
@@ -586,13 +593,6 @@ $(document).ready(function() {
         $(this.closest('label')).toggleClass('is-on', this.checked);
     });
 
-    // UI: Client ID input
-    $('#drive-client-id').on('input', function() {
-        appConfig.driveClientId = this.value.trim();
-        appConfig._driveAccessToken = null;
-        appConfig._driveFolderId = null;
-    });
-
     // UI: Folder name input
     $('#drive-folder-name').on('input', function() {
         appConfig.driveFolderName = this.value.trim() || 'Photo Booth Captures';
@@ -602,8 +602,8 @@ $(document).ready(function() {
     // UI: Sign in button
     $('#btn-drive-signin').on('click', async function() {
         const btn = $(this);
-        if (!appConfig.driveClientId) {
-            _driveSetStatus('Enter your Client ID first.', true);
+        if (!GOOGLE_DRIVE_CLIENT_ID || GOOGLE_DRIVE_CLIENT_ID.startsWith('YOUR_CLIENT')) {
+            _driveSetStatus('App not configured. Set GOOGLE_DRIVE_CLIENT_ID in app.js.', true);
             return;
         }
         btn.prop('disabled', true).text('Signing in…');
@@ -988,7 +988,7 @@ $(document).ready(function() {
         updateDashboardGallery();
 
         // AUTO-UPLOAD TO GOOGLE DRIVE (Method A) — fire-and-forget, non-blocking
-        if (appConfig.driveUpload && appConfig.driveClientId) {
+        if (appConfig.driveUpload && GOOGLE_DRIVE_CLIENT_ID && !GOOGLE_DRIVE_CLIENT_ID.startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
                     await uploadToDrive(blob, filename);
