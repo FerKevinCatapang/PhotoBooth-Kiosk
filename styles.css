@@ -211,6 +211,11 @@ button { transition: opacity 0.1s, transform 0.1s; }
 .facing-btn span { display:inline-block; padding:0.42rem 1rem; border:1.5px solid #d1d5db; border-radius:999px; font-size:0.83rem; font-weight:500; color:#6b7280; background:#fff; transition:background 0.15s, color 0.15s, border-color 0.15s; }
 .facing-btn input[type="radio"]:checked + span { background:#be185d; color:#fff; border-color:#be185d; }
 .facing-btn:hover span { border-color:#be185d; color:#be185d; }
+
+/* Google Sign-In button */
+.btn-google-signin { display:inline-flex; align-items:center; gap:0.6rem; background:#fff; border:1.5px solid #d1d5db; color:#374151; font-weight:600; font-size:0.9rem; padding:0.55rem 1.25rem; border-radius:8px; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,0.08); transition:box-shadow 0.15s, border-color 0.15s; touch-action:manipulation; }
+.btn-google-signin:hover { border-color:#4285F4; box-shadow:0 2px 8px rgba(66,133,244,0.25); }
+.btn-google-signin:active { opacity:0.88; transform:scale(0.97); }
 .text-input { width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 0.95rem; }
 
 /* Feature Toggle Row */
@@ -298,7 +303,7 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
 /* Full-cover media background for welcome screen (kiosk + preview) */
 .ws-media-bg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; border-radius: inherit; }
 .ws-thumb-media { width: 100%; height: 100%; object-fit: cover; display: block; }
-#live-ws-title { font-size: 4rem; font-weight: 800; color: #111827; margin-bottom: 1rem; text-shadow: 0 2px 4px rgba(255,255,255,0.5); line-height: 1.1;}
+#live-ws-title { font-size: clamp(1.4rem, 6vw, 4rem); font-weight: 800; color: #111827; margin-bottom: 1rem; text-shadow: 0 2px 4px rgba(255,255,255,0.5); line-height: 1.1; word-break: break-word; overflow-wrap: break-word;}
 #live-ws-subtitle { font-size: 1.5rem; color: #374151; margin-bottom: 4rem; }
 .circle-action-btn { width: 160px; height: 160px; border-radius: 50%; background: rgba(255,255,255,0.25); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 10px 25px rgba(0,0,0,0.15); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s, background 0.2s; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
 .circle-action-btn:hover { transform: scale(1.05); box-shadow: 0 15px 35px rgba(0,0,0,0.2); background: rgba(255,255,255,0.35); }
@@ -664,7 +669,7 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
     .lightbox-inner img { max-width: 92vw; max-height: 78vh; }
 
     /* ── Kiosk welcome screen ── */
-    #live-ws-title { font-size: 2.4rem; }
+    #live-ws-title { font-size: clamp(1.1rem, 5vw, 2rem); }
     #live-ws-subtitle { font-size: 1.1rem; margin-bottom: 2rem; }
     .circle-action-btn { width: 120px; height: 120px; }
 
