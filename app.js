@@ -227,9 +227,14 @@ $(document).ready(function() {
 
     // Click on upload zone opens file picker
     $('#ws-media-drop').on('click', function(e) {
-        if (!$(e.target).is('#ws-media-remove')) {
-            $('#ws-media-input').trigger('click');
+        if (!$(e.target).closest('#ws-media-remove, #btn-pick-ws-media').length) {
+            document.getElementById('ws-media-input').click();
         }
+    });
+    // Dedicated Choose File button — native .click() so the browser trusts it as a real user gesture
+    $('#btn-pick-ws-media').on('click', function(e) {
+        e.stopPropagation();
+        document.getElementById('ws-media-input').click();
     });
 
     // File selected via input
@@ -1274,7 +1279,13 @@ $(document).ready(function() {
     }
 
     $('#wiz-ws-media-drop').on('click', function(e) {
-        if (!$(e.target).is('#wiz-ws-media-remove')) $('#wiz-ws-media-input').trigger('click');
+        if (!$(e.target).closest('#wiz-ws-media-remove, #wiz-btn-pick-media').length) {
+            document.getElementById('wiz-ws-media-input').click();
+        }
+    });
+    $('#wiz-btn-pick-media').on('click', function(e) {
+        e.stopPropagation();
+        document.getElementById('wiz-ws-media-input').click();
     });
     $('#wiz-ws-media-input').on('change', function() {
         const file = this.files[0];
