@@ -31,7 +31,8 @@ let appConfig = {
     //   'server'  – POST image to a local WiFi print server (best for tablets/silent kiosk)
     printMode: 'dialog',
     printServer: '',     // e.g. "http://192.168.1.50:3000"
-    selectedCameraId: '' // deviceId chosen in Capture Settings
+    selectedCameraId: '', // deviceId chosen in Capture Settings
+    facingMode: 'user'    // 'user' = front cam, 'environment' = rear cam, '' = specific device
 };
 
 // --- Filename generator: eventName_YYYYMMDD_HHMMSS.png ---
@@ -510,6 +511,10 @@ $(document).ready(function() {
         appConfig.selectedCameraId = this.value;
     });
 
+    $('input[name="facing-mode"]').on('change', function() {
+        appConfig.facingMode = this.value;
+    });
+
     $('#btn-refresh-cameras').on('click', function() {
         const btn = $(this);
         btn.prop('disabled', true).text('Refreshing…');
@@ -526,13 +531,19 @@ $(document).ready(function() {
         launchBtn.prop('disabled', true).text('Initializing Hardware...');
 
         try {
-            const constraints = {
-                video: {
-                    deviceId: appConfig.selectedCameraId ? { exact: appConfig.selectedCameraId } : undefined,
-                    width:  { ideal: 4096 },
-                    height: { ideal: 3072 }
-                }
+            // Build video constraints: specific device takes priority, then facingMode
+            const videoConstraints = {
+                width:  { ideal: 4096 },
+                height: { ideal: 3072 }
             };
+            if (appConfig.selectedCameraId && appConfig.facingMode === '') {
+                // Admin picked a named device from the dropdown
+                videoConstraints.deviceId = { exact: appConfig.selectedCameraId };
+            } else if (appConfig.facingMode) {
+                // Front or rear — let the OS/browser pick the best physical camera
+                videoConstraints.facingMode = { ideal: appConfig.facingMode };
+            }
+            const constraints = { video: videoConstraints };
 
             currentStream = await navigator.mediaDevices.getUserMedia(constraints);
             const videoEl = $('#camera-feed')[0];
