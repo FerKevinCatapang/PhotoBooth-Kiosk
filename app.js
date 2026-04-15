@@ -30,7 +30,8 @@ let appConfig = {
     //   'dialog'  – system print dialog (window.print)  — works on desktop, iPad AirPrint, Android Chrome
     //   'server'  – POST image to a local WiFi print server (best for tablets/silent kiosk)
     printMode: 'dialog',
-    printServer: ''     // e.g. "http://192.168.1.50:3000"
+    printServer: '',     // e.g. "http://192.168.1.50:3000"
+    selectedCameraId: '' // deviceId chosen in Capture Settings
 };
 
 // --- Filename generator: eventName_YYYYMMDD_HHMMSS.png ---
@@ -466,6 +467,58 @@ $(document).ready(function() {
         });
     }
 
+    // --- Camera selection ---
+    async function populateCameraList() {
+        try {
+            // A brief getUserMedia is needed first so labels are not empty (browser security)
+            await navigator.mediaDevices.getUserMedia({ video: true })
+                .then(s => s.getTracks().forEach(t => t.stop()))
+                .catch(() => {});
+
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoInputs = devices.filter(d => d.kind === 'videoinput');
+            const sel = document.getElementById('camera-select');
+            const prevValue = appConfig.selectedCameraId || sel.value;
+
+            sel.innerHTML = '';
+            if (videoInputs.length === 0) {
+                sel.innerHTML = '<option value="">No cameras found</option>';
+                return;
+            }
+            videoInputs.forEach((cam, i) => {
+                const opt = document.createElement('option');
+                opt.value = cam.deviceId;
+                opt.textContent = cam.label || ('Camera ' + (i + 1));
+                // Auto-prefer USB/external cameras
+                if (!appConfig.selectedCameraId &&
+                    (cam.label.toLowerCase().includes('usb') || cam.label.toLowerCase().includes('external'))) {
+                    opt.selected = true;
+                }
+                sel.appendChild(opt);
+            });
+            // Restore previously chosen camera if still available
+            if (prevValue && [...sel.options].some(o => o.value === prevValue)) {
+                sel.value = prevValue;
+            }
+            appConfig.selectedCameraId = sel.value;
+        } catch (e) {
+            console.warn('populateCameraList:', e);
+        }
+    }
+
+    $('#camera-select').on('change', function() {
+        appConfig.selectedCameraId = this.value;
+    });
+
+    $('#btn-refresh-cameras').on('click', function() {
+        const btn = $(this);
+        btn.prop('disabled', true).text('Refreshing…');
+        populateCameraList().finally(() => btn.prop('disabled', false).text('↺ Refresh'));
+    });
+
+    // Populate on load (non-blocking)
+    populateCameraList();
+
     // --- Launch Kiosk ---
     $('#btn-launch-booth').on('click', async function() {
         appConfig.layout = $('input[name="layout"]:checked').val();
@@ -473,15 +526,9 @@ $(document).ready(function() {
         launchBtn.prop('disabled', true).text('Initializing Hardware...');
 
         try {
-            await navigator.mediaDevices.getUserMedia({ video: true });
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoInputs = devices.filter(device => device.kind === 'videoinput');
-            const externalCam = videoInputs.find(cam => cam.label.toLowerCase().includes('usb') || cam.label.toLowerCase().includes('external'));
-            let selectedDeviceId = externalCam ? externalCam.deviceId : (videoInputs.length > 0 ? videoInputs[0].deviceId : undefined);
-
             const constraints = {
                 video: {
-                    deviceId: selectedDeviceId ? { exact: selectedDeviceId } : undefined,
+                    deviceId: appConfig.selectedCameraId ? { exact: appConfig.selectedCameraId } : undefined,
                     width:  { ideal: 4096 },
                     height: { ideal: 3072 }
                 }
