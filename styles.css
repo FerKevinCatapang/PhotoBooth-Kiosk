@@ -204,6 +204,13 @@ button { transition: opacity 0.1s, transform 0.1s; }
 .btn-primary { background-color: #be185d; color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 8px; font-weight: 600; cursor: pointer; }
 .btn-primary:hover { background-color: #9d174d; }
 .btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 500;}
+
+/* Camera facing-mode pill buttons */
+.facing-btn { display:inline-flex; align-items:center; cursor:pointer; }
+.facing-btn input[type="radio"] { position:absolute; opacity:0; width:0; height:0; }
+.facing-btn span { display:inline-block; padding:0.42rem 1rem; border:1.5px solid #d1d5db; border-radius:999px; font-size:0.83rem; font-weight:500; color:#6b7280; background:#fff; transition:background 0.15s, color 0.15s, border-color 0.15s; }
+.facing-btn input[type="radio"]:checked + span { background:#be185d; color:#fff; border-color:#be185d; }
+.facing-btn:hover span { border-color:#be185d; color:#be185d; }
 .text-input { width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 6px; font-family: inherit; font-size: 0.95rem; }
 
 /* Feature Toggle Row */
