@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- Allow camera, local fetch (print server), and inline scripts inside Capacitor WebView -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src * 'self' data: blob: 'unsafe-inline' 'unsafe-eval';
+                   media-src * blob: data:;
+                   connect-src * http: https:;">
+    <title>Photo Booth - Admin Dashboard & Clean Review</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- ========================================== -->
+    <!-- 0. SETUP WIZARD (first-launch only)        -->
+    <!-- ========================================== -->
+    <div id="setup-wizard" class="wizard-overlay" style="display:none;">
+        <div class="wizard-container">
+
+            <!-- Progress Header -->
+            <div class="wizard-header">
+                <div class="wizard-brand">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#be185d" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span>Photo Booth Setup</span>
+                </div>
+                <ol class="wiz-step-list">
+                    <li class="wiz-step-item active" data-s="1"><span class="wiz-dot">1</span><span class="wiz-label">Layout</span></li>
+                    <li class="wiz-step-item" data-s="2"><span class="wiz-dot">2</span><span class="wiz-label">Template</span></li>
+                    <li class="wiz-step-item" data-s="3"><span class="wiz-dot">3</span><span class="wiz-label">Timing</span></li>
+                    <li class="wiz-step-item" data-s="4"><span class="wiz-dot">4</span><span class="wiz-label">Welcome</span></li>
+                    <li class="wiz-step-item" data-s="5"><span class="wiz-dot">5</span><span class="wiz-label">Storage</span></li>
+                </ol>
+            </div>
+
+            <!-- Step Body -->
+            <div class="wizard-body">
+
+                <!-- STEP 1: Layout -->
+                <div class="wstep" id="wstep-1">
+                    <h2 class="wstep-title">Choose your photo layout</h2>
+                    <p class="wstep-sub">Select the paper size and number of photos per session. Matches Canon Selphy CP1500 natively.</p>
+
+                    <!-- Event Name -->
+                    <div class="settings-card" style="padding:1.25rem 1.5rem; margin-bottom:1.5rem;">
+                        <label style="display:block; font-weight:600; font-size:0.92rem; color:#374151; margin-bottom:0.5rem;">Event Name <span style="color:#9ca3af; font-weight:400;">(optional)</span></label>
+                        <input type="text" id="wiz-event-name" class="text-input" placeholder="e.g. Smiths_Wedding or Birthday_Party" style="width:100%;">
+                        <p style="margin:0.4rem 0 0; font-size:0.78rem; color:#9ca3af;">Used as the filename prefix for every saved photo: <em>EventName_YYYYMMDD_HHMMSS.png</em></p>
+                    </div>
+
+                    <div class="layout-size-group">
+                        <div class="layout-size-header">
+                            <span class="layout-size-name">2 × 6 in Strip</span>
+                            <span class="selphy-badge selphy-wide">Selphy Wide paper</span>
+                        </div>
+                        <div class="settings-card" style="padding:1rem; margin-bottom:0;">
+                            <div class="layout-grid">
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="2x6-2">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-2x6 grid-rows-2"><div class="mini-photo bg-red"></div><div class="mini-photo bg-green"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">2 Photos</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="2x6-3">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-2x6 grid-rows-3"><div class="mini-photo bg-red"></div><div class="mini-photo bg-green"></div><div class="mini-photo bg-blue"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">3 Photos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="layout-size-group">
+                        <div class="layout-size-header">
+                            <span class="layout-size-name">4 × 6 in Portrait</span>
+                            <span class="selphy-badge selphy-native">✓ Selphy native</span>
+                        </div>
+                        <div class="settings-card" style="padding:1rem; margin-bottom:0;">
+                            <div class="layout-grid">
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6-1" checked>
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-4x6 grid-rows-1"><div class="mini-photo bg-red"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">1 Photo</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6-2">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-4x6 grid-rows-2"><div class="mini-photo bg-red"></div><div class="mini-photo bg-green"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">2 Photos</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6-4">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-4x6 grid-2x2"><div class="mini-photo bg-red"></div><div class="mini-photo bg-green"></div><div class="mini-photo bg-blue"></div><div class="mini-photo bg-yellow"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">4 Photos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="layout-size-group">
+                        <div class="layout-size-header">
+                            <span class="layout-size-name">4 × 6 in Landscape</span>
+                            <span class="selphy-badge selphy-native">✓ Selphy native</span>
+                        </div>
+                        <div class="settings-card" style="padding:1rem; margin-bottom:0;">
+                            <div class="layout-grid">
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6l-1">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-4x6l grid-rows-1"><div class="mini-photo bg-red"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">1 Photo</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6l-2">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-4x6l grid-cols-2"><div class="mini-photo bg-red"></div><div class="mini-photo bg-green"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">2 Photos</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6l-3">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-4x6l grid-cols-3"><div class="mini-photo bg-red"></div><div class="mini-photo bg-green"></div><div class="mini-photo bg-blue"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">3 Photos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="layout-size-group">
+                        <div class="layout-size-header">
+                            <span class="layout-size-name">5 × 7 in Portrait</span>
+                            <span class="selphy-badge selphy-scaled">Scales to 4×6 on Selphy</span>
+                        </div>
+                        <div class="settings-card" style="padding:1rem; margin-bottom:0;">
+                            <div class="layout-grid">
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="5x7-1">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-5x7 grid-rows-1"><div class="mini-photo bg-blue"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">1 Photo</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="5x7-2">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-5x7 grid-rows-2"><div class="mini-photo bg-blue"></div><div class="mini-photo bg-yellow"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">2 Photos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="layout-size-group">
+                        <div class="layout-size-header">
+                            <span class="layout-size-name">6 × 8 in Portrait</span>
+                            <span class="selphy-badge selphy-scaled">Scales to Wide on Selphy</span>
+                        </div>
+                        <div class="settings-card" style="padding:1rem; margin-bottom:0;">
+                            <div class="layout-grid">
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="6x8-1">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-6x8 grid-rows-1"><div class="mini-photo bg-red"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">1 Photo</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="6x8-4">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap"><div class="mini-paper mini-6x8 grid-2x2"><div class="mini-photo bg-red"></div><div class="mini-photo bg-green"></div><div class="mini-photo bg-blue"></div><div class="mini-photo bg-yellow"></div></div><div class="mini-paper-footer"></div></div>
+                                        <span class="title">4 Photos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div><!-- /wstep-1 -->
+
+                <!-- STEP 2: Photo Template -->
+                <div class="wstep" id="wstep-2" style="display:none;">
+                    <h2 class="wstep-title">Photo Template Background</h2>
+                    <p class="wstep-sub">Upload an image that fills behind every captured photo. Leave blank for a plain white background — you can change this any time in the dashboard.</p>
+                    <div class="settings-card template-upload-card" id="wiz-bg-zone">
+                        <input type="file" id="wiz-bg-input" accept=".jpg,.jpeg,.png" hidden>
+                        <div class="upload-empty-state" id="wiz-bg-empty">
+                            <div class="upload-icon">🖼️</div>
+                            <div class="upload-prompt">
+                                <span class="upload-title">Upload Background</span>
+                                <span class="upload-sub">Click anywhere or drag &amp; drop a JPG / PNG here</span>
+                            </div>
+                            <button class="btn-outline btn-upload" id="wiz-btn-pick-bg">Choose File</button>
+                        </div>
+                        <div class="upload-preview-state" id="wiz-bg-preview" style="display:none;">
+                            <img class="upload-thumb" id="wiz-bg-thumb" src="" alt="Background preview">
+                            <div class="upload-preview-info">
+                                <span class="upload-filename" id="wiz-bg-filename">image.png</span>
+                                <span class="upload-dims" id="wiz-bg-dims"></span>
+                                <button class="btn-outline btn-remove-upload" id="wiz-btn-clear-bg">✕ Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                </div><!-- /wstep-2 -->
+
+                <!-- STEP 3: Timing -->
+                <div class="wstep" id="wstep-3" style="display:none;">
+                    <h2 class="wstep-title">Timing &amp; Countdowns</h2>
+                    <p class="wstep-sub">Set how long the countdown runs before each photo, and how long guests can review the result.</p>
+                    <div class="settings-card" style="margin-bottom:1.5rem;">
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>First Photo Countdown</span>
+                                <span class="slider-value" id="wiz-val-cd-1">5s</span>
+                            </div>
+                            <input type="range" class="custom-range" id="wiz-cd-1" min="1" max="15" value="5">
+                            <div class="wiz-range-tips"><span>1s</span><span>15s</span></div>
+                        </div>
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Subsequent Photos Countdown</span>
+                                <span class="slider-value" id="wiz-val-cd-others">5s</span>
+                            </div>
+                            <input type="range" class="custom-range" id="wiz-cd-others" min="1" max="15" value="5">
+                            <div class="wiz-range-tips"><span>1s</span><span>15s</span></div>
+                        </div>
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Review Time</span>
+                                <span class="slider-value" id="wiz-val-review">4s</span>
+                            </div>
+                            <input type="range" class="custom-range" id="wiz-review" min="1" max="30" value="4">
+                            <div class="wiz-range-tips"><span>1s</span><span>30s</span></div>
+                        </div>
+                    </div>
+                </div><!-- /wstep-3 -->
+
+                <!-- STEP 4: Welcome Screen -->
+                <div class="wstep" id="wstep-4" style="display:none;">
+                    <h2 class="wstep-title">Welcome Screen</h2>
+                    <p class="wstep-sub">Customize what guests see before the photo booth starts. Upload a photo or video, or use a solid color background.</p>
+                    <div class="wiz-welcome-layout">
+                        <div class="wiz-welcome-controls">
+                            <div class="tool-group">
+                                <label>Background Media</label>
+                                <div id="wiz-ws-media-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer; min-height:90px;">
+                                    <input type="file" id="wiz-ws-media-input" accept="image/*,video/*" style="display:none;">
+                                    <div class="upload-empty-state" id="wiz-ws-media-empty" style="padding:1.25rem 1.5rem; gap:0.5rem;">
+                                        <span style="font-size:1.5rem;">🎬</span>
+                                        <p style="font-weight:600; margin:0; color:#374151; font-size:0.9rem;">Click or drag image / video</p>
+                                        <p style="margin:0; color:#9ca3af; font-size:0.78rem;">JPG, PNG &middot; MP4, MOV, WEBM</p>
+                                        <button class="btn-outline btn-upload" onclick="event.stopPropagation(); $('#wiz-ws-media-input').trigger('click');">Choose File</button>
+                                    </div>
+                                    <div id="wiz-ws-media-filled" style="display:none; padding:0.75rem;">
+                                        <div id="wiz-ws-thumb-wrap" style="width:100%; border-radius:6px; overflow:hidden; aspect-ratio:16/9; background:#000;"></div>
+                                        <button id="wiz-ws-media-remove" class="btn-outline" style="width:100%; margin-top:0.5rem; font-size:0.82rem;">&#10005; Remove Media</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="tool-group">
+                                <label>Background Color <span style="color:#9ca3af; font-size:0.78rem;">(used when no media)</span></label>
+                                <div class="color-picker-wrapper">
+                                    <input type="color" id="wiz-ws-color" value="#E0F2FE">
+                                    <span id="wiz-ws-color-hex">#E0F2FE</span>
+                                </div>
+                            </div>
+                            <div class="tool-group">
+                                <label>Title Text</label>
+                                <input type="text" id="wiz-ws-title" class="text-input" value="Welcome to the Party!">
+                            </div>
+                            <div class="tool-group">
+                                <label>Subtitle Text</label>
+                                <input type="text" id="wiz-ws-subtitle" class="text-input" value="Tap the camera to begin">
+                            </div>
+                        </div>
+                        <div class="wiz-welcome-preview-wrap">
+                            <div class="wiz-ws-preview" id="wiz-ws-preview">
+                                <img id="wiz-prev-media-img" class="ws-media-bg" style="display:none;" alt="">
+                                <video id="wiz-prev-media-video" class="ws-media-bg" autoplay loop muted playsinline style="display:none;"></video>
+                                <div class="welcome-content" style="flex:1; justify-content:center; padding:1rem;">
+                                    <h3 id="wiz-prev-title" style="font-size:0.95rem; margin:0 0 0.25rem; color:#111827;">Welcome to the Party!</h3>
+                                    <p id="wiz-prev-subtitle" style="font-size:0.72rem; color:#4b5563; margin:0;">Tap the camera to begin</p>
+                                </div>
+                                <div class="welcome-action" style="padding-bottom:0.75rem;">
+                                    <div class="prev-start-btn" style="width:40px; height:40px; font-size:0.6rem;">
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                                        <span>Photo</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <p style="text-align:center; color:#9ca3af; font-size:0.78rem; margin-top:0.5rem;">Preview</p>
+                        </div>
+                    </div>
+                </div><!-- /wstep-4 -->
+
+                <!-- STEP 5: Storage & Launch -->
+                <div class="wstep" id="wstep-5" style="display:none;">
+                    <h2 class="wstep-title">Photo Storage</h2>
+                    <p class="wstep-sub">Choose how captured photos are saved after each session.</p>
+                    <div class="wiz-storage-options">
+                        <label class="wiz-storage-card">
+                            <input type="radio" name="wiz-storage" value="local" checked>
+                            <div class="wiz-storage-inner">
+                                <div class="wiz-storage-icon">💾</div>
+                                <div>
+                                    <div class="wiz-storage-title">Save to Local Folder</div>
+                                    <div class="wiz-storage-sub">Photos are saved silently to a folder you choose on this device. Best for kiosk use.</div>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="wiz-storage-card">
+                            <input type="radio" name="wiz-storage" value="download">
+                            <div class="wiz-storage-inner">
+                                <div class="wiz-storage-icon">⬇️</div>
+                                <div>
+                                    <div class="wiz-storage-title">Browser Download</div>
+                                    <div class="wiz-storage-sub">Each captured photo triggers a browser download dialog.</div>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                    <div id="wiz-folder-config" class="settings-card" style="margin-top:1.25rem;">
+                        <p style="font-size:0.9rem; color:#374151; margin-bottom:0.75rem;">Select a folder where photos will be saved automatically after each session.</p>
+                        <button id="wiz-btn-select-dir" class="btn-outline">📁 Choose Folder</button>
+                        <span id="wiz-dir-status" style="margin-left:0.75rem; font-size:0.85rem; color:#6b7280;">No folder selected</span>
+                    </div>
+                    <div class="wiz-launch-section">
+                        <button id="wiz-launch-kiosk" class="btn-primary wiz-launch-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Launch Kiosk Mode
+                        </button>
+                        <a href="#" id="wiz-go-dashboard" class="wiz-dashboard-link">Go to Dashboard instead →</a>
+                    </div>
+                </div><!-- /wstep-5 -->
+
+            </div><!-- /wizard-body -->
+
+            <!-- Footer Nav -->
+            <div class="wizard-footer">
+                <button id="wiz-skip" class="btn-outline wiz-skip-btn">Skip setup</button>
+                <div class="wiz-nav-btns">
+                    <button id="wiz-back" class="btn-outline" style="display:none;">← Back</button>
+                    <button id="wiz-next" class="btn-primary">Next →</button>
+                </div>
+            </div>
+
+        </div><!-- /wizard-container -->
+    </div><!-- /setup-wizard -->
+
+    <!-- ========================================== -->
+    <!-- 1. ADMIN DASHBOARD                         -->
+    <!-- ========================================== -->
+    <div id="admin-dashboard" class="dashboard-layout">
+        
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <a href="#" class="back-link">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                    Back to events
+                </a>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" data-target="panel-dashboard"><span class="icon">🖥️</span> Dashboard</a>
+
+                <div class="nav-section">BASIC</div>
+                <a href="#" class="nav-item" data-target="panel-capture"><span class="icon">📸</span> Capture settings</a>
+                
+                <div class="nav-section">ADVANCED</div>
+                <a href="#" class="nav-item" data-target="panel-welcome"><span class="icon">📱</span> Welcome screen</a>
+                <a href="#" class="nav-item" data-target="panel-template"><span class="icon">🖼️</span> Photo Template</a>
+                <a href="#" class="nav-item" data-target="panel-printer"><span class="icon">🖨️</span> Printer Setup</a>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <button id="btn-launch-booth" class="btn-primary w-100">Launch Kiosk Mode</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            
+            <!-- PANEL: DASHBOARD (NEW) -->
+            <div id="panel-dashboard" class="admin-panel">
+                <div class="content-header">
+                    <h1>Dashboard</h1>
+                </div>
+
+                <!-- Event Name -->
+                <div class="settings-card" style="padding:1.25rem 1.5rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:1rem;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    <div style="flex:1; min-width:0;">
+                        <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Event Name</label>
+                        <input type="text" id="event-name-input" class="text-input" placeholder="e.g. Smiths_Wedding" style="width:100%; max-width:420px;">
+                    </div>
+                    <div style="font-size:0.78rem; color:#9ca3af; white-space:nowrap;">
+                        Saved as: <code id="filename-preview">photobooth_YYYYMMDD_HHMMSS.png</code>
+                    </div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Views</div>
+                        <div class="stat-value">1.1k</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Captures</div>
+                        <div class="stat-value" id="stat-captures">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Shares</div>
+                        <div class="stat-value">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Emails / SMS</div>
+                        <div class="stat-value">0</div>
+                    </div>
+                </div>
+
+                <!-- Activity Chart -->
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3 class="section-title" style="margin:0;">Activity</h3>
+                        <span style="color:#6b7280; font-size:0.9rem;">Last 7 Days</span>
+                    </div>
+                    <div class="chart-placeholder">
+                        <!-- Mock SVG Chart matching the screenshot -->
+                        <svg viewBox="0 0 800 200" preserveAspectRatio="none" style="width: 100%; height: 100%; border-radius: 0 0 8px 8px;">
+                            <defs>
+                                <linearGradient id="chart-grad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="rgba(190, 24, 93, 0.2)"/>
+                                    <stop offset="100%" stop-color="rgba(190, 24, 93, 0)"/>
+                                </linearGradient>
+                            </defs>
+                            <!-- Fill -->
+                            <path d="M0,180 C100,170 150,100 250,110 C350,120 400,40 500,50 C600,60 700,20 800,30 L800,200 L0,200 Z" fill="url(#chart-grad)"/>
+                            <!-- Line -->
+                            <path d="M0,180 C100,170 150,100 250,110 C350,120 400,40 500,50 C600,60 700,20 800,30" fill="none" stroke="#be185d" stroke-width="3"/>
+                            <!-- Data Points -->
+                            <circle cx="250" cy="110" r="4" fill="#be185d" stroke="#fff" stroke-width="2"/>
+                            <circle cx="500" cy="50" r="4" fill="#be185d" stroke="#fff" stroke-width="2"/>
+                            <circle cx="800" cy="30" r="4" fill="#be185d" stroke="#fff" stroke-width="2"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Gallery Section -->
+                <div class="gallery-section">
+                    <div class="gallery-header">
+                        <h3 class="section-title" style="margin:0;">Recent Captures</h3>
+                        <a href="#" id="btn-view-all-gallery">View all →</a>
+                    </div>
+                    <div id="dashboard-gallery" class="gallery-grid">
+                        <!-- Images will be injected here dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL: CAPTURE SETTINGS -->
+            <div id="panel-capture" class="admin-panel" style="display: none;">
+                <div class="content-header">
+                    <h1>Capture Settings</h1>
+                </div>
+
+                <!-- Photo Mode Toggle -->
+                <div class="settings-section">
+                    <div class="settings-card feature-toggle-row">
+                        <div class="feature-toggle-left">
+                            <div class="feature-icon">
+                                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="2" width="20" height="20" rx="5"></rect>
+                                    <circle cx="12" cy="12" r="4"></circle>
+                                    <circle cx="17.5" cy="6.5" r="1.2" fill="#374151" stroke="none"></circle>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="feature-title">Enable photo mode</div>
+                                <div class="feature-subtitle">Capture photos for print or <a href="#" onclick="return false;">digital delivery</a></div>
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-photo-mode">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label" id="toggle-photo-label">OFF</span>
+                        </label>
+                    </div>
+                    <!-- Social Sharing Toggle -->
+                    <div class="settings-card feature-toggle-row" style="margin-top: 1rem;">
+                        <div class="feature-toggle-left">
+                            <div class="feature-icon">
+                                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="feature-title">Social media sharing</div>
+                                <div class="feature-subtitle">Show share buttons after each session (WhatsApp, Facebook, X, Email&hellip;)</div>
+                            </div>
+                        </div>
+                        <label class="toggle-switch is-on">
+                            <input type="checkbox" id="toggle-social-share" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label" id="toggle-social-label">ON</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3 class="section-title">Photo layout</h3>
+                    <p style="color:#6b7280; font-size:0.9rem; margin-bottom:1.25rem;">All layouts use the polaroid-style template. Photos are square-cropped to fit. Select the paper size that matches your Canon Selphy CP1500.</p>
+
+                    <!-- 2×6 Strip -->
+                    <div class="layout-size-group">
+                        <div class="layout-size-header">
+                            <span class="layout-size-name">2 × 6 in Strip</span>
+                            <span class="selphy-badge selphy-wide">Selphy Wide paper</span>
+                        </div>
+                        <div class="settings-card" style="padding: 1rem; margin-bottom: 0;">
+                            <div class="layout-grid">
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="2x6-2">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-2x6 grid-rows-2">
+                                                <div class="mini-photo bg-red"></div>
+                                                <div class="mini-photo bg-green"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">2 Photos</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="2x6-3">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-2x6 grid-rows-3">
+                                                <div class="mini-photo bg-red"></div>
+                                                <div class="mini-photo bg-green"></div>
+                                                <div class="mini-photo bg-blue"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">3 Photos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4×6 Portrait -->
+                    <div class="layout-size-group">
+                        <div class="layout-size-header">
+                            <span class="layout-size-name">4 × 6 in Portrait</span>
+                            <span class="selphy-badge selphy-native">✓ Selphy native</span>
+                        </div>
+                        <div class="settings-card" style="padding: 1rem; margin-bottom: 0;">
+                            <div class="layout-grid">
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6-1" checked>
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-4x6 grid-rows-1">
+                                                <div class="mini-photo bg-red"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">1 Photo</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6-2">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-4x6 grid-rows-2">
+                                                <div class="mini-photo bg-red"></div>
+                                                <div class="mini-photo bg-green"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">2 Photos</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6-4">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-4x6 grid-2x2">
+                                                <div class="mini-photo bg-red"></div>
+                                                <div class="mini-photo bg-green"></div>
+                                                <div class="mini-photo bg-blue"></div>
+                                                <div class="mini-photo bg-yellow"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">4 Photos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4×6 Landscape -->
+                    <div class="layout-size-group">
+                        <div class="layout-size-header">
+                            <span class="layout-size-name">4 × 6 in Landscape</span>
+                            <span class="selphy-badge selphy-native">✓ Selphy native</span>
+                        </div>
+                        <div class="settings-card" style="padding: 1rem; margin-bottom: 0;">
+                            <div class="layout-grid">
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6l-1">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-4x6l grid-rows-1">
+                                                <div class="mini-photo bg-red"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">1 Photo</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6l-2">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-4x6l grid-cols-2">
+                                                <div class="mini-photo bg-red"></div>
+                                                <div class="mini-photo bg-green"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">2 Photos</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="4x6l-3">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-4x6l grid-cols-3">
+                                                <div class="mini-photo bg-red"></div>
+                                                <div class="mini-photo bg-green"></div>
+                                                <div class="mini-photo bg-blue"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">3 Photos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 5×7 Portrait -->
+                    <div class="layout-size-group">
+                        <div class="layout-size-header">
+                            <span class="layout-size-name">5 × 7 in Portrait</span>
+                            <span class="selphy-badge selphy-scaled">Scales to 4×6 on Selphy</span>
+                        </div>
+                        <div class="settings-card" style="padding: 1rem; margin-bottom: 0;">
+                            <div class="layout-grid">
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="5x7-1">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-5x7 grid-rows-1">
+                                                <div class="mini-photo bg-blue"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">1 Photo</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="5x7-2">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-5x7 grid-rows-2">
+                                                <div class="mini-photo bg-blue"></div>
+                                                <div class="mini-photo bg-yellow"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">2 Photos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 6×8 Portrait -->
+                    <div class="layout-size-group">
+                        <div class="layout-size-header">
+                            <span class="layout-size-name">6 × 8 in Portrait</span>
+                            <span class="selphy-badge selphy-scaled">Scales to Wide on Selphy</span>
+                        </div>
+                        <div class="settings-card" style="padding: 1rem; margin-bottom: 0;">
+                            <div class="layout-grid">
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="6x8-1">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-6x8 grid-rows-1">
+                                                <div class="mini-photo bg-red"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">1 Photo</span>
+                                    </div>
+                                </label>
+                                <label class="layout-card">
+                                    <input type="radio" name="layout" value="6x8-4">
+                                    <div class="card-content">
+                                        <div class="mini-paper-wrap">
+                                            <div class="mini-paper mini-6x8 grid-2x2">
+                                                <div class="mini-photo bg-red"></div>
+                                                <div class="mini-photo bg-green"></div>
+                                                <div class="mini-photo bg-blue"></div>
+                                                <div class="mini-photo bg-yellow"></div>
+                                            </div>
+                                            <div class="mini-paper-footer"></div>
+                                        </div>
+                                        <span class="title">4 Photos</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3 class="section-title">Countdown</h3>
+                    <div class="settings-card">
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label>Countdown before photo 1</label>
+                                <div class="slider-value"><span id="val-cd-1">5</span> sec</div>
+                            </div>
+                            <input type="range" id="setting-cd-1" min="1" max="10" value="5" class="custom-range">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label>Countdown before other photos</label>
+                                <div class="slider-value"><span id="val-cd-others">5</span> sec</div>
+                            </div>
+                            <input type="range" id="setting-cd-others" min="1" max="10" value="5" class="custom-range">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label>Photo review time (Preview)</label>
+                                <div class="slider-value"><span id="val-review">4</span> sec</div>
+                            </div>
+                            <input type="range" id="setting-review" min="1" max="10" value="4" class="custom-range">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3 class="section-title">Save Destination</h3>
+                    <div class="settings-card">
+                        <div class="radio-group" style="margin-bottom: 1rem;">
+                            <label class="storage-card">
+                                <input type="radio" name="storage" value="local" checked id="radio-local">
+                                <div class="card-content">
+                                    <span class="title">Local Folder</span>
+                                </div>
+                            </label>
+                            <label class="storage-card">
+                                <input type="radio" name="storage" value="drive">
+                                <div class="card-content">
+                                    <span class="title">Make.com Webhook</span>
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <div id="local-folder-config" class="folder-picker-box">
+                            <p class="subtitle" style="margin-bottom: 0.5rem;">Choose where local photos will be saved seamlessly.</p>
+                            <div class="flex-row-align">
+                                <button id="btn-select-dir" class="btn-outline">Select Save Folder</button>
+                                <span id="dir-status" class="dir-status-text">No folder selected (Will prompt download)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL: WELCOME SCREEN DESIGNER -->
+            <div id="panel-welcome" class="admin-panel" style="display: none;">
+                <div class="content-header flex-between">
+                    <h1>Welcome Screen Designer</h1>
+                </div>
+
+                <div class="designer-layout">
+                    <div class="designer-tools">
+
+                        <!-- Background Media Upload -->
+                        <div class="tool-group">
+                            <label>Background Media</label>
+                            <div id="ws-media-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer;">
+                                <input type="file" id="ws-media-input" accept="image/*,video/*" style="display:none;">
+                                <div class="upload-empty-state" id="ws-media-empty">
+                                    <span style="font-size:2rem;">🖼️</span>
+                                    <p style="font-weight:600; margin:0; color:#374151;">Click or drag image / video</p>
+                                    <p style="margin:0; color:#9ca3af; font-size:0.8rem;">JPG, PNG, GIF &middot; MP4, MOV, WEBM</p>
+                                    <button class="btn-outline btn-upload" onclick="event.stopPropagation(); $('#ws-media-input').trigger('click');">Choose File</button>
+                                </div>
+                                <div id="ws-media-filled" style="display:none; padding:0.75rem;">
+                                    <div id="ws-media-thumb-wrap" style="width:100%; border-radius:6px; overflow:hidden; aspect-ratio:16/9; background:#000;"></div>
+                                    <button id="ws-media-remove" class="btn-outline" style="width:100%; margin-top:0.5rem; font-size:0.82rem;">&#10005; Remove Media</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Background Color (fallback) -->
+                        <div class="tool-group">
+                            <label>Background Color <span style="color:#9ca3af; font-size:0.8rem;">(used when no media)</span></label>
+                            <div class="color-picker-wrapper">
+                                <input type="color" id="edit-bg-color" value="#E0F2FE">
+                                <span id="color-hex">#E0F2FE</span>
+                            </div>
+                        </div>
+
+                        <div class="tool-group">
+                            <label>Title Text</label>
+                            <input type="text" id="edit-title" class="text-input" value="Welcome to the Party!">
+                        </div>
+                        <div class="tool-group">
+                            <label>Subtitle Text</label>
+                            <input type="text" id="edit-subtitle" class="text-input" value="Tap the camera to begin">
+                        </div>
+                    </div>
+
+                    <div class="designer-preview-container">
+                        <div class="preview-frame" id="designer-preview">
+                            <img id="prev-media-img" class="ws-media-bg" style="display:none;" alt="">
+                            <video id="prev-media-video" class="ws-media-bg" autoplay loop muted playsinline style="display:none;"></video>
+                            <div class="welcome-content">
+                                <h2 id="prev-title">Welcome to the Party!</h2>
+                                <p id="prev-subtitle">Tap the camera to begin</p>
+                            </div>
+                            <div class="welcome-action">
+                                <div class="prev-start-btn">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                    <span>Photo</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL: PHOTO TEMPLATE -->
+            <div id="panel-template" class="admin-panel" style="display: none;">
+                <div class="content-header">
+                    <h1>Photo Template</h1>
+                </div>
+
+                <!-- Active layout size hint bar -->
+                <div class="template-hint-bar">
+                    <div class="hint-icon">📐</div>
+                    <div class="hint-text">
+                        <div class="hint-layout-row">
+                            <strong id="hint-layout-name">4×6 Portrait · 1 photo</strong>
+                            <span class="hint-size-badge" id="hint-canvas-size">1200 × 1800 px</span>
+                        </div>
+                        <div class="hint-sub" id="hint-paper">Postcard paper (KP-108IN) · Selphy CP1500 native ✓</div>
+                    </div>
+                </div>
+
+                <!-- Background Image Upload -->
+                <div class="settings-section">
+                    <h3 class="section-title">Background Image</h3>
+                    <p style="color:#6b7280; font-size:0.9rem; margin-bottom:1rem;">
+                        Fills the canvas behind your captured photos. If no image is uploaded, the background defaults to white.<br>
+                        Accepts <strong>JPG, JPEG, PNG</strong> &middot; Recommended size: <strong><span id="bg-size-hint">1200 × 1800 px</span></strong>
+                    </p>
+                    <div class="settings-card template-upload-card" id="bg-upload-zone">
+                        <input type="file" id="upload-template-bg" accept=".jpg,.jpeg,.png" hidden>
+                        <div class="upload-empty-state" id="bg-empty-state">
+                            <div class="upload-icon">🖼️</div>
+                            <div class="upload-prompt">
+                                <span class="upload-title">Upload Background</span>
+                                <span class="upload-sub">Click anywhere or drag &amp; drop a file here</span>
+                            </div>
+                            <button class="btn-outline btn-upload" id="btn-pick-bg">Choose File</button>
+                        </div>
+                        <div class="upload-preview-state" id="bg-preview-state" style="display:none;">
+                            <img class="upload-thumb" id="bg-thumb" src="" alt="Background preview">
+                            <div class="upload-preview-info">
+                                <span class="upload-filename" id="bg-filename">image.png</span>
+                                <span class="upload-dims" id="bg-dims"></span>
+                                <button class="btn-outline btn-remove-upload" id="btn-clear-bg">✕ Remove</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Canvas Preview -->
+                <div class="settings-section">
+                    <h3 class="section-title">Live Preview</h3>
+                    <div class="template-canvas-wrap">
+                        <canvas id="template-preview-canvas"></canvas>
+                        <span class="template-canvas-label" id="template-canvas-label">4×6 Portrait · 1 photo</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PANEL: PRINTER SETUP -->
+            <div id="panel-printer" class="admin-panel" style="display: none;">
+                <div class="content-header">
+                    <h1>Printer Setup</h1>
+                </div>
+
+                <!-- Printer Status -->
+                <div class="settings-section">
+                    <h3 class="section-title">Printer Connection</h3>
+                    <div class="settings-card">
+                        <div class="printer-status-row">
+                            <div class="printer-status-left">
+                                <div class="printer-device-icon">
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                                        <rect x="6" y="14" width="12" height="8"></rect>
+                                    </svg>
+                                </div>
+                                <div class="printer-status-info">
+                                    <div class="printer-device-name">Default System Printer</div>
+                                    <div class="printer-status-badge">
+                                        <span class="status-dot"></span>
+                                        <span id="printer-status-text">Ready</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button id="btn-test-print" class="btn-outline">Test Print</button>
+                        </div>
+                        <div class="info-box" style="margin-top:1rem;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#be185d" stroke-width="2" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                            <p><strong>Silent / Auto-Print:</strong> Launch Chrome with <code>--kiosk-printing</code> to skip the print dialog and print automatically to the default printer without user interaction.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Paper Size -->
+                <div class="settings-section">
+                    <h3 class="section-title">Paper Size</h3>
+                    <p style="color:#6b7280; font-size:0.9rem; margin-bottom:1rem;">Select the paper loaded in your printer. <strong>Auto</strong> maps each layout to its recommended paper size automatically.</p>
+                    <div class="settings-card">
+                        <div class="paper-size-grid">
+
+                            <label class="paper-size-card">
+                                <input type="radio" name="paper-size" value="auto" checked>
+                                <div class="paper-card-content">
+                                    <div class="paper-thumb paper-auto">Auto</div>
+                                    <div class="paper-label">Auto</div>
+                                    <div class="paper-sublabel">Follow layout</div>
+                                </div>
+                            </label>
+
+                            <label class="paper-size-card">
+                                <input type="radio" name="paper-size" value="2x6">
+                                <div class="paper-card-content">
+                                    <div class="paper-thumb paper-2x6"></div>
+                                    <div class="paper-label">2 &times; 6 in</div>
+                                    <div class="paper-sublabel">Wide paper</div>
+                                </div>
+                            </label>
+
+                            <label class="paper-size-card">
+                                <input type="radio" name="paper-size" value="4x6">
+                                <div class="paper-card-content">
+                                    <div class="paper-thumb paper-4x6"></div>
+                                    <div class="paper-label">4 &times; 6 in</div>
+                                    <div class="paper-sublabel">✓ Selphy native</div>
+                                </div>
+                            </label>
+
+                            <label class="paper-size-card">
+                                <input type="radio" name="paper-size" value="5x7">
+                                <div class="paper-card-content">
+                                    <div class="paper-thumb paper-5x7"></div>
+                                    <div class="paper-label">5 &times; 7 in</div>
+                                    <div class="paper-sublabel">Scales to 4&times;6</div>
+                                </div>
+                            </label>
+
+                            <label class="paper-size-card">
+                                <input type="radio" name="paper-size" value="6x8">
+                                <div class="paper-card-content">
+                                    <div class="paper-thumb paper-6x8"></div>
+                                    <div class="paper-label">6 &times; 8 in</div>
+                                    <div class="paper-sublabel">Scales to Wide</div>
+                                </div>
+                            </label>
+
+                        </div>
+                        <div class="paper-mapping-info" id="paper-mapping-info">
+                            <span class="info-tag">Active paper:</span> <strong>4×6 in (Portrait)</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Print Options -->
+                <div class="settings-section">
+                    <h3 class="section-title">Print Options</h3>
+                    <div class="settings-card">
+
+                        <!-- Copies -->
+                        <div class="print-option-row">
+                            <div class="print-option-label">
+                                <div class="opt-title">Print Copies</div>
+                                <div class="opt-subtitle">Number of prints per photo session</div>
+                            </div>
+                            <div class="copies-control">
+                                <button class="copies-btn" id="btn-copies-down">&minus;</button>
+                                <span id="print-copies-display">1</span>
+                                <button class="copies-btn" id="btn-copies-up">+</button>
+                            </div>
+                        </div>
+
+                        <div class="print-option-divider"></div>
+
+                        <!-- Color Mode -->
+                        <div class="print-option-row">
+                            <div class="print-option-label">
+                                <div class="opt-title">Color Mode</div>
+                                <div class="opt-subtitle">Color or black &amp; white output</div>
+                            </div>
+                            <div class="segmented-control">
+                                <label class="seg-option"><input type="radio" name="color-mode" value="color" checked><span>Color</span></label>
+                                <label class="seg-option"><input type="radio" name="color-mode" value="grayscale"><span>B&amp;W</span></label>
+                            </div>
+                        </div>
+
+                        <div class="print-option-divider"></div>
+
+                        <!-- Print Quality -->
+                        <div class="print-option-row">
+                            <div class="print-option-label">
+                                <div class="opt-title">Print Quality</div>
+                                <div class="opt-subtitle">Higher quality uses more ink and time</div>
+                            </div>
+                            <div class="segmented-control">
+                                <label class="seg-option"><input type="radio" name="print-quality" value="draft"><span>Draft</span></label>
+                                <label class="seg-option"><input type="radio" name="print-quality" value="standard"><span>Standard</span></label>
+                                <label class="seg-option"><input type="radio" name="print-quality" value="high" checked><span>High</span></label>
+                                <label class="seg-option"><input type="radio" name="print-quality" value="photo"><span>Photo</span></label>
+                            </div>
+                        </div>
+
+                        <div class="print-option-divider"></div>
+
+                        <!-- Borderless -->
+                        <div class="print-option-row">
+                            <div class="print-option-label">
+                                <div class="opt-title">Borderless Print</div>
+                                <div class="opt-subtitle">Print edge-to-edge without margins</div>
+                            </div>
+                            <label class="toggle-switch is-on">
+                                <input type="checkbox" id="toggle-borderless" checked>
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label" id="toggle-borderless-label">ON</span>
+                            </label>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- ===== TABLET / MOBILE PRINTING ===== -->
+                <div class="settings-section">
+                    <h3 class="section-title">Tablet &amp; Mobile Printing</h3>
+                    <p style="color:#6b7280; font-size:0.9rem; margin-bottom:1rem;">
+                        Running on an <strong>iPad</strong> or <strong>Android tablet</strong>? Choose how photos are sent to the printer.
+                    </p>
+
+                    <!-- Mode picker -->
+                    <div class="settings-card" style="margin-bottom:1rem;">
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+
+                            <label style="display:flex; align-items:flex-start; gap:0.75rem; cursor:pointer; padding:0.75rem; border-radius:10px; border:2px solid #be185d; background:#fdf2f8;">
+                                <input type="radio" name="print-mode" value="dialog" checked style="margin-top:3px; accent-color:#be185d;">
+                                <div>
+                                    <div style="font-weight:600; color:#374151; font-size:0.92rem;">System Print Dialog <span style="font-weight:400; color:#9ca3af;">(default)</span></div>
+                                    <div style="font-size:0.8rem; color:#6b7280; margin-top:2px;">
+                                        Uses <code>window.print()</code>.
+                                        On <strong>iPad</strong> this opens the native AirPrint sheet (works out-of-the-box with SELPHY CP1500).
+                                        On <strong>Android</strong> it opens the system print dialog — install <em>Canon PRINT Inkjet/SELPHY</em> from the Play Store so the printer appears there.
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label style="display:flex; align-items:flex-start; gap:0.75rem; cursor:pointer; padding:0.75rem; border-radius:10px; border:2px solid #e5e7eb;">
+                                <input type="radio" name="print-mode" value="server" style="margin-top:3px; accent-color:#be185d;">
+                                <div>
+                                    <div style="font-weight:600; color:#374151; font-size:0.92rem;">Local Print Server <span style="background:#dcfce7; color:#166534; font-size:0.72rem; padding:1px 6px; border-radius:4px; margin-left:4px;">Recommended for kiosks</span></div>
+                                    <div style="font-size:0.8rem; color:#6b7280; margin-top:2px;">
+                                        Silently POSTs photos to a Node.js server running on the same WiFi network (e.g. a Raspberry Pi). No dialog shown to guests — fully automated. Works on any device: iPad, Android, tablet, PC.
+                                    </div>
+                                </div>
+                            </label>
+
+                        </div>
+                    </div>
+
+                    <!-- Print Server URL (shown only when server mode selected) -->
+                    <div class="settings-card" id="print-server-config" style="display:none;">
+                        <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
+                            <div style="flex:1; min-width:200px;">
+                                <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.4rem;">Print Server URL</label>
+                                <input type="url" id="print-server-url" class="text-input" placeholder="http://192.168.1.50:3000" style="width:100%;">
+                                <p style="font-size:0.78rem; color:#9ca3af; margin-top:0.3rem;">The IP address of the machine running <code>server.js</code> on your local network.</p>
+                            </div>
+                            <button id="btn-test-server" class="btn-outline" style="white-space:nowrap;">Test Connection</button>
+                        </div>
+                        <div id="server-status-msg" style="margin-top:0.75rem; font-size:0.83rem; display:none;"></div>
+
+                        <div class="info-box" style="margin-top:1rem;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#be185d" stroke-width="2" style="flex-shrink:0;margin-top:2px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            <div style="font-size:0.82rem;">
+                                <strong>Quick start:</strong> On a Raspberry Pi or any machine on the same WiFi, run:
+                                <pre style="background:#f3f4f6; border-radius:6px; padding:0.5rem 0.75rem; margin:0.5rem 0; font-size:0.8rem; overflow-x:auto;">cd print-server &amp;&amp; npm install &amp;&amp; node server.js</pre>
+                                Then set the URL above to <code>http://&lt;pi-ip&gt;:3000</code>.
+                                Set <code>PRINTER_NAME</code> env variable to target a specific printer (leave blank for system default).
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- iPad / Android quick-setup guides -->
+                    <details style="margin-top:0.75rem;">
+                        <summary style="cursor:pointer; font-weight:600; font-size:0.9rem; color:#374151; padding:0.5rem 0;">iPad setup guide</summary>
+                        <div class="info-box" style="margin-top:0.5rem; flex-direction:column; align-items:flex-start; gap:0.25rem; font-size:0.82rem;">
+                            <ol style="padding-left:1.25rem; line-height:1.9;">
+                                <li>Connect the Canon SELPHY CP1500 to the same WiFi as the iPad.</li>
+                                <li>On the SELPHY, enable <strong>Wi-Fi</strong> (menu → Wi-Fi settings → Infrastructure mode).</li>
+                                <li>The printer will appear automatically in iOS AirPrint — no driver install needed.</li>
+                                <li>Use <strong>System Print Dialog</strong> mode above. When a guest takes a photo, an AirPrint sheet appears briefly and prints silently.</li>
+                                <li>For fully silent printing (no sheet), switch to <strong>Local Print Server</strong> mode with a Raspberry Pi.</li>
+                            </ol>
+                        </div>
+                    </details>
+                    <details style="margin-top:0.5rem;">
+                        <summary style="cursor:pointer; font-weight:600; font-size:0.9rem; color:#374151; padding:0.5rem 0;">Android tablet setup guide</summary>
+                        <div class="info-box" style="margin-top:0.5rem; flex-direction:column; align-items:flex-start; gap:0.25rem; font-size:0.82rem;">
+                            <ol style="padding-left:1.25rem; line-height:1.9;">
+                                <li>Install <strong>Canon PRINT Inkjet/SELPHY</strong> from the Google Play Store.</li>
+                                <li>Open the Canon app once and add the SELPHY printer — this registers it with Android's print subsystem.</li>
+                                <li>Connect the SELPHY to the same WiFi as the tablet.</li>
+                                <li>Use <strong>System Print Dialog</strong> mode. When a guest takes a photo, the Android print sheet appears with the SELPHY listed.</li>
+                                <li>For a completely dialog-free experience, use <strong>Local Print Server</strong> mode.</li>
+                            </ol>
+                        </div>
+                    </details>
+                </div>
+
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- 2. KIOSK MODE (Welcome -> Booth Loop)      -->
+    <!-- ========================================== -->
+    <div id="kiosk-mode" class="kiosk-wrapper" style="display: none;">
+        
+        <div id="guest-welcome" class="welcome-overlay">
+            <img id="ws-image-bg" class="ws-media-bg" style="display:none;" alt="">
+            <video id="ws-video-bg" class="ws-media-bg" autoplay loop muted playsinline style="display:none;"></video>
+            <button id="btn-exit-kiosk" class="hidden-exit-btn">Exit Kiosk</button>
+            <div class="welcome-content">
+                <h1 id="live-ws-title">Welcome to the Party!</h1>
+                <p id="live-ws-subtitle">Tap the camera to begin</p>
+            </div>
+            <div class="welcome-action">
+                <button id="btn-start-session" class="circle-action-btn">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                    <span>Photo</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="live-booth" class="booth-container">
+            <div class="viewfinder">
+                <video id="camera-feed" autoplay playsinline></video>
+                <canvas id="photo-canvas" style="display:none;"></canvas>
+                
+                <div id="countdown-overlay" style="display:none;"></div>
+                <div id="flash-overlay" style="display:none;"></div>
+                
+                <div id="processing-overlay" style="display:none;">
+                    <div class="spinner"></div>
+                    <h2>Processing...</h2>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== SOCIAL SHARE OVERLAY ========== -->
+        <div id="share-overlay" style="display:none;">
+            <div class="share-inner">
+                <!-- Photo preview -->
+                <div class="share-photo-wrap">
+                    <img id="share-preview-img" src="" alt="Your photo">
+                </div>
+                <!-- Actions panel -->
+                <div class="share-panel">
+                    <div class="share-heading">
+                        <h2 class="share-title">Your photo is ready!</h2>
+                        <p class="share-sub">Share it with the world</p>
+                    </div>
+                    <div class="share-btn-grid">
+                        <!-- Native OS share sheet (tablets / phones) -->
+                        <button id="btn-share-native" class="share-btn share-btn-native">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                            <span>Share</span>
+                        </button>
+                        <!-- WhatsApp -->
+                        <button id="btn-share-whatsapp" class="share-btn share-btn-whatsapp">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>
+                            <span>WhatsApp</span>
+                        </button>
+                        <!-- Facebook -->
+                        <button id="btn-share-facebook" class="share-btn share-btn-facebook">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                            <span>Facebook</span>
+                        </button>
+                        <!-- X (Twitter) -->
+                        <button id="btn-share-x" class="share-btn share-btn-x">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.26 5.632 5.903-5.632zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                            <span>X</span>
+                        </button>
+                        <!-- Email -->
+                        <button id="btn-share-email" class="share-btn share-btn-email">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                            <span>Email</span>
+                        </button>
+                        <!-- Download -->
+                        <button id="btn-share-download" class="share-btn share-btn-download">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            <span>Save Photo</span>
+                        </button>
+                    </div>
+                    <button id="btn-share-done" class="share-done-btn">
+                        Done
+                        <span id="share-countdown" class="share-countdown-badge">8</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- ============================================ -->
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="app.js"></script>
+
+    <!-- ========== PHOTO LIGHTBOX ========== -->
+    <div id="photo-lightbox" class="lightbox-overlay" style="display:none;">
+        <div id="photo-lightbox-backdrop" style="position:absolute; inset:0; background:rgba(0,0,0,0.92);"></div>
+        <div class="lightbox-inner">
+            <button class="lightbox-close" id="lightbox-close">&times;</button>
+            <button class="lightbox-nav lightbox-prev" id="lightbox-prev">&#8249;</button>
+            <img id="lightbox-img" src="" alt="">
+            <button class="lightbox-nav lightbox-next" id="lightbox-next">&#8250;</button>
+            <div class="lightbox-counter" id="lightbox-counter">1 / 1</div>
+        </div>
+    </div>
+
+    <!-- ========== GALLERY MODAL ========== -->
+    <div id="gallery-modal" class="gallery-modal-overlay" style="display:none;">
+        <div id="gallery-modal-backdrop" style="position:fixed; inset:0; background:rgba(0,0,0,0.8);"></div>
+        <div class="gallery-modal-inner">
+            <div class="gallery-modal-header">
+                <h2>All Captures <span id="gallery-modal-count" style="font-size:1rem; font-weight:500; color:#6b7280;"></span></h2>
+                <button class="gallery-modal-close" id="gallery-modal-close">&times;</button>
+            </div>
+            <div id="gallery-modal-grid" class="gallery-modal-grid"></div>
+        </div>
+    </div>
+</html>
