@@ -59,6 +59,23 @@ button { transition: opacity 0.1s, transform 0.1s; }
 .gallery-item:hover img { transform: scale(1.05); }
 .gallery-item .overlay { position: absolute; bottom: 0; left: 0; width: 100%; padding: 8px; background: linear-gradient(transparent, rgba(0,0,0,0.7)); color: white; font-size: 0.75rem;}
 .empty-gallery { grid-column: 1 / -1; padding: 3rem; text-align: center; color: #6b7280; background: #fff; border: 1px dashed #d1d5db; border-radius: 8px; }
+/* Gallery tab count badge */
+.gallery-tab-count { background: #e5e7eb; color: #6b7280; border-radius: 999px; padding: 0 6px; font-size: 0.72rem; font-weight: 700; min-width: 18px; text-align: center; margin-left: 1px; }
+.capture-tab-btn.active .gallery-tab-count { background: #fce7f3; color: #be185d; }
+/* Video gallery items */
+.gallery-item-video { aspect-ratio: 9/16; }
+.gallery-item-video video { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; pointer-events: none; }
+.gallery-item-video:hover video { transform: scale(1.05); }
+.gallery-play-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 44px; height: 44px; background: rgba(0,0,0,0.55); border-radius: 50%; display: flex; justify-content: center; align-items: center; color: #fff; pointer-events: none; transition: background 0.2s; z-index: 2; }
+.gallery-item-video:hover .gallery-play-icon,
+.gallery-modal-item-video:hover .gallery-play-icon { background: rgba(190,24,93,0.82); }
+/* Video gallery grid uses portrait 9:16 columns */
+.gallery-grid-video { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+/* Gallery modal video items */
+.gallery-modal-item-video { aspect-ratio: 9/16; }
+.gallery-modal-item-video video { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; pointer-events: none; }
+.gallery-modal-item-video:hover video { transform: scale(1.04); }
+.gallery-modal-grid-video { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 
 /* Polaroid layout card footer hint */
 .polaroid-card-footer-preview { height: 8px; background: #e5e7eb; border-radius: 2px; margin: 4px 0 6px; }
@@ -74,6 +91,41 @@ button { transition: opacity 0.1s, transform 0.1s; }
 .pp-date-line { width: 50px; height: 2px; background: #111; margin-bottom: 2px; }
 .pp-date { font-size: 0.88rem; font-weight: 600; color: #111; }
 .pp-hashtag { font-size: 0.75rem; color: #555; }
+
+/* ===================== CAPTURE SETTINGS TABS ===================== */
+.capture-tabs-nav {
+    display: flex;
+    gap: 0.25rem;
+    background: #f3f4f6;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 0.3rem;
+    margin-bottom: 1.75rem;
+    width: fit-content;
+}
+.capture-tab-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.55rem 1.1rem;
+    border: none;
+    background: transparent;
+    border-radius: 7px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+    white-space: nowrap;
+}
+.capture-tab-btn:hover { background: #e9ecef; color: #374151; }
+.capture-tab-btn.active {
+    background: #ffffff;
+    color: #be185d;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.10);
+}
+.capture-tab-btn.active svg { stroke: #be185d; }
+.cap-tab-content { }
 
 /* ===================== PRINTER SETUP PANEL ===================== */
 
@@ -307,11 +359,17 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
 #live-ws-subtitle { font-size: 1.5rem; color: #374151; margin-bottom: 4rem; }
 .circle-action-btn { width: 160px; height: 160px; border-radius: 50%; background: rgba(255,255,255,0.25); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 10px 25px rgba(0,0,0,0.15); display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s, background 0.2s; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.4); }
 .circle-action-btn:hover { transform: scale(1.05); box-shadow: 0 15px 35px rgba(0,0,0,0.2); background: rgba(255,255,255,0.35); }
+/* Video Guestbook start button accent */
+.vg-action-btn { background: rgba(190, 24, 93, 0.25); border-color: rgba(255,255,255,0.6); }
+.vg-action-btn:hover { background: rgba(190, 24, 93, 0.45); }
 .hidden-exit-btn { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.1); border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; opacity: 0.3; transition: opacity 0.2s; }
 .hidden-exit-btn:hover { opacity: 1; background: rgba(0,0,0,0.5); color: white;}
 .booth-container { width: 100%; height: 100%; position: relative; z-index: 10; display: flex; justify-content: center; align-items: center; }
 .viewfinder { position: relative; background-color: #000; overflow: hidden; flex-shrink: 0; }
-#camera-feed { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Video Guestbook viewfinder fills the full screen */
+.vg-viewfinder { width: 100vw !important; height: 100vh !important; }
+#camera-feed { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1); }
+#vg-camera-feed { width: 100%; height: 100%; object-fit: cover; display: block; transform: scaleX(-1); }
 #photo-canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
 #countdown-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0.8); font-size: 20vw; font-weight: 700; color: #ffffff; text-shadow: 0 10px 30px rgba(0,0,0,0.8); z-index: 20; opacity: 0; transition: all 0.2s; }
 #countdown-overlay.active { opacity: 1; transform: translate(-50%, -50%) scale(1); }
@@ -319,6 +377,24 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
 #processing-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 40; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white;}
 .spinner { width: 60px; height: 60px; border: 6px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px;}
 @keyframes spin { to { transform: rotate(360deg); } }
+/* VG countdown overlay */
+#vg-countdown-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 22vw; font-weight: 900; color: #fff; text-shadow: 0 8px 30px rgba(0,0,0,0.7); z-index: 25; display: flex; justify-content: center; align-items: center; }
+#vg-countdown-overlay.cd-pop { animation: vg-cd-pop 0.9s ease-out forwards; }
+@keyframes vg-cd-pop { 0% { transform: translate(-50%, -50%) scale(1.3); opacity: 1; } 80% { transform: translate(-50%, -50%) scale(0.95); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.85; } }
+/* VG HUD (REC badge + timer) */
+#vg-hud { position: absolute; top: 1.5rem; left: 50%; transform: translateX(-50%); z-index: 25; display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+.vg-rec-badge { display: flex; align-items: center; gap: 0.4rem; background: rgba(0,0,0,0.55); border-radius: 999px; padding: 0.35rem 0.85rem; color: #fff; font-size: 0.88rem; font-weight: 700; letter-spacing: 0.1em; }
+.vg-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: vg-blink 1s step-start infinite; flex-shrink: 0; }
+@keyframes vg-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.vg-timer { font-size: 2.5rem; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6); line-height: 1; }
+.vg-time-left { font-size: 1rem; font-weight: 600; color: #fca5a5; text-shadow: 0 1px 4px rgba(0,0,0,0.5); display: none; }
+/* VG Stop button */
+#vg-controls { position: absolute; bottom: 2.5rem; left: 50%; transform: translateX(-50%); z-index: 25; }
+.vg-stop-btn { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; background: rgba(239,68,68,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 2px solid rgba(255,255,255,0.4); border-radius: 999px; padding: 0.9rem 2rem; color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; transition: background 0.2s, transform 0.15s; }
+.vg-stop-btn:hover { background: rgba(220, 38, 38, 0.95); transform: scale(1.04); }
+.vg-stop-btn:active { transform: scale(0.96); }
+/* VG processing overlay */
+#vg-processing-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.82); z-index: 40; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; gap: 1rem; }
 
 /* =====================================================
    SETUP WIZARD
@@ -379,6 +455,11 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
     max-width: 80vw; max-height: 85vh;
     object-fit: contain; border-radius: 10px;
     box-shadow: 0 30px 70px rgba(0,0,0,0.6);
+}
+#lightbox-video {
+    max-width: 80vw; max-height: 85vh;
+    border-radius: 10px; box-shadow: 0 30px 70px rgba(0,0,0,0.6);
+    outline: none; background: #000;
 }
 .lightbox-close {
     position: absolute; top: -2.2rem; right: 0;

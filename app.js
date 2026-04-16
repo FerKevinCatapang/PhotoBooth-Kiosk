@@ -2,6 +2,7 @@ let currentStream = null;
 let directoryHandle = null;
 
 let capturedPhotos = []; // In-memory database of captured session photos
+let capturedVideos = []; // In-memory database of captured video guestbook blob URLs
 
 let appConfig = {
     layout: '4x6-1',
@@ -14,6 +15,12 @@ let appConfig = {
     welcomeSubtitle: 'Tap the camera to begin',
     welcomeMedia: null,   // { type: 'image'|'video', objectUrl: string } or null
     photoMode: false,
+    // Capture mode: 'photobooth' | 'videoguestbook'
+    captureMode: 'photobooth',
+    // Video Guestbook settings
+    vgMaxDuration: 60,        // max recording seconds
+    vgPromptText: 'Share a message for the happy couple!',
+    vgCountdown: 3,           // countdown before recording starts
     // Printer settings
     printCopies: 1,
     printQuality: 'high',
@@ -684,6 +691,33 @@ $(document).ready(function() {
         appConfig.selectedCameraId = this.value;
     });
 
+    // --- Capture Settings Tabs ---
+    document.querySelectorAll('.capture-tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const target = this.dataset.capTab;
+            document.querySelectorAll('.capture-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.cap-tab-content').forEach(function(c) { c.style.display = 'none'; });
+            this.classList.add('active');
+            const tabEl = document.getElementById(target);
+            if (tabEl) tabEl.style.display = '';
+            // Set capture mode based on active tab
+            appConfig.captureMode = (target === 'cap-tab-videoguestbook') ? 'videoguestbook' : 'photobooth';
+        });
+    });
+
+    // --- Video Guestbook Settings ---
+    $('#setting-vg-duration').on('input', function() {
+        appConfig.vgMaxDuration = parseInt(this.value, 10);
+        $('#val-vg-duration').text(this.value);
+    });
+    $('#setting-vg-countdown').on('input', function() {
+        appConfig.vgCountdown = parseInt(this.value, 10);
+        $('#val-vg-countdown').text(this.value);
+    });
+    $('#setting-vg-prompt').on('input', function() {
+        appConfig.vgPromptText = this.value;
+    });
+
     $('input[name="facing-mode"]').on('change', function() {
         appConfig.facingMode = this.value;
     });
@@ -710,20 +744,22 @@ $(document).ready(function() {
                 height: { ideal: 3072 }
             };
             if (appConfig.selectedCameraId && appConfig.facingMode === '') {
-                // Admin picked a named device from the dropdown
                 videoConstraints.deviceId = { exact: appConfig.selectedCameraId };
             } else if (appConfig.facingMode) {
-                // Front or rear — let the OS/browser pick the best physical camera
                 videoConstraints.facingMode = { ideal: appConfig.facingMode };
             }
-            const constraints = { video: videoConstraints };
+            const constraints = appConfig.captureMode === 'videoguestbook'
+                ? { video: videoConstraints, audio: true }
+                : { video: videoConstraints };
 
             currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-            const videoEl = $('#camera-feed')[0];
-            videoEl.srcObject = currentStream;
 
-            // Size the viewfinder to match the layout's aspect ratio
-            applyKioskViewfinderSize();
+            if (appConfig.captureMode === 'videoguestbook') {
+                $('#vg-camera-feed')[0].srcObject = currentStream;
+            } else {
+                $('#camera-feed')[0].srcObject = currentStream;
+                applyKioskViewfinderSize();
+            }
 
             $('#admin-dashboard').hide();
             $('#kiosk-mode').fadeIn(400);
@@ -733,26 +769,39 @@ $(document).ready(function() {
             console.error("Camera error:", err);
             alert("Camera access denied. Cannot start kiosk mode.");
         } finally {
-            launchBtn.prop('disabled', false).text('Launch Kiosk Mode');
+            launchBtn.prop('disabled', false).text('🚀 Launch Kiosk Mode');
         }
     });
 
     $('#btn-exit-kiosk').on('click', function() {
+        stopVgRecordingIfActive();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
         $('#kiosk-mode').hide();
+        $('#vg-booth').hide();
+        $('#live-booth').hide();
         $('#admin-dashboard').fadeIn(400);
     });
 
-    // --- Kiosk Logic ---
+    // --- Kiosk Logic (PhotoBooth) ---
     $('#btn-start-session').on('click', function() {
         $('#guest-welcome').addClass('hidden');
         setTimeout(triggerCaptureSequence, 500);
     });
 
+    // --- Kiosk Logic (Video Guestbook) ---
+    $('#btn-start-vg-session').on('click', function() {
+        $('#guest-welcome').addClass('hidden');
+        setTimeout(triggerVgSequence, 500);
+    });
+
     // Tap anywhere on the welcome screen to start (not just the small button)
     $('#guest-welcome').on('click', function(e) {
-        if ($(e.target).closest('#btn-exit-kiosk, #btn-start-session').length) return;
-        $('#btn-start-session').trigger('click');
+        if ($(e.target).closest('#btn-exit-kiosk, #btn-start-session, #btn-start-vg-session').length) return;
+        if (appConfig.captureMode === 'videoguestbook') {
+            $('#btn-start-vg-session').trigger('click');
+        } else {
+            $('#btn-start-session').trigger('click');
+        }
     });
 
     // Lock scroll/pinch-zoom inside kiosk (prevents accidental browser gestures)
@@ -785,9 +834,18 @@ $(document).ready(function() {
     }
 
     function resetToWelcomeScreen() {
+        // Hide capture screens
         $('#photo-canvas').hide();
         $('#camera-feed').show();
         $('#processing-overlay').hide();
+        $('#live-booth').hide();
+        $('#vg-booth').hide();
+
+        // Show the correct start button for the active mode
+        const isVg = appConfig.captureMode === 'videoguestbook';
+        $('#btn-start-session').toggle(!isVg);
+        $('#btn-start-vg-session').toggle(isVg);
+
         $('#guest-welcome').removeClass('hidden');
         // Resume welcome video if it was paused
         const kv = $('#ws-video-bg')[0];
@@ -834,6 +892,7 @@ $(document).ready(function() {
     // =========================================================
 
     async function triggerCaptureSequence() {
+        $('#live-booth').show();
         const video = $('#camera-feed')[0];
         const previewCanvas = $('#photo-canvas')[0];
         const previewCtx = previewCanvas.getContext('2d');
@@ -910,6 +969,146 @@ $(document).ready(function() {
 
         return { cWidth: pW, cHeight: pH, photoSlots };
     }
+
+    // ==================== VIDEO GUESTBOOK ====================
+    let _vgMediaRecorder = null;
+    let _vgChunks = [];
+    let _vgTimerInterval = null;
+    let _vgMaxTimer = null;
+    let _vgElapsed = 0;
+
+    function stopVgRecordingIfActive() {
+        if (_vgMediaRecorder && _vgMediaRecorder.state !== 'inactive') {
+            _vgMediaRecorder.stop();
+        }
+        clearInterval(_vgTimerInterval);
+        clearTimeout(_vgMaxTimer);
+    }
+
+    async function triggerVgSequence() {
+        $('#vg-booth').show();
+        const videoEl = $('#vg-camera-feed')[0];
+
+        // Pre-record countdown
+        const cdEl = document.getElementById('vg-countdown-overlay');
+        cdEl.style.display = 'flex';
+        for (let i = appConfig.vgCountdown; i >= 1; i--) {
+            cdEl.textContent = i;
+            cdEl.classList.remove('cd-pop');
+            void cdEl.offsetWidth; // reflow to restart animation
+            cdEl.classList.add('cd-pop');
+            await new Promise(r => setTimeout(r, 1000));
+        }
+        cdEl.style.display = 'none';
+
+        // Start recording
+        _vgChunks = [];
+        _vgElapsed = 0;
+        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+            ? 'video/webm;codecs=vp9,opus'
+            : MediaRecorder.isTypeSupported('video/webm')
+            ? 'video/webm'
+            : 'video/mp4';
+
+        try {
+            _vgMediaRecorder = new MediaRecorder(currentStream, { mimeType });
+        } catch (e) {
+            _vgMediaRecorder = new MediaRecorder(currentStream);
+        }
+
+        _vgMediaRecorder.ondataavailable = function(e) {
+            if (e.data && e.data.size > 0) _vgChunks.push(e.data);
+        };
+
+        _vgMediaRecorder.onstop = function() {
+            clearInterval(_vgTimerInterval);
+            clearTimeout(_vgMaxTimer);
+            $('#vg-hud').hide();
+            $('#vg-controls').hide();
+            $('#vg-processing-overlay').fadeIn(200);
+            const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
+            const blob = new Blob(_vgChunks, { type: mimeType });
+            saveVgVideo(blob, ext);
+        };
+
+        _vgMediaRecorder.start(500); // collect chunks every 500ms
+        $('#vg-hud').show();
+        $('#vg-controls').show();
+
+        // Update HUD timer every second
+        _vgTimerInterval = setInterval(function() {
+            _vgElapsed++;
+            const mins = Math.floor(_vgElapsed / 60);
+            const secs = _vgElapsed % 60;
+            $('#vg-timer').text(mins + ':' + String(secs).padStart(2, '0'));
+            const left = appConfig.vgMaxDuration - _vgElapsed;
+            if (left <= 10) {
+                $('#vg-time-left').text(left + 's left').show();
+            }
+        }, 1000);
+
+        // Auto-stop at max duration
+        _vgMaxTimer = setTimeout(function() {
+            if (_vgMediaRecorder && _vgMediaRecorder.state !== 'inactive') {
+                _vgMediaRecorder.stop();
+            }
+        }, appConfig.vgMaxDuration * 1000);
+    }
+
+    $('#btn-vg-stop').on('click', function() {
+        stopVgRecordingIfActive();
+    });
+
+    async function saveVgVideo(blob, ext) {
+        const now = new Date();
+        const ts = now.getFullYear()
+            + String(now.getMonth() + 1).padStart(2, '0')
+            + String(now.getDate()).padStart(2, '0')
+            + '_'
+            + String(now.getHours()).padStart(2, '0')
+            + String(now.getMinutes()).padStart(2, '0')
+            + String(now.getSeconds()).padStart(2, '0');
+        const prefix = appConfig.eventName
+            ? appConfig.eventName.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '')
+            : 'guestbook';
+        const filename = `${prefix}_${ts}.${ext}`;
+
+        // Keep a blob URL in memory for gallery playback (intentionally not revoked)
+        const galleryBlobUrl = URL.createObjectURL(blob);
+        capturedVideos.unshift(galleryBlobUrl);
+        updateDashboardGallery();
+
+        try {
+            if (directoryHandle) {
+                const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+            } else {
+                const dlUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = dlUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
+            }
+        } catch (err) {
+            console.error('[VG] Save error:', err);
+        }
+
+        // Reset HUD state
+        $('#vg-time-left').hide().text('');
+        $('#vg-timer').text('0:00');
+        $('#vg-processing-overlay').fadeOut(200);
+
+        // Brief thank-you pause then return to welcome
+        await new Promise(r => setTimeout(r, 1500));
+        $('#vg-booth').hide();
+        resetToWelcomeScreen();
+    }
+    // =========================================================
 
     /**
      * Capture one photo into the layout slot.
@@ -1262,37 +1461,97 @@ $(document).ready(function() {
 
     // --- Dashboard Gallery UI Engine ---
     function updateDashboardGallery() {
-        $('#stat-captures').text(capturedPhotos.length);
-        const gallery = $('#dashboard-gallery');
-        gallery.empty();
+        const total = capturedPhotos.length + capturedVideos.length;
+        $('#stat-captures').text(total);
+        $('#count-photos').text(capturedPhotos.length);
+        $('#count-videos').text(capturedVideos.length);
+
+        // --- Photo grid ---
+        const photoGrid = $('#dashboard-gallery-photo');
+        photoGrid.empty();
         if (capturedPhotos.length === 0) {
-            gallery.append('<div class="empty-gallery">No photos captured yet. Launch the Kiosk to start a session!</div>');
-            return;
+            photoGrid.append('<div class="empty-gallery">No photos yet. Launch the Kiosk to start a session!</div>');
+        } else {
+            capturedPhotos.slice(0, 8).forEach((src, index) => {
+                const num = capturedPhotos.length - index;
+                photoGrid.append(`<div class="gallery-item" data-index="${index}" title="Photo #${num}"><img src="${src}" alt="Photo #${num}"><div class="overlay">Photo #${num}</div></div>`);
+            });
         }
-        // Show up to 8 most recent thumbnails
-        capturedPhotos.slice(0, 8).forEach((src, index) => {
-            const num = capturedPhotos.length - index;
-            gallery.append(`<div class="gallery-item" data-index="${index}" title="Capture #${num}"><img src="${src}" alt="Capture #${num}"><div class="overlay">Capture #${num}</div></div>`);
+
+        // --- Video grid ---
+        const videoGrid = $('#dashboard-gallery-video');
+        videoGrid.empty();
+        if (capturedVideos.length === 0) {
+            videoGrid.append('<div class="empty-gallery">No videos yet. Switch to Video Guestbook mode and record a message!</div>');
+        } else {
+            capturedVideos.slice(0, 8).forEach((src, index) => {
+                const num = capturedVideos.length - index;
+                videoGrid.append(`
+                    <div class="gallery-item gallery-item-video" data-vindex="${index}" title="Video #${num}">
+                        <video src="${src}" preload="metadata" muted playsinline></video>
+                        <div class="gallery-play-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </div>
+                        <div class="overlay">Video #${num}</div>
+                    </div>`);
+            });
+        }
+
+        // --- Dashboard gallery tab switching ---
+        $(document).off('click.galtabs').on('click.galtabs', '[data-gallery-tab]', function() {
+            const target = $(this).data('gallery-tab');
+            $(this).closest('.gallery-section').find('[data-gallery-tab]').removeClass('active');
+            $(this).addClass('active');
+            $(this).closest('.gallery-section').find('.gallery-tab-content').hide();
+            $('#' + target).show();
         });
     }
 
     // --- Gallery lightbox ---
     let _lightboxIdx = 0;
+    let _lightboxType = 'photo'; // 'photo' | 'video'
+
+    function _lightboxItems() {
+        return _lightboxType === 'video' ? capturedVideos : capturedPhotos;
+    }
+
     function _renderLightbox() {
-        $('#lightbox-img').attr('src', capturedPhotos[_lightboxIdx]);
-        $('#lightbox-counter').text((_lightboxIdx + 1) + ' / ' + capturedPhotos.length);
+        const items = _lightboxItems();
+        const isVideo = _lightboxType === 'video';
+        if (isVideo) {
+            $('#lightbox-img').hide();
+            const vid = $('#lightbox-video');
+            vid.attr('src', items[_lightboxIdx]).show();
+            vid[0].load();
+        } else {
+            $('#lightbox-video').hide().attr('src', '');
+            $('#lightbox-img').attr('src', items[_lightboxIdx]).show();
+        }
+        $('#lightbox-counter').text((_lightboxIdx + 1) + ' / ' + items.length);
         $('#lightbox-prev').toggle(_lightboxIdx > 0);
-        $('#lightbox-next').toggle(_lightboxIdx < capturedPhotos.length - 1);
+        $('#lightbox-next').toggle(_lightboxIdx < items.length - 1);
     }
     function openLightbox(idx) {
+        _lightboxType = 'photo';
         _lightboxIdx = idx;
         _renderLightbox();
         $('#photo-lightbox').fadeIn(200);
     }
-    $(document).on('click', '.gallery-item', function() {
+    function openVideoLightbox(idx) {
+        _lightboxType = 'video';
+        _lightboxIdx = idx;
+        _renderLightbox();
+        $('#photo-lightbox').fadeIn(200);
+    }
+    $(document).on('click', '.gallery-item:not(.gallery-item-video)', function() {
         openLightbox(parseInt($(this).data('index')));
     });
+    $(document).on('click', '.gallery-item.gallery-item-video', function() {
+        openVideoLightbox(parseInt($(this).data('vindex')));
+    });
     $(document).on('click', '#lightbox-close, #photo-lightbox-backdrop', function() {
+        const vid = document.getElementById('lightbox-video');
+        if (vid) vid.pause();
         $('#photo-lightbox').fadeOut(200);
     });
     $('#lightbox-prev').on('click', function(e) {
@@ -1301,7 +1560,7 @@ $(document).ready(function() {
     });
     $('#lightbox-next').on('click', function(e) {
         e.stopPropagation();
-        if (_lightboxIdx < capturedPhotos.length - 1) { _lightboxIdx++; _renderLightbox(); }
+        if (_lightboxIdx < _lightboxItems().length - 1) { _lightboxIdx++; _renderLightbox(); }
     });
 
     // --- Lightbox swipe (touch) ---
@@ -1317,35 +1576,66 @@ $(document).ready(function() {
             const dx = e.changedTouches[0].clientX - _tsX;
             const dy = e.changedTouches[0].clientY - _tsY;
             _tsX = null; _tsY = null;
-            // Ignore if mostly vertical or too short
             if (Math.abs(dx) < 50 || Math.abs(dy) > Math.abs(dx)) return;
-            if (dx < 0 && _lightboxIdx < capturedPhotos.length - 1) { _lightboxIdx++; _renderLightbox(); }
+            const items = _lightboxItems();
+            if (dx < 0 && _lightboxIdx < items.length - 1) { _lightboxIdx++; _renderLightbox(); }
             else if (dx > 0 && _lightboxIdx > 0) { _lightboxIdx--; _renderLightbox(); }
         }, { passive: true });
     })();
 
     // --- Full gallery modal ---
     function openGalleryModal() {
-        const grid = $('#gallery-modal-grid');
-        grid.empty();
+        // Photo grid
+        const photoGrid = $('#gallery-modal-grid');
+        photoGrid.empty();
         if (capturedPhotos.length === 0) {
-            grid.append('<div class="empty-gallery">No photos captured yet.</div>');
+            photoGrid.append('<div class="empty-gallery">No photos captured yet.</div>');
         } else {
             capturedPhotos.forEach((src, idx) => {
                 const num = capturedPhotos.length - idx;
-                grid.append(`<div class="gallery-modal-item" data-index="${idx}"><img src="${src}" alt="Capture #${num}"><div class="overlay">Capture #${num}</div></div>`);
+                photoGrid.append(`<div class="gallery-modal-item" data-index="${idx}"><img src="${src}" alt="Photo #${num}"><div class="overlay">Photo #${num}</div></div>`);
             });
         }
-        $('#gallery-modal-count').text('(' + capturedPhotos.length + ')');
+        // Video grid
+        const videoGrid = $('#gallery-modal-grid-video');
+        videoGrid.empty();
+        if (capturedVideos.length === 0) {
+            videoGrid.append('<div class="empty-gallery">No videos captured yet.</div>');
+        } else {
+            capturedVideos.forEach((src, idx) => {
+                const num = capturedVideos.length - idx;
+                videoGrid.append(`
+                    <div class="gallery-modal-item gallery-modal-item-video" data-vindex="${idx}" title="Video #${num}">
+                        <video src="${src}" preload="metadata" muted playsinline></video>
+                        <div class="gallery-play-icon">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </div>
+                        <div class="overlay">Video #${num}</div>
+                    </div>`);
+            });
+        }
+        const total = capturedPhotos.length + capturedVideos.length;
+        $('#gallery-modal-count').text('(' + total + ')');
         $('#gallery-modal').fadeIn(200);
+
+        // Modal tab switching
+        $(document).off('click.modaltabs').on('click.modaltabs', '[data-modal-tab]', function() {
+            const target = $(this).data('modal-tab');
+            $('#gallery-modal').find('[data-modal-tab]').removeClass('active');
+            $(this).addClass('active');
+            $('.gallery-modal-tab-content').hide();
+            $('#' + target).show();
+        });
     }
     $('#btn-view-all-gallery').on('click', function(e) { e.preventDefault(); openGalleryModal(); });
     $('#gallery-modal-close, #gallery-modal-backdrop').on('click', function() { $('#gallery-modal').fadeOut(200); });
-    $(document).on('click', '.gallery-modal-item', function() {
-        $('#gallery-modal').fadeOut(150, function() {
-            openLightbox(parseInt($(this).find('.gallery-modal-item').length ? 0 : 0));
-        });
+    $(document).on('click', '.gallery-modal-item:not(.gallery-modal-item-video)', function() {
+        $('#gallery-modal').fadeOut(150);
         openLightbox(parseInt($(this).data('index')));
+    });
+    $(document).on('click', '.gallery-modal-item.gallery-modal-item-video', function() {
+        $('#gallery-modal').fadeOut(150);
+        openVideoLightbox(parseInt($(this).data('vindex')));
     });
 
     // --- Event Name handlers ---

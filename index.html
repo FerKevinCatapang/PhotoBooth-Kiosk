@@ -464,8 +464,28 @@
                         <h3 class="section-title" style="margin:0;">Recent Captures</h3>
                         <a href="#" id="btn-view-all-gallery">View all →</a>
                     </div>
-                    <div id="dashboard-gallery" class="gallery-grid">
-                        <!-- Images will be injected here dynamically -->
+                    <!-- Gallery tabs -->
+                    <div class="capture-tabs-nav" style="margin-bottom:1.25rem;">
+                        <button class="capture-tab-btn active" data-gallery-tab="gallery-tab-photos">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            PhotoBooth
+                            <span class="gallery-tab-count" id="count-photos">0</span>
+                        </button>
+                        <button class="capture-tab-btn" data-gallery-tab="gallery-tab-videos">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                            Video Guestbook
+                            <span class="gallery-tab-count" id="count-videos">0</span>
+                        </button>
+                    </div>
+                    <div id="gallery-tab-photos" class="gallery-tab-content">
+                        <div id="dashboard-gallery-photo" class="gallery-grid">
+                            <!-- Photo thumbnails injected here -->
+                        </div>
+                    </div>
+                    <div id="gallery-tab-videos" class="gallery-tab-content" style="display:none;">
+                        <div id="dashboard-gallery-video" class="gallery-grid gallery-grid-video">
+                            <!-- Video thumbnails injected here -->
+                        </div>
                     </div>
                 </div>
             </div>
@@ -475,6 +495,21 @@
                 <div class="content-header">
                     <h1>Capture Settings</h1>
                 </div>
+
+                <!-- Capture Settings Tabs -->
+                <div class="capture-tabs-nav">
+                    <button class="capture-tab-btn active" data-cap-tab="cap-tab-photobooth">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                        PhotoBooth
+                    </button>
+                    <button class="capture-tab-btn" data-cap-tab="cap-tab-videoguestbook">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                        Video Guestbook
+                    </button>
+                </div>
+
+                <!-- TAB: PhotoBooth -->
+                <div id="cap-tab-photobooth" class="cap-tab-content">
 
                 <!-- Camera Selection -->
                 <div class="settings-section">
@@ -839,6 +874,65 @@
                         </div>
                     </div>
                 </div>
+
+                </div><!-- /cap-tab-photobooth -->
+
+                <!-- TAB: Video Guestbook -->
+                <div id="cap-tab-videoguestbook" class="cap-tab-content" style="display:none;">
+
+                    <!-- Camera (shared, already configured in PhotoBooth tab) -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Camera</h3>
+                        <div class="settings-card" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            <p style="margin:0; font-size:0.88rem; color:#6b7280;">Camera selection is shared with the <strong>PhotoBooth</strong> tab — configure it there.</p>
+                        </div>
+                    </div>
+
+                    <!-- Max Recording Duration -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Recording Duration</h3>
+                        <div class="settings-card">
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Maximum recording length</label>
+                                    <div class="slider-value"><span id="val-vg-duration">60</span> sec</div>
+                                </div>
+                                <input type="range" id="setting-vg-duration" min="10" max="180" step="5" value="60" class="custom-range">
+                            </div>
+                            <div class="slider-group" style="margin-top:1rem; border-top:1px solid #f3f4f6; padding-top:1rem;">
+                                <div class="slider-header">
+                                    <label>Countdown before recording</label>
+                                    <div class="slider-value"><span id="val-vg-countdown">3</span> sec</div>
+                                </div>
+                                <input type="range" id="setting-vg-countdown" min="1" max="10" value="3" class="custom-range">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Prompt Text -->
+                    <div class="settings-section">
+                        <h3 class="section-title">On-Screen Prompt</h3>
+                        <div class="settings-card">
+                            <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.5rem;">Prompt shown to guests before recording</label>
+                            <input type="text" id="setting-vg-prompt" class="text-input" value="Share a message for the happy couple!" style="width:100%;">
+                            <p style="margin:0.4rem 0 0; font-size:0.78rem; color:#9ca3af;">Displayed on the kiosk welcome screen when Video Guestbook mode is active.</p>
+                        </div>
+                    </div>
+
+                    <!-- Save Destination -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Save Destination</h3>
+                        <div class="settings-card">
+                            <p style="font-size:0.88rem; color:#6b7280; margin-bottom:0.75rem;">Video files (.webm) are saved to the same destination configured in the <strong>PhotoBooth</strong> tab (Local Folder or download).</p>
+                            <div class="settings-card" style="background:#f9fafb; border:1px dashed #d1d5db; padding:0.85rem 1rem; margin-bottom:0;">
+                                <p style="margin:0; font-size:0.85rem; color:#374151;">Files are named: <code style="background:#f3f4f6; border-radius:4px; padding:1px 5px; font-size:0.82rem;">EventName_YYYYMMDD_HHMMSS.webm</code></p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- /cap-tab-videoguestbook -->
+
             </div>
 
             <!-- PANEL: WELCOME SCREEN DESIGNER -->
@@ -1302,14 +1396,21 @@
                 <p id="live-ws-subtitle">Tap the camera to begin</p>
             </div>
             <div class="welcome-action">
-                <button id="btn-start-session" class="circle-action-btn">
+                <!-- Photo booth start button -->
+                <button id="btn-start-session" class="circle-action-btn" style="display:none;">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                     <span>Photo</span>
+                </button>
+                <!-- Video guestbook start button -->
+                <button id="btn-start-vg-session" class="circle-action-btn vg-action-btn" style="display:none;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    <span>Record</span>
                 </button>
             </div>
         </div>
 
-        <div id="live-booth" class="booth-container">
+        <!-- ========== PHOTO BOOTH CAPTURE SCREEN ========== -->
+        <div id="live-booth" class="booth-container" style="display:none;">
             <div class="viewfinder">
                 <video id="camera-feed" autoplay playsinline></video>
                 <canvas id="photo-canvas" style="display:none;"></canvas>
@@ -1320,6 +1421,40 @@
                 <div id="processing-overlay" style="display:none;">
                     <div class="spinner"></div>
                     <h2>Processing...</h2>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== VIDEO GUESTBOOK CAPTURE SCREEN ========== -->
+        <div id="vg-booth" class="booth-container" style="display:none;">
+            <div class="viewfinder vg-viewfinder">
+                <video id="vg-camera-feed" autoplay playsinline muted></video>
+
+                <!-- Pre-record countdown -->
+                <div id="vg-countdown-overlay" style="display:none;"></div>
+
+                <!-- Recording HUD -->
+                <div id="vg-hud" style="display:none;">
+                    <div class="vg-rec-badge">
+                        <span class="vg-rec-dot"></span>
+                        <span>REC</span>
+                    </div>
+                    <div class="vg-timer" id="vg-timer">0:00</div>
+                    <div class="vg-time-left" id="vg-time-left"></div>
+                </div>
+
+                <!-- Stop recording button -->
+                <div id="vg-controls" style="display:none;">
+                    <button id="btn-vg-stop" class="vg-stop-btn">
+                        <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="3"/></svg>
+                        <span>Stop Recording</span>
+                    </button>
+                </div>
+
+                <!-- Processing overlay (shared style) -->
+                <div id="vg-processing-overlay" style="display:none;">
+                    <div class="spinner"></div>
+                    <h2>Saving video…</h2>
                 </div>
             </div>
         </div>
@@ -1382,13 +1517,14 @@
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="app.js"></script>
 
-    <!-- ========== PHOTO LIGHTBOX ========== -->
+    <!-- ========== PHOTO / VIDEO LIGHTBOX ========== -->
     <div id="photo-lightbox" class="lightbox-overlay" style="display:none;">
         <div id="photo-lightbox-backdrop" style="position:absolute; inset:0; background:rgba(0,0,0,0.92);"></div>
         <div class="lightbox-inner">
             <button class="lightbox-close" id="lightbox-close">&times;</button>
             <button class="lightbox-nav lightbox-prev" id="lightbox-prev">&#8249;</button>
             <img id="lightbox-img" src="" alt="">
+            <video id="lightbox-video" controls playsinline style="display:none;"></video>
             <button class="lightbox-nav lightbox-next" id="lightbox-next">&#8250;</button>
             <div class="lightbox-counter" id="lightbox-counter">1 / 1</div>
         </div>
@@ -1402,7 +1538,23 @@
                 <h2>All Captures <span id="gallery-modal-count" style="font-size:1rem; font-weight:500; color:#6b7280;"></span></h2>
                 <button class="gallery-modal-close" id="gallery-modal-close">&times;</button>
             </div>
-            <div id="gallery-modal-grid" class="gallery-modal-grid"></div>
+            <!-- Modal tabs -->
+            <div class="capture-tabs-nav" style="margin-bottom:1.25rem;">
+                <button class="capture-tab-btn active" data-modal-tab="modal-tab-photos">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    PhotoBooth
+                </button>
+                <button class="capture-tab-btn" data-modal-tab="modal-tab-videos">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    Video Guestbook
+                </button>
+            </div>
+            <div id="modal-tab-photos" class="gallery-modal-tab-content">
+                <div id="gallery-modal-grid" class="gallery-modal-grid"></div>
+            </div>
+            <div id="modal-tab-videos" class="gallery-modal-tab-content" style="display:none;">
+                <div id="gallery-modal-grid-video" class="gallery-modal-grid gallery-modal-grid-video"></div>
+            </div>
         </div>
     </div>
 </html>
