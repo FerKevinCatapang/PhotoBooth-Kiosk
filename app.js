@@ -825,17 +825,19 @@ $(document).ready(function() {
         launchBtn.prop('disabled', true).text('Initializing Hardware...');
 
         try {
-            // Build video constraints: specific device takes priority, then facingMode
-            const videoConstraints = {
-                width:  { ideal: 4096 },
-                height: { ideal: 3072 }
-            };
+            // Build video constraints: specific device takes priority, then facingMode.
+            // Video Guestbook uses a lower resolution (1080p max) to prevent encoder
+            // lag and stuttering; PhotoBooth uses the highest available for still quality.
+            const isVgMode = appConfig.captureMode === 'videoguestbook';
+            const videoConstraints = isVgMode
+                ? { width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 30, max: 30 } }
+                : { width: { ideal: 4096 }, height: { ideal: 3072 } };
             if (appConfig.selectedCameraId && appConfig.facingMode === '') {
                 videoConstraints.deviceId = { exact: appConfig.selectedCameraId };
             } else if (appConfig.facingMode) {
                 videoConstraints.facingMode = { ideal: appConfig.facingMode };
             }
-            const constraints = appConfig.captureMode === 'videoguestbook'
+            const constraints = isVgMode
                 ? { video: videoConstraints, audio: true }
                 : { video: videoConstraints };
 
@@ -1116,16 +1118,31 @@ $(document).ready(function() {
         _vgChunks = [];
         _vgElapsed = 0;
         _vgSaving = false; // reset save guard for this new recording session (also guards against a stale true from a previous session)
-        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        // Prefer VP8 over VP9: VP8 has broader hardware-acceleration support on
+        // kiosk/tablet devices, reducing CPU load and preventing lag/stuttering.
+        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+            ? 'video/webm;codecs=vp8,opus'
+            : MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
             ? 'video/webm;codecs=vp9,opus'
             : MediaRecorder.isTypeSupported('video/webm')
             ? 'video/webm'
             : 'video/mp4';
 
+        // Explicit bitrate caps prevent the encoder from saturating the CPU.
+        // 2.5 Mbps video + 128 kbps audio is more than enough for a guestbook clip.
+        const VG_VIDEO_BITRATE = 2500000; // 2.5 Mbps
+        const VG_AUDIO_BITRATE = 128000;  // 128 kbps
+        const recorderOptions = { mimeType, videoBitsPerSecond: VG_VIDEO_BITRATE, audioBitsPerSecond: VG_AUDIO_BITRATE };
         try {
-            _vgMediaRecorder = new MediaRecorder(recordStream, { mimeType });
+            _vgMediaRecorder = new MediaRecorder(recordStream, recorderOptions);
         } catch (e) {
-            _vgMediaRecorder = new MediaRecorder(recordStream);
+            console.warn('[VG] MediaRecorder with bitrate options failed, retrying with mimeType only:', e.message);
+            try {
+                _vgMediaRecorder = new MediaRecorder(recordStream, { mimeType });
+            } catch (e2) {
+                console.warn('[VG] MediaRecorder with mimeType failed, using browser defaults:', e2.message);
+                _vgMediaRecorder = new MediaRecorder(recordStream);
+            }
         }
 
         _vgMediaRecorder.ondataavailable = function(e) {
