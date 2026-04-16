@@ -29,6 +29,8 @@ let appConfig = {
     borderless: true,
     // Template image (set by admin in Photo Template panel)
     templateBg: null,
+    // Video Guestbook frame/background image (overlaid on the recording)
+    vgFrameBg: null,
     // Show social sharing overlay after each capture
     socialShare: true,
     // Event name used as filename prefix (e.g. "Smiths_Wedding")
@@ -718,6 +720,50 @@ $(document).ready(function() {
         appConfig.vgPromptText = this.value;
     });
 
+    // --- Video Guestbook Frame/Background ---
+    async function applyVgFrameImage(file) {
+        try {
+            const img = await loadImageFromFile(file);
+            appConfig.vgFrameBg = img;
+            $('#vg-frame-thumb').attr('src', img.src);
+            $('#vg-frame-filename').text(file.name);
+            $('#vg-frame-dims').text(img.naturalWidth + ' × ' + img.naturalHeight + ' px');
+            $('#vg-frame-empty-state').hide();
+            $('#vg-frame-preview-state').show();
+            // Show the overlay on the live viewfinder
+            $('#vg-frame-overlay').attr('src', img.src).show();
+        } catch(e) { console.error('Failed to load VG frame image', e); }
+    }
+
+    $('#btn-pick-vg-frame').on('click', () => $('#upload-vg-frame').click());
+    $('#vg-frame-empty-state').on('click', function(e) {
+        if (!$(e.target).is('button')) $('#upload-vg-frame').click();
+    });
+    $('#upload-vg-frame').on('change', async function() {
+        if (this.files[0]) await applyVgFrameImage(this.files[0]);
+        this.value = '';
+    });
+    $('#btn-clear-vg-frame').on('click', function() {
+        appConfig.vgFrameBg = null;
+        $('#vg-frame-preview-state').hide();
+        $('#vg-frame-empty-state').show();
+        $('#vg-frame-overlay').hide().attr('src', '');
+    });
+
+    // Drag-and-drop on VG frame upload zone
+    const vgFrameZone = document.getElementById('vg-frame-upload-zone');
+    if (vgFrameZone) {
+        vgFrameZone.addEventListener('dragover', e => { e.preventDefault(); vgFrameZone.classList.add('drag-over'); });
+        vgFrameZone.addEventListener('dragleave', () => vgFrameZone.classList.remove('drag-over'));
+        vgFrameZone.addEventListener('drop', async e => {
+            e.preventDefault();
+            vgFrameZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (!file || !file.type.match(/image\/(jpe?g|png)/)) return;
+            await applyVgFrameImage(file);
+        });
+    }
+
     $('input[name="facing-mode"]').on('change', function() {
         appConfig.facingMode = this.value;
     });
@@ -977,12 +1023,15 @@ $(document).ready(function() {
     let _vgMaxTimer = null;
     let _vgElapsed = 0;
 
+    let _vgFrameAnimId = null; // rAF id for canvas compositing loop
+
     function stopVgRecordingIfActive() {
         if (_vgMediaRecorder && _vgMediaRecorder.state !== 'inactive') {
             _vgMediaRecorder.stop();
         }
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
+        if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
     }
 
     async function triggerVgSequence() {
@@ -1010,10 +1059,40 @@ $(document).ready(function() {
             ? 'video/webm'
             : 'video/mp4';
 
+        // When a frame/background is set, composite it onto a canvas and record that stream
+        // so the frame is embedded in the saved video file.
+        let recordStream = currentStream;
+        let stopCompositing = false;
+        if (appConfig.vgFrameBg) {
+            const vtrack = currentStream.getVideoTracks()[0];
+            const settings = vtrack ? vtrack.getSettings() : {};
+            const cw = settings.width  || videoEl.videoWidth  || 1280;
+            const ch = settings.height || videoEl.videoHeight || 720;
+            const compositeCanvas = document.createElement('canvas');
+            compositeCanvas.width  = cw;
+            compositeCanvas.height = ch;
+            const compCtx = compositeCanvas.getContext('2d');
+            const frameBg = appConfig.vgFrameBg;
+
+            function drawCompositeFrame() {
+                if (stopCompositing) return;
+                compCtx.drawImage(videoEl, 0, 0, cw, ch);
+                compCtx.drawImage(frameBg, 0, 0, cw, ch);
+                _vgFrameAnimId = requestAnimationFrame(drawCompositeFrame);
+            }
+            drawCompositeFrame();
+
+            // Combine canvas video stream with the original audio track
+            const canvasStream = compositeCanvas.captureStream(30);
+            const audioTracks = currentStream.getAudioTracks();
+            audioTracks.forEach(t => canvasStream.addTrack(t));
+            recordStream = canvasStream;
+        }
+
         try {
-            _vgMediaRecorder = new MediaRecorder(currentStream, { mimeType });
+            _vgMediaRecorder = new MediaRecorder(recordStream, { mimeType });
         } catch (e) {
-            _vgMediaRecorder = new MediaRecorder(currentStream);
+            _vgMediaRecorder = new MediaRecorder(recordStream);
         }
 
         _vgMediaRecorder.ondataavailable = function(e) {
@@ -1023,6 +1102,8 @@ $(document).ready(function() {
         _vgMediaRecorder.onstop = function() {
             clearInterval(_vgTimerInterval);
             clearTimeout(_vgMaxTimer);
+            stopCompositing = true;
+            if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
             $('#vg-hud').hide();
             $('#vg-controls').hide();
             $('#vg-processing-overlay').fadeIn(200);
