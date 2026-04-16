@@ -1072,10 +1072,22 @@ $(document).ready(function() {
     let _vgElapsed = 0;
 
     let _vgFrameAnimId = null; // rAF id for canvas compositing loop
+    let _vgSaving = false;     // guard: prevents saveVgVideo from running twice per session
 
     function stopVgRecordingIfActive() {
-        if (_vgMediaRecorder && _vgMediaRecorder.state !== 'inactive') {
-            _vgMediaRecorder.stop();
+        // Null out immediately so a second call (e.g. max-timer + user tap race)
+        // cannot call .stop() on the same recorder again.
+        const recorder = _vgMediaRecorder;
+        _vgMediaRecorder = null;
+        if (recorder && recorder.state !== 'inactive') {
+            try {
+                recorder.stop();
+            } catch (e) {
+                // If stop() throws (e.g. InvalidStateError), restore the reference
+                // so cleanup can still be attempted later.
+                _vgMediaRecorder = recorder;
+                console.warn('[VG] recorder.stop() threw:', e.message);
+            }
         }
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
@@ -1103,6 +1115,7 @@ $(document).ready(function() {
         // Start recording
         _vgChunks = [];
         _vgElapsed = 0;
+        _vgSaving = false; // reset save guard for this new recording session (also guards against a stale true from a previous session)
         const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
             ? 'video/webm;codecs=vp9,opus'
             : MediaRecorder.isTypeSupported('video/webm')
@@ -1120,6 +1133,10 @@ $(document).ready(function() {
         };
 
         _vgMediaRecorder.onstop = function() {
+            // Guard against onstop firing more than once (mobile browser quirk or
+            // double-stop race between the max-duration timer and the Stop button).
+            if (_vgSaving) return;
+            _vgSaving = true;
             clearInterval(_vgTimerInterval);
             clearTimeout(_vgMaxTimer);
             if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
@@ -1149,9 +1166,7 @@ $(document).ready(function() {
 
         // Auto-stop at max duration
         _vgMaxTimer = setTimeout(function() {
-            if (_vgMediaRecorder && _vgMediaRecorder.state !== 'inactive') {
-                _vgMediaRecorder.stop();
-            }
+            stopVgRecordingIfActive();
         }, appConfig.vgMaxDuration * 1000);
     }
 
@@ -1161,7 +1176,7 @@ $(document).ready(function() {
 
     async function saveVgVideo(blob, ext) {
         // Stop canvas compositing if it was active
-        if (_vgRafId) { cancelAnimationFrame(_vgRafId); _vgRafId = null; }
+        if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
 
         const now = new Date();
         const ts = now.getFullYear()
