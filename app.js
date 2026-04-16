@@ -759,7 +759,7 @@ $(document).ready(function() {
             e.preventDefault();
             vgFrameZone.classList.remove('drag-over');
             const file = e.dataTransfer.files[0];
-            if (!file || !file.type.match(/image\/(jpeg|png)/)) return;
+            if (!file || !file.type.match(/image\/(jpe?g|png)/)) return;
             await applyVgFrameImage(file);
         });
     }
@@ -1062,6 +1062,7 @@ $(document).ready(function() {
         // When a frame/background is set, composite it onto a canvas and record that stream
         // so the frame is embedded in the saved video file.
         let recordStream = currentStream;
+        let stopCompositing = false;
         if (appConfig.vgFrameBg) {
             const vtrack = currentStream.getVideoTracks()[0];
             const settings = vtrack ? vtrack.getSettings() : {};
@@ -1074,6 +1075,7 @@ $(document).ready(function() {
             const frameBg = appConfig.vgFrameBg;
 
             function drawCompositeFrame() {
+                if (stopCompositing) return;
                 compCtx.drawImage(videoEl, 0, 0, cw, ch);
                 compCtx.drawImage(frameBg, 0, 0, cw, ch);
                 _vgFrameAnimId = requestAnimationFrame(drawCompositeFrame);
@@ -1100,6 +1102,7 @@ $(document).ready(function() {
         _vgMediaRecorder.onstop = function() {
             clearInterval(_vgTimerInterval);
             clearTimeout(_vgMaxTimer);
+            stopCompositing = true;
             if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
             $('#vg-hud').hide();
             $('#vg-controls').hide();
