@@ -40,11 +40,14 @@ let appConfig = {
     printServer: '',     // e.g. "http://192.168.1.50:3000"
     selectedCameraId: '', // deviceId chosen in Capture Settings
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
+    // Video Guestbook frame overlay
+    vgOverlay: { objectUrl: null, orientation: 'portrait' },
     // Google Drive (Method A - browser OAuth)
     driveUpload: false,
     driveFolderName: 'Photo Booth Captures',
     _driveAccessToken: null,
-    _driveFolderId: null
+    _driveFolderId: null,
+    _driveVgFolderId: null
 };
 
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
@@ -523,6 +526,7 @@ $(document).ready(function() {
                     if (resp.error) { reject(new Error(resp.error)); return; }
                     appConfig._driveAccessToken = resp.access_token;
                     appConfig._driveFolderId = null; // reset folder cache on new token
+                    appConfig._driveVgFolderId = null;
                     resolve(resp.access_token);
                 }
             });
@@ -601,6 +605,72 @@ $(document).ready(function() {
         }
     }
 
+    // Find or create the "Video Guestbook" sub-folder inside the main captures folder
+    async function _driveEnsureVgFolder(token) {
+        if (appConfig._driveVgFolderId) return appConfig._driveVgFolderId;
+        const parentId = await _driveEnsureFolder(token);
+        const subName = 'Video Guestbook';
+        const query = encodeURIComponent(
+            `mimeType='application/vnd.google-apps.folder' and name='${subName}' and '${parentId}' in parents and trashed=false`
+        );
+        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
+            headers: { Authorization: 'Bearer ' + token }
+        });
+        const searchData = await searchResp.json();
+        if (searchData.files && searchData.files.length > 0) {
+            appConfig._driveVgFolderId = searchData.files[0].id;
+            return appConfig._driveVgFolderId;
+        }
+        // Create the sub-folder
+        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: subName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
+        });
+        const folder = await createResp.json();
+        appConfig._driveVgFolderId = folder.id;
+        return folder.id;
+    }
+
+    // Upload a video blob to the Video Guestbook sub-folder in Drive
+    async function uploadVgToDrive(blob, filename) {
+        try {
+            const token = await _driveEnsureToken();
+            const folderId = await _driveEnsureVgFolder(token);
+            const mimeType = blob.type || 'video/webm';
+            const meta = JSON.stringify({ name: filename, parents: [folderId] });
+            const form = new FormData();
+            form.append('metadata', new Blob([meta], { type: 'application/json' }));
+            form.append('file', blob, filename);
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + token },
+                body: form
+            });
+            if (!resp.ok) {
+                if (resp.status === 401) {
+                    appConfig._driveAccessToken = null;
+                    const token2 = await _driveEnsureToken();
+                    const form2 = new FormData();
+                    form2.append('metadata', new Blob([meta], { type: 'application/json' }));
+                    form2.append('file', blob, filename);
+                    const resp2 = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+                        method: 'POST',
+                        headers: { Authorization: 'Bearer ' + token2 },
+                        body: form2
+                    });
+                    if (!resp2.ok) throw new Error('Drive VG upload failed after retry');
+                    return resp2.json();
+                }
+                throw new Error('Drive VG upload failed');
+            }
+            return resp.json();
+        } catch (e) {
+            console.warn('[Drive] VG upload error:', e.message);
+            throw e;
+        }
+    }
+
     // UI: toggle
     $('#toggle-drive-upload').on('change', function() {
         appConfig.driveUpload = this.checked;
@@ -612,6 +682,7 @@ $(document).ready(function() {
     $('#drive-folder-name').on('input', function() {
         appConfig.driveFolderName = this.value.trim() || 'Photo Booth Captures';
         appConfig._driveFolderId = null; // reset folder cache
+        appConfig._driveVgFolderId = null; // reset VG subfolder cache too
     });
 
     // UI: Sign in button
@@ -717,6 +788,84 @@ $(document).ready(function() {
     $('#setting-vg-prompt').on('input', function() {
         appConfig.vgPromptText = this.value;
     });
+
+    // --- Video Guestbook Overlay ---
+    function applyVgOverlay(file) {
+        if (!file || !file.type.startsWith('image/')) return;
+        if (appConfig.vgOverlay.objectUrl) URL.revokeObjectURL(appConfig.vgOverlay.objectUrl);
+        const url = URL.createObjectURL(file);
+        appConfig.vgOverlay.objectUrl = url;
+        $('#vg-overlay-thumb').attr('src', url);
+        $('#vg-overlay-filename').text(file.name);
+        $('#vg-overlay-empty').hide();
+        $('#vg-overlay-preview').show();
+        // Pre-load into the kiosk overlay element
+        $('#vg-overlay-img').attr('src', url);
+    }
+
+    $('#vg-overlay-drop').on('click', function(e) {
+        // Ignore clicks on the action buttons — they handle themselves
+        if ($(e.target).closest('#btn-clear-vg-overlay, #btn-pick-vg-overlay').length) return;
+        document.getElementById('vg-overlay-input').click();
+    });
+    $('#vg-overlay-input').on('change', function() {
+        if (this.files[0]) applyVgOverlay(this.files[0]);
+        this.value = '';
+    });
+    $('#btn-pick-vg-overlay').on('click', function(e) {
+        e.stopPropagation();
+        document.getElementById('vg-overlay-input').click(); // native click — reliable across all browsers
+    });
+    $('#btn-clear-vg-overlay').on('click', function(e) {
+        e.stopPropagation();
+        if (appConfig.vgOverlay.objectUrl) {
+            URL.revokeObjectURL(appConfig.vgOverlay.objectUrl);
+            appConfig.vgOverlay.objectUrl = null;
+        }
+        $('#vg-overlay-img').hide().attr('src', '');
+        $('#vg-overlay-thumb').attr('src', '');
+        $('#vg-overlay-filename').text('');
+        $('#vg-overlay-empty').show();
+        $('#vg-overlay-preview').hide();
+        $('#vg-overlay-input').val('');
+    });
+
+    // Drag-and-drop for overlay upload card
+    document.getElementById('vg-overlay-drop').addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('drag-over'); });
+    document.getElementById('vg-overlay-drop').addEventListener('dragleave', function() { this.classList.remove('drag-over'); });
+    document.getElementById('vg-overlay-drop').addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('drag-over');
+        const file = e.dataTransfer.files[0];
+        if (file) applyVgOverlay(file);
+    });
+
+    $('input[name="vg-overlay-orient"]').on('change', function() {
+        appConfig.vgOverlay.orientation = this.value;
+        applyVgViewfinderOrientation();
+    });
+
+    /** Apply portrait/landscape class to the VG viewfinder element */
+    function applyVgViewfinderOrientation() {
+        const el = document.querySelector('#vg-booth .vg-viewfinder');
+        if (!el) return;
+        const isPortrait = appConfig.vgOverlay.orientation !== 'landscape';
+        el.classList.toggle('orient-portrait', isPortrait);
+        el.classList.toggle('orient-landscape', !isPortrait);
+    }
+
+    /**
+     * Draw a video/image element scaled to fill (cover) a canvas rectangle,
+     * centring and cropping just like CSS object-fit:cover.
+     */
+    function _drawCoverOnCanvas(ctx, src, dx, dy, dw, dh) {
+        const sw = src.videoWidth  || src.naturalWidth  || dw;
+        const sh = src.videoHeight || src.naturalHeight || dh;
+        const scale = Math.max(dw / sw, dh / sh);
+        const nw = sw * scale;
+        const nh = sh * scale;
+        ctx.drawImage(src, dx + (dw - nw) / 2, dy + (dh - nh) / 2, nw, nh);
+    }
 
     $('input[name="facing-mode"]').on('change', function() {
         appConfig.facingMode = this.value;
@@ -845,6 +994,16 @@ $(document).ready(function() {
         const isVg = appConfig.captureMode === 'videoguestbook';
         $('#btn-start-session').toggle(!isVg);
         $('#btn-start-vg-session').toggle(isVg);
+
+        // Apply current VG viewfinder orientation class (harmless when not in VG mode)
+        applyVgViewfinderOrientation();
+
+        // Update the subtitle to reflect current mode
+        if (isVg) {
+            $('#live-ws-subtitle').text(appConfig.vgPromptText || 'Share a message!');
+        } else {
+            $('#live-ws-subtitle').text(appConfig.welcomeSubtitle || 'Tap the camera to begin');
+        }
 
         $('#guest-welcome').removeClass('hidden');
         // Resume welcome video if it was paused
@@ -976,6 +1135,8 @@ $(document).ready(function() {
     let _vgTimerInterval = null;
     let _vgMaxTimer = null;
     let _vgElapsed = 0;
+    let _vgRafId = null;  // requestAnimationFrame ID for canvas recording
+    let _vgCanvas = null; // off-screen canvas used when overlay is set
 
     function stopVgRecordingIfActive() {
         if (_vgMediaRecorder && _vgMediaRecorder.state !== 'inactive') {
@@ -983,11 +1144,21 @@ $(document).ready(function() {
         }
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
+        if (_vgRafId) { cancelAnimationFrame(_vgRafId); _vgRafId = null; }
     }
 
     async function triggerVgSequence() {
         $('#vg-booth').show();
         const videoEl = $('#vg-camera-feed')[0];
+
+        // Apply orientation-based viewfinder sizing
+        applyVgViewfinderOrientation();
+
+        // Show frame overlay if one has been configured
+        const overlayUrl = appConfig.vgOverlay && appConfig.vgOverlay.objectUrl;
+        if (overlayUrl) {
+            $('#vg-overlay-img').show();
+        }
 
         // Pre-record countdown
         const cdEl = document.getElementById('vg-countdown-overlay');
@@ -1001,6 +1172,60 @@ $(document).ready(function() {
         }
         cdEl.style.display = 'none';
 
+        // Decide whether to use canvas recording:
+        //  - Always use canvas for portrait (need to crop 16:9 camera → 9:16)
+        //  - Also use canvas when an overlay must be burned in
+        const isPortrait = appConfig.vgOverlay.orientation !== 'landscape';
+        const useCanvas  = isPortrait || !!overlayUrl;
+
+        _vgRafId   = null;
+        _vgCanvas  = null;
+        let recordStream = currentStream;
+
+        if (useCanvas) {
+            // Wait until camera video has real dimensions
+            await new Promise(r => {
+                if (videoEl.videoWidth) { r(); return; }
+                videoEl.addEventListener('loadedmetadata', r, { once: true });
+                setTimeout(r, 600);
+            });
+
+            _vgCanvas = document.createElement('canvas');
+            const vw = videoEl.videoWidth  || 1280;
+            const vh = videoEl.videoHeight || 720;
+
+            if (isPortrait) {
+                // Canvas is 9:16 — use the longer camera dimension as our height
+                const longDim = Math.max(vw, vh);
+                _vgCanvas.width  = Math.round(longDim * 9 / 16);
+                _vgCanvas.height = longDim;
+            } else {
+                // Canvas matches camera native resolution (16:9)
+                _vgCanvas.width  = vw;
+                _vgCanvas.height = vh;
+            }
+
+            const ctx = _vgCanvas.getContext('2d');
+            const cw = _vgCanvas.width;
+            const ch = _vgCanvas.height;
+            const overlayImgEl = overlayUrl ? document.getElementById('vg-overlay-img') : null;
+
+            function drawVgFrame() {
+                // Camera frame cropped to fill canvas (covers correctly for portrait crop)
+                _drawCoverOnCanvas(ctx, videoEl, 0, 0, cw, ch);
+                // Overlay burned on top (if any)
+                if (overlayImgEl && overlayImgEl.complete && overlayImgEl.naturalWidth) {
+                    ctx.drawImage(overlayImgEl, 0, 0, cw, ch);
+                }
+                _vgRafId = requestAnimationFrame(drawVgFrame);
+            }
+            drawVgFrame();
+
+            const canvasStream = _vgCanvas.captureStream(30);
+            currentStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+            recordStream = canvasStream;
+        }
+
         // Start recording
         _vgChunks = [];
         _vgElapsed = 0;
@@ -1011,9 +1236,9 @@ $(document).ready(function() {
             : 'video/mp4';
 
         try {
-            _vgMediaRecorder = new MediaRecorder(currentStream, { mimeType });
+            _vgMediaRecorder = new MediaRecorder(recordStream, { mimeType });
         } catch (e) {
-            _vgMediaRecorder = new MediaRecorder(currentStream);
+            _vgMediaRecorder = new MediaRecorder(recordStream);
         }
 
         _vgMediaRecorder.ondataavailable = function(e) {
@@ -1060,6 +1285,10 @@ $(document).ready(function() {
     });
 
     async function saveVgVideo(blob, ext) {
+        // Stop canvas compositing if it was active
+        if (_vgRafId) { cancelAnimationFrame(_vgRafId); _vgRafId = null; }
+        $('#vg-overlay-img').hide();
+
         const now = new Date();
         const ts = now.getFullYear()
             + String(now.getMonth() + 1).padStart(2, '0')
@@ -1078,6 +1307,7 @@ $(document).ready(function() {
         capturedVideos.unshift(galleryBlobUrl);
         updateDashboardGallery();
 
+        // Save locally (folder or download)
         try {
             if (directoryHandle) {
                 const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
@@ -1096,6 +1326,11 @@ $(document).ready(function() {
             }
         } catch (err) {
             console.error('[VG] Save error:', err);
+        }
+
+        // Upload to Google Drive (Video Guestbook sub-folder) if enabled
+        if (appConfig.driveUpload && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
+            uploadVgToDrive(blob, filename).catch(e => console.warn('[Drive] VG upload failed:', e.message));
         }
 
         // Reset HUD state

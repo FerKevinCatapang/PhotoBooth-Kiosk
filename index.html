@@ -373,7 +373,6 @@
         
         <aside class="sidebar">
             <div class="sidebar-header">
-                <button id="btn-launch-booth" class="btn-primary w-100">🚀 Launch Kiosk Mode</button>
             </div>
             
             <nav class="nav-menu">
@@ -390,6 +389,7 @@
             </nav>
             
             <div class="sidebar-footer">
+                <button id="btn-launch-booth" class="btn-primary w-100">🚀 Launch Kiosk Mode</button>
             </div>
         </aside>
 
@@ -920,11 +920,52 @@
                         </div>
                     </div>
 
+                    <!-- Video Frame Overlay -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Video Frame Overlay</h3>
+                        <div class="settings-card">
+                            <!-- Orientation -->
+                            <div style="margin-bottom:1rem;">
+                                <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.5rem;">Frame orientation</label>
+                                <div style="display:flex; gap:0.5rem;">
+                                    <label class="facing-btn">
+                                        <input type="radio" name="vg-overlay-orient" value="portrait" checked>
+                                        <span>Portrait (9:16)</span>
+                                    </label>
+                                    <label class="facing-btn">
+                                        <input type="radio" name="vg-overlay-orient" value="landscape">
+                                        <span>Landscape (16:9)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <!-- Upload -->
+                            <div id="vg-overlay-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer;">
+                                <input type="file" id="vg-overlay-input" accept="image/png,image/webp,image/gif,image/jpeg" style="display:none;">
+                                <div class="upload-empty-state" id="vg-overlay-empty">
+                                    <div class="upload-icon">🖼️</div>
+                                    <div class="upload-prompt">
+                                        <span class="upload-title">Upload Overlay Image</span>
+                                        <span class="upload-sub">PNG with transparency recommended · Click or drag</span>
+                                    </div>
+                                    <button class="btn-outline btn-upload" id="btn-pick-vg-overlay">Choose File</button>
+                                </div>
+                                <div class="upload-preview-state" id="vg-overlay-preview" style="display:none;">
+                                    <img class="upload-thumb" id="vg-overlay-thumb" src="" alt="Overlay preview" style="object-fit:contain; background:#f3f4f6;">
+                                    <div class="upload-preview-info">
+                                        <span class="upload-filename" id="vg-overlay-filename"></span>
+                                        <button class="btn-outline btn-remove-upload" id="btn-clear-vg-overlay">✕ Remove</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <p style="margin:0.5rem 0 0; font-size:0.78rem; color:#9ca3af;">The overlay is shown on screen during recording and burned into the video file. PNG with a transparent background works best for a frame effect.</p>
+                        </div>
+                    </div>
+
                     <!-- Save Destination -->
                     <div class="settings-section">
                         <h3 class="section-title">Save Destination</h3>
                         <div class="settings-card">
-                            <p style="font-size:0.88rem; color:#6b7280; margin-bottom:0.75rem;">Video files (.webm) are saved to the same destination configured in the <strong>PhotoBooth</strong> tab (Local Folder or download).</p>
+                            <p style="font-size:0.88rem; color:#6b7280; margin-bottom:0.75rem;">Video files (.webm) are saved to the same destination configured in the <strong>PhotoBooth</strong> tab (Local Folder or download). When Google Drive is enabled, videos are uploaded to a <strong>Video Guestbook</strong> sub-folder inside your main captures folder.</p>
                             <div class="settings-card" style="background:#f9fafb; border:1px dashed #d1d5db; padding:0.85rem 1rem; margin-bottom:0;">
                                 <p style="margin:0; font-size:0.85rem; color:#374151;">Files are named: <code style="background:#f3f4f6; border-radius:4px; padding:1px 5px; font-size:0.82rem;">EventName_YYYYMMDD_HHMMSS.webm</code></p>
                             </div>
@@ -1429,6 +1470,9 @@
         <div id="vg-booth" class="booth-container" style="display:none;">
             <div class="viewfinder vg-viewfinder">
                 <video id="vg-camera-feed" autoplay playsinline muted></video>
+
+                <!-- Frame overlay (shown during recording, burned into video) -->
+                <img id="vg-overlay-img" style="display:none;" alt="">
 
                 <!-- Pre-record countdown -->
                 <div id="vg-countdown-overlay" style="display:none;"></div>
