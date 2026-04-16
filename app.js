@@ -791,7 +791,6 @@ $(document).ready(function() {
         appConfig.vgPromptText = this.value;
     });
 
-<<<<<<< HEAD
     // --- Video Guestbook Overlay ---
     function applyVgOverlay(file) {
         if (!file || !file.type.startsWith('image/')) return;
@@ -868,50 +867,6 @@ $(document).ready(function() {
         const nw = sw * scale;
         const nh = sh * scale;
         ctx.drawImage(src, dx + (dw - nw) / 2, dy + (dh - nh) / 2, nw, nh);
-=======
-    // --- Video Guestbook Frame/Background ---
-    async function applyVgFrameImage(file) {
-        try {
-            const img = await loadImageFromFile(file);
-            appConfig.vgFrameBg = img;
-            $('#vg-frame-thumb').attr('src', img.src);
-            $('#vg-frame-filename').text(file.name);
-            $('#vg-frame-dims').text(img.naturalWidth + ' × ' + img.naturalHeight + ' px');
-            $('#vg-frame-empty-state').hide();
-            $('#vg-frame-preview-state').show();
-            // Show the overlay on the live viewfinder
-            $('#vg-frame-overlay').attr('src', img.src).show();
-        } catch(e) { console.error('Failed to load VG frame image', e); }
-    }
-
-    $('#btn-pick-vg-frame').on('click', function(e) { e.stopPropagation(); document.getElementById('upload-vg-frame').click(); });
-    $('#vg-frame-empty-state').on('click', function(e) {
-        if (!$(e.target).is('button')) $('#upload-vg-frame').click();
-    });
-    $('#upload-vg-frame').on('change', async function() {
-        if (this.files[0]) await applyVgFrameImage(this.files[0]);
-        this.value = '';
-    });
-    $('#btn-clear-vg-frame').on('click', function() {
-        appConfig.vgFrameBg = null;
-        $('#vg-frame-preview-state').hide();
-        $('#vg-frame-empty-state').show();
-        $('#vg-frame-overlay').hide().attr('src', '');
-    });
-
-    // Drag-and-drop on VG frame upload zone
-    const vgFrameZone = document.getElementById('vg-frame-upload-zone');
-    if (vgFrameZone) {
-        vgFrameZone.addEventListener('dragover', e => { e.preventDefault(); vgFrameZone.classList.add('drag-over'); });
-        vgFrameZone.addEventListener('dragleave', () => vgFrameZone.classList.remove('drag-over'));
-        vgFrameZone.addEventListener('drop', async e => {
-            e.preventDefault();
-            vgFrameZone.classList.remove('drag-over');
-            const file = e.dataTransfer.files[0];
-            if (!file || !file.type.match(/image\/(jpe?g|png)/)) return;
-            await applyVgFrameImage(file);
-        });
->>>>>>> 9a93a43496ce182f4a69ed0d71a317c81f8032f7
     }
 
     $('input[name="facing-mode"]').on('change', function() {
