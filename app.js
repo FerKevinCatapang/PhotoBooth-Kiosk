@@ -468,7 +468,7 @@ $(document).ready(function() {
         } catch(e) { console.error('Failed to load background image', e); }
     }
 
-    $('#btn-pick-bg').on('click', () => $('#upload-template-bg').click());
+    $('#btn-pick-bg').on('click', function(e) { e.stopPropagation(); document.getElementById('upload-template-bg').click(); });
     $('#bg-empty-state').on('click', function(e) {
         if (!$(e.target).is('button')) $('#upload-template-bg').click();
     });
@@ -735,7 +735,7 @@ $(document).ready(function() {
         } catch(e) { console.error('Failed to load VG frame image', e); }
     }
 
-    $('#btn-pick-vg-frame').on('click', () => $('#upload-vg-frame').click());
+    $('#btn-pick-vg-frame').on('click', function(e) { e.stopPropagation(); document.getElementById('upload-vg-frame').click(); });
     $('#vg-frame-empty-state').on('click', function(e) {
         if (!$(e.target).is('button')) $('#upload-vg-frame').click();
     });
