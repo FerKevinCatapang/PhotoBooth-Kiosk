@@ -42,8 +42,7 @@ let appConfig = {
     printServer: '',     // e.g. "http://192.168.1.50:3000"
     selectedCameraId: '', // deviceId chosen in Capture Settings
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
-    // Video Guestbook frame overlay
-    vgOverlay: { objectUrl: null, orientation: 'portrait' },
+
     // Google Drive (Method A - browser OAuth)
     driveUpload: false,
     driveFolderName: 'Photo Booth Captures',
@@ -791,70 +790,7 @@ $(document).ready(function() {
         appConfig.vgPromptText = this.value;
     });
 
-    // --- Video Guestbook Overlay ---
-    function applyVgOverlay(file) {
-        if (!file || !file.type.startsWith('image/')) return;
-        if (appConfig.vgOverlay.objectUrl) URL.revokeObjectURL(appConfig.vgOverlay.objectUrl);
-        const url = URL.createObjectURL(file);
-        appConfig.vgOverlay.objectUrl = url;
-        $('#vg-overlay-thumb').attr('src', url);
-        $('#vg-overlay-filename').text(file.name);
-        $('#vg-overlay-empty').hide();
-        $('#vg-overlay-preview').show();
-        // Pre-load into the kiosk overlay element
-        $('#vg-overlay-img').attr('src', url);
-    }
 
-    $('#vg-overlay-drop').on('click', function(e) {
-        // Ignore clicks on the action buttons — they handle themselves
-        if ($(e.target).closest('#btn-clear-vg-overlay, #btn-pick-vg-overlay').length) return;
-        document.getElementById('vg-overlay-input').click();
-    });
-    $('#vg-overlay-input').on('change', function() {
-        if (this.files[0]) applyVgOverlay(this.files[0]);
-        this.value = '';
-    });
-    $('#btn-pick-vg-overlay').on('click', function(e) {
-        e.stopPropagation();
-        document.getElementById('vg-overlay-input').click(); // native click — reliable across all browsers
-    });
-    $('#btn-clear-vg-overlay').on('click', function(e) {
-        e.stopPropagation();
-        if (appConfig.vgOverlay.objectUrl) {
-            URL.revokeObjectURL(appConfig.vgOverlay.objectUrl);
-            appConfig.vgOverlay.objectUrl = null;
-        }
-        $('#vg-overlay-img').hide().attr('src', '');
-        $('#vg-overlay-thumb').attr('src', '');
-        $('#vg-overlay-filename').text('');
-        $('#vg-overlay-empty').show();
-        $('#vg-overlay-preview').hide();
-        $('#vg-overlay-input').val('');
-    });
-
-    // Drag-and-drop for overlay upload card
-    document.getElementById('vg-overlay-drop').addEventListener('dragover', function(e) { e.preventDefault(); this.classList.add('drag-over'); });
-    document.getElementById('vg-overlay-drop').addEventListener('dragleave', function() { this.classList.remove('drag-over'); });
-    document.getElementById('vg-overlay-drop').addEventListener('drop', function(e) {
-        e.preventDefault();
-        this.classList.remove('drag-over');
-        const file = e.dataTransfer.files[0];
-        if (file) applyVgOverlay(file);
-    });
-
-    $('input[name="vg-overlay-orient"]').on('change', function() {
-        appConfig.vgOverlay.orientation = this.value;
-        applyVgViewfinderOrientation();
-    });
-
-    /** Apply portrait/landscape class to the VG viewfinder element */
-    function applyVgViewfinderOrientation() {
-        const el = document.querySelector('#vg-booth .vg-viewfinder');
-        if (!el) return;
-        const isPortrait = appConfig.vgOverlay.orientation !== 'landscape';
-        el.classList.toggle('orient-portrait', isPortrait);
-        el.classList.toggle('orient-landscape', !isPortrait);
-    }
 
     /**
      * Draw a video/image element scaled to fill (cover) a canvas rectangle,
@@ -997,9 +933,6 @@ $(document).ready(function() {
         $('#btn-start-session').toggle(!isVg);
         $('#btn-start-vg-session').toggle(isVg);
 
-        // Apply current VG viewfinder orientation class (harmless when not in VG mode)
-        applyVgViewfinderOrientation();
-
         // Update the subtitle to reflect current mode
         if (isVg) {
             $('#live-ws-subtitle').text(appConfig.vgPromptText || 'Share a message!');
@@ -1137,8 +1070,6 @@ $(document).ready(function() {
     let _vgTimerInterval = null;
     let _vgMaxTimer = null;
     let _vgElapsed = 0;
-    let _vgRafId = null;  // requestAnimationFrame ID for canvas recording
-    let _vgCanvas = null; // off-screen canvas used when overlay is set
 
     let _vgFrameAnimId = null; // rAF id for canvas compositing loop
 
@@ -1148,25 +1079,12 @@ $(document).ready(function() {
         }
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
-<<<<<<< HEAD
-        if (_vgRafId) { cancelAnimationFrame(_vgRafId); _vgRafId = null; }
-=======
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
->>>>>>> 9a93a43496ce182f4a69ed0d71a317c81f8032f7
     }
 
     async function triggerVgSequence() {
         $('#vg-booth').show();
         const videoEl = $('#vg-camera-feed')[0];
-
-        // Apply orientation-based viewfinder sizing
-        applyVgViewfinderOrientation();
-
-        // Show frame overlay if one has been configured
-        const overlayUrl = appConfig.vgOverlay && appConfig.vgOverlay.objectUrl;
-        if (overlayUrl) {
-            $('#vg-overlay-img').show();
-        }
 
         // Pre-record countdown
         const cdEl = document.getElementById('vg-countdown-overlay');
@@ -1180,59 +1098,7 @@ $(document).ready(function() {
         }
         cdEl.style.display = 'none';
 
-        // Decide whether to use canvas recording:
-        //  - Always use canvas for portrait (need to crop 16:9 camera → 9:16)
-        //  - Also use canvas when an overlay must be burned in
-        const isPortrait = appConfig.vgOverlay.orientation !== 'landscape';
-        const useCanvas  = isPortrait || !!overlayUrl;
-
-        _vgRafId   = null;
-        _vgCanvas  = null;
-        let recordStream = currentStream;
-
-        if (useCanvas) {
-            // Wait until camera video has real dimensions
-            await new Promise(r => {
-                if (videoEl.videoWidth) { r(); return; }
-                videoEl.addEventListener('loadedmetadata', r, { once: true });
-                setTimeout(r, 600);
-            });
-
-            _vgCanvas = document.createElement('canvas');
-            const vw = videoEl.videoWidth  || 1280;
-            const vh = videoEl.videoHeight || 720;
-
-            if (isPortrait) {
-                // Canvas is 9:16 — use the longer camera dimension as our height
-                const longDim = Math.max(vw, vh);
-                _vgCanvas.width  = Math.round(longDim * 9 / 16);
-                _vgCanvas.height = longDim;
-            } else {
-                // Canvas matches camera native resolution (16:9)
-                _vgCanvas.width  = vw;
-                _vgCanvas.height = vh;
-            }
-
-            const ctx = _vgCanvas.getContext('2d');
-            const cw = _vgCanvas.width;
-            const ch = _vgCanvas.height;
-            const overlayImgEl = overlayUrl ? document.getElementById('vg-overlay-img') : null;
-
-            function drawVgFrame() {
-                // Camera frame cropped to fill canvas (covers correctly for portrait crop)
-                _drawCoverOnCanvas(ctx, videoEl, 0, 0, cw, ch);
-                // Overlay burned on top (if any)
-                if (overlayImgEl && overlayImgEl.complete && overlayImgEl.naturalWidth) {
-                    ctx.drawImage(overlayImgEl, 0, 0, cw, ch);
-                }
-                _vgRafId = requestAnimationFrame(drawVgFrame);
-            }
-            drawVgFrame();
-
-            const canvasStream = _vgCanvas.captureStream(30);
-            currentStream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
-            recordStream = canvasStream;
-        }
+        const recordStream = currentStream;
 
         // Start recording
         _vgChunks = [];
@@ -1242,36 +1108,6 @@ $(document).ready(function() {
             : MediaRecorder.isTypeSupported('video/webm')
             ? 'video/webm'
             : 'video/mp4';
-
-        // When a frame/background is set, composite it onto a canvas and record that stream
-        // so the frame is embedded in the saved video file.
-        let recordStream = currentStream;
-        let stopCompositing = false;
-        if (appConfig.vgFrameBg) {
-            const vtrack = currentStream.getVideoTracks()[0];
-            const settings = vtrack ? vtrack.getSettings() : {};
-            const cw = settings.width  || videoEl.videoWidth  || 1280;
-            const ch = settings.height || videoEl.videoHeight || 720;
-            const compositeCanvas = document.createElement('canvas');
-            compositeCanvas.width  = cw;
-            compositeCanvas.height = ch;
-            const compCtx = compositeCanvas.getContext('2d');
-            const frameBg = appConfig.vgFrameBg;
-
-            function drawCompositeFrame() {
-                if (stopCompositing) return;
-                compCtx.drawImage(videoEl, 0, 0, cw, ch);
-                compCtx.drawImage(frameBg, 0, 0, cw, ch);
-                _vgFrameAnimId = requestAnimationFrame(drawCompositeFrame);
-            }
-            drawCompositeFrame();
-
-            // Combine canvas video stream with the original audio track
-            const canvasStream = compositeCanvas.captureStream(30);
-            const audioTracks = currentStream.getAudioTracks();
-            audioTracks.forEach(t => canvasStream.addTrack(t));
-            recordStream = canvasStream;
-        }
 
         try {
             _vgMediaRecorder = new MediaRecorder(recordStream, { mimeType });
@@ -1286,7 +1122,6 @@ $(document).ready(function() {
         _vgMediaRecorder.onstop = function() {
             clearInterval(_vgTimerInterval);
             clearTimeout(_vgMaxTimer);
-            stopCompositing = true;
             if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
             $('#vg-hud').hide();
             $('#vg-controls').hide();
@@ -1327,7 +1162,6 @@ $(document).ready(function() {
     async function saveVgVideo(blob, ext) {
         // Stop canvas compositing if it was active
         if (_vgRafId) { cancelAnimationFrame(_vgRafId); _vgRafId = null; }
-        $('#vg-overlay-img').hide();
 
         const now = new Date();
         const ts = now.getFullYear()
