@@ -928,6 +928,35 @@
                         </div>
                     </div>
 
+                    <!-- Video Frame / Background -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Frame / Background</h3>
+                        <p style="color:#6b7280; font-size:0.9rem; margin-bottom:1rem;">
+                            Upload a PNG or JPG frame image that will be overlaid on the recording — just like a photo template border.<br>
+                            Use a <strong>transparent PNG</strong> for a decorative frame, or a solid image for a full background.<br>
+                            Accepts <strong>JPG, JPEG, PNG</strong> &middot; Recommended aspect ratio: <strong>16 × 9</strong>
+                        </p>
+                        <div class="settings-card template-upload-card" id="vg-frame-upload-zone">
+                            <input type="file" id="upload-vg-frame" accept=".jpg,.jpeg,.png" hidden>
+                            <div class="upload-empty-state" id="vg-frame-empty-state">
+                                <div class="upload-icon">🖼️</div>
+                                <div class="upload-prompt">
+                                    <span class="upload-title">Upload Frame / Background</span>
+                                    <span class="upload-sub">Click anywhere or drag &amp; drop a file here</span>
+                                </div>
+                                <button class="btn-outline btn-upload" id="btn-pick-vg-frame">Choose File</button>
+                            </div>
+                            <div class="upload-preview-state" id="vg-frame-preview-state" style="display:none;">
+                                <img class="upload-thumb" id="vg-frame-thumb" src="" alt="Frame preview">
+                                <div class="upload-preview-info">
+                                    <span class="upload-filename" id="vg-frame-filename">image.png</span>
+                                    <span class="upload-dims" id="vg-frame-dims"></span>
+                                    <button class="btn-outline btn-remove-upload" id="btn-clear-vg-frame">✕ Remove</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div><!-- /cap-tab-videoguestbook -->
 
             </div>
@@ -1426,6 +1455,9 @@
         <div id="vg-booth" class="booth-container" style="display:none;">
             <div class="viewfinder vg-viewfinder">
                 <video id="vg-camera-feed" autoplay playsinline muted></video>
+
+                <!-- Frame / background overlay (shown when admin uploads a frame image) -->
+                <img id="vg-frame-overlay" src="" alt="" style="display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:fill; pointer-events:none; z-index:2;">
 
                 <!-- Pre-record countdown -->
                 <div id="vg-countdown-overlay" style="display:none;"></div>
