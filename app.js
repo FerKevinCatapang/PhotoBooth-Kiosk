@@ -1571,9 +1571,9 @@ $(document).ready(function() {
 
         // Update the subtitle to reflect current mode
         if (isVg) {
-            $('#live-ws-subtitle').text(appConfig.vgPromptText || 'Share a message!');
+            $('#live-ws-subtitle').text(appConfig.vgPromptText);
         } else {
-            $('#live-ws-subtitle').text(appConfig.welcomeSubtitle || 'Tap the camera to begin');
+            $('#live-ws-subtitle').text(appConfig.welcomeSubtitle);
         }
 
         $('#guest-welcome').removeClass('hidden');
