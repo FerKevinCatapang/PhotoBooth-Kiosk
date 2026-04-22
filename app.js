@@ -49,7 +49,6 @@ let appConfig = {
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
 
     // Google Drive (Method A - browser OAuth)
-    driveUpload: false,
     driveFolderName: 'Photo Booth Captures',
     _driveAccessToken: null,
     _driveFolderId: null,
@@ -153,8 +152,10 @@ $(document).ready(function() {
         appConfig.storage = $(this).val();
         if(appConfig.storage === 'local') {
             $('#local-folder-config').slideDown();
+            $('#pb-drive-config').slideUp();
         } else {
             $('#local-folder-config').slideUp();
+            $('#pb-drive-config').slideDown();
         }
     });
 
@@ -677,13 +678,6 @@ $(document).ready(function() {
         }
     }
 
-    // UI: toggle
-    $('#toggle-drive-upload').on('change', function() {
-        appConfig.driveUpload = this.checked;
-        $('#toggle-drive-label').text(this.checked ? 'ON' : 'OFF');
-        $(this.closest('label')).toggleClass('is-on', this.checked);
-    });
-
     // UI: Folder name input
     $('#drive-folder-name').on('input', function() {
         appConfig.driveFolderName = this.value.trim() || 'Photo Booth Captures';
@@ -1004,8 +998,10 @@ $(document).ready(function() {
         appConfig.vgStorage = $(this).val();
         if (appConfig.vgStorage === 'local') {
             $('#vg-local-folder-config').slideDown();
+            $('#vg-drive-config').slideUp();
         } else {
             $('#vg-local-folder-config').slideUp();
+            $('#vg-drive-config').slideDown();
         }
     });
 
@@ -1914,7 +1910,7 @@ $(document).ready(function() {
         }
 
         // Upload to Google Drive (Video Guestbook sub-folder) if enabled
-        if (appConfig.driveUpload && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
+        if (appConfig.vgStorage === 'drive' && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
             uploadVgToDrive(blob, filename).catch(e => console.warn('[Drive] VG upload failed:', e.message));
         }
 
@@ -2116,7 +2112,7 @@ $(document).ready(function() {
         updateDashboardGallery();
 
         // AUTO-UPLOAD TO GOOGLE DRIVE (Method A) — fire-and-forget, non-blocking
-        if (appConfig.driveUpload && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
+        if (appConfig.storage === 'drive' && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
                     await uploadToDrive(blob, filename);
