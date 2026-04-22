@@ -1,5 +1,6 @@
 let currentStream = null;
 let directoryHandle = null;
+let vgDirectoryHandle = null;
 
 let capturedPhotos = []; // In-memory database of captured session photos
 let capturedVideos = []; // In-memory database of captured video guestbook blob URLs
@@ -11,16 +12,20 @@ let appConfig = {
     countdownOthers: 5,
     reviewTime: 4,
     welcomeBg: '#E0F2FE',
-    welcomeTitle: 'Welcome to the Party!',
-    welcomeSubtitle: 'Tap the camera to begin',
+    welcomeTitle: '',
+    welcomeSubtitle: '',
     welcomeMedia: null,   // { type: 'image'|'video', objectUrl: string } or null
     photoMode: false,
     // Capture mode: 'photobooth' | 'videoguestbook'
     captureMode: 'photobooth',
     // Video Guestbook settings
     vgMaxDuration: 60,        // max recording seconds
-    vgPromptText: 'Share a message for the happy couple!',
+    vgPromptText: '',
     vgCountdown: 3,           // countdown before recording starts
+    vgSelectedCameraId: '',   // VG-specific camera device ID
+    vgFacingMode: 'user',     // VG-specific facing mode
+    vgStorage: 'local',       // VG-specific save destination
+    vgOverlay: null,          // { objectUrl, img } or null — PNG overlay burned into recordings
     // Printer settings
     printCopies: 1,
     printQuality: 'high',
@@ -853,6 +858,7 @@ $(document).ready(function() {
             if (tabEl) tabEl.style.display = '';
             // Set capture mode based on active tab
             appConfig.captureMode = (target === 'cap-tab-videoguestbook') ? 'videoguestbook' : 'photobooth';
+            updateAdvancedNavForMode(appConfig.captureMode);
         });
     });
 
@@ -868,6 +874,253 @@ $(document).ready(function() {
     $('#setting-vg-prompt').on('input', function() {
         appConfig.vgPromptText = this.value;
     });
+
+    // --- VG Camera Selection ---
+    async function populateVgCameraList() {
+        const diag = document.getElementById('vg-camera-diag');
+        const setDiag = (html) => { if (diag) diag.innerHTML = html; };
+        setDiag('<span style="color:#9ca3af;">Scanning for cameras…</span>');
+
+        try {
+            const permResults = await Promise.allSettled([
+                navigator.mediaDevices.getUserMedia({ video: true }),
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+            ]);
+            permResults.forEach(r => {
+                if (r.status === 'fulfilled') r.value.getTracks().forEach(t => t.stop());
+            });
+            const allDenied = permResults.every(r => r.status === 'rejected');
+            if (allDenied) {
+                const err = permResults[0].reason;
+                setDiag(`<span style="color:#dc2626;">⚠ Camera permission denied (${err.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
+                document.getElementById('vg-camera-select').innerHTML = '<option value="">— permission denied —</option>';
+                return;
+            }
+
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoInputs = devices.filter(d => d.kind === 'videoinput');
+            const sel = document.getElementById('vg-camera-select');
+            const prevValue = appConfig.vgSelectedCameraId || sel.value;
+
+            sel.innerHTML = '';
+            if (videoInputs.length === 0) {
+                sel.innerHTML = '<option value="">No cameras found</option>';
+                setDiag('<span style="color:#dc2626;">⚠ No cameras detected. Plug in the camera, make sure it is in UVC mode, then tap Refresh.</span>');
+                return;
+            }
+
+            videoInputs.forEach((cam, i) => {
+                const opt = document.createElement('option');
+                opt.value = cam.deviceId;
+                opt.textContent = cam.label || ('Camera ' + (i + 1));
+                const lbl = (cam.label || '').toLowerCase();
+                if (!appConfig.vgSelectedCameraId &&
+                    (lbl.includes('usb') || lbl.includes('external') ||
+                     lbl.includes('dji') || lbl.includes('action') || lbl.includes('gopro'))) {
+                    opt.selected = true;
+                }
+                sel.appendChild(opt);
+            });
+
+            if (prevValue && [...sel.options].some(o => o.value === prevValue)) {
+                sel.value = prevValue;
+            }
+            appConfig.vgSelectedCameraId = sel.value;
+
+            const lines = videoInputs.map((cam, i) => {
+                const lbl = cam.label || '<em style="color:#f59e0b;">no label — tap Refresh after granting camera permission</em>';
+                const shortId = cam.deviceId ? ' <span style="color:#9ca3af;font-family:monospace;font-size:0.72rem;">' + cam.deviceId.slice(0, 10) + '…</span>' : '';
+                return `<span style="display:block;">[${i + 1}] ${lbl}${shortId}</span>`;
+            }).join('');
+            const hint = videoInputs.some(c => !c.label)
+                ? '<span style="color:#f59e0b; display:block; margin-top:3px;">⚠ Some cameras have no label — grant camera permission and tap Refresh.</span>'
+                : '';
+            setDiag(`<span style="font-weight:600;">${videoInputs.length} camera(s) detected:</span><span style="display:block; margin-top:2px;">${lines}</span>${hint}`);
+        } catch (e) {
+            setDiag(`<span style="color:#dc2626;">⚠ Error: ${e.name} — ${e.message}</span>`);
+            console.warn('populateVgCameraList:', e);
+        }
+    }
+
+    $('#vg-camera-select').on('change', function() {
+        appConfig.vgSelectedCameraId = this.value;
+    });
+
+    $('input[name="vg-facing-mode"]').on('change', function() {
+        appConfig.vgFacingMode = this.value;
+    });
+
+    $('#btn-refresh-vg-cameras').on('click', function() {
+        const btn = $(this);
+        btn.prop('disabled', true).text('Refreshing…');
+        populateVgCameraList().finally(() => btn.prop('disabled', false).text('↺ Refresh'));
+    });
+
+    // --- VG Test Camera ---
+    let _vgTestStream = null;
+
+    function _stopVgCameraTest() {
+        if (_vgTestStream) { _vgTestStream.getTracks().forEach(t => t.stop()); _vgTestStream = null; }
+        const pv = document.getElementById('vg-camera-test-preview');
+        if (pv) pv.srcObject = null;
+        $('#vg-camera-test-card').hide();
+        $('#btn-test-vg-camera').text('▶ Test');
+    }
+
+    $('#btn-test-vg-camera').on('click', async function() {
+        const btn = $(this);
+        if (_vgTestStream) { _stopVgCameraTest(); return; }
+
+        btn.prop('disabled', true).text('Opening…');
+        const diag = document.getElementById('vg-camera-diag');
+        try {
+            const deviceId = appConfig.vgSelectedCameraId;
+            const constraints = deviceId && appConfig.vgFacingMode === ''
+                ? { video: { deviceId: { exact: deviceId } } }
+                : { video: appConfig.vgFacingMode ? { facingMode: appConfig.vgFacingMode } : true };
+
+            _vgTestStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const pv = document.getElementById('vg-camera-test-preview');
+            pv.srcObject = _vgTestStream;
+
+            const track = _vgTestStream.getVideoTracks()[0];
+            const settings = track.getSettings();
+            const info = document.getElementById('vg-camera-test-info');
+            if (info) info.textContent = `${track.label}  ·  ${settings.width || '?'} × ${settings.height || '?'}`;
+
+            $('#vg-camera-test-card').show();
+            btn.prop('disabled', false).text('⏹ Stop Test');
+        } catch (e) {
+            btn.prop('disabled', false).text('▶ Test');
+            const msg = `<span style="color:#dc2626;">⚠ Could not open camera: <strong>${e.name}</strong> — ${e.message}</span>`;
+            if (diag) diag.innerHTML = msg;
+        }
+    });
+
+    $('#btn-stop-vg-camera-test').on('click', function() { _stopVgCameraTest(); });
+
+    // --- VG Storage ---
+    $('input[name="vg-storage"]').on('change', function() {
+        appConfig.vgStorage = $(this).val();
+        if (appConfig.vgStorage === 'local') {
+            $('#vg-local-folder-config').slideDown();
+        } else {
+            $('#vg-local-folder-config').slideUp();
+        }
+    });
+
+    $('#btn-vg-select-dir').on('click', async function() {
+        try {
+            if (!window.showDirectoryPicker) {
+                alert("Your browser does not support seamless folder saving. Videos will be saved via standard downloads.");
+                return;
+            }
+            vgDirectoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            $('#vg-dir-status').text(`Saving to: /${vgDirectoryHandle.name}`);
+        } catch (err) {
+            console.log("Directory picker cancelled or failed.", err);
+        }
+    });
+
+    // Populate VG camera list on load
+    populateVgCameraList();
+
+    // --- Advanced nav visibility based on capture mode ---
+    function updateAdvancedNavForMode(mode) {
+        const isVg = mode === 'videoguestbook';
+        $('#nav-photo-layout, #nav-template, #nav-printer').toggle(!isVg);
+        $('#nav-video-overlay').toggle(isVg);
+        // If a photo-only panel is active while switching to VG, go to dashboard
+        if (isVg) {
+            const active = $('.nav-item.active').data('target');
+            if (active === 'panel-photo-layout' || active === 'panel-template' || active === 'panel-printer') {
+                $('[data-target="panel-dashboard"]').trigger('click');
+            }
+        }
+        // If video-overlay panel is active while switching to PhotoBooth, go to dashboard
+        if (!isVg) {
+            const active = $('.nav-item.active').data('target');
+            if (active === 'panel-video-overlay') {
+                $('[data-target="panel-dashboard"]').trigger('click');
+            }
+        }
+    }
+
+    // --- Video Overlay upload ---
+    $('#btn-pick-vg-overlay, #vg-overlay-drop').on('click', function(e) {
+        if ($(e.target).is('#vg-overlay-remove')) return;
+        $('#vg-overlay-input').trigger('click');
+    });
+
+    $('#vg-overlay-input').on('change', function() {
+        const file = this.files[0];
+        this.value = '';
+        if (!file) return;
+        if (file.type !== 'image/png') {
+            _showOverlayError('Please select a PNG file.');
+            return;
+        }
+        const url = URL.createObjectURL(file);
+        const testImg = new Image();
+        testImg.onload = function() {
+            if (testImg.naturalWidth !== 1920 || testImg.naturalHeight !== 1080) {
+                URL.revokeObjectURL(url);
+                _showOverlayError(`Image must be exactly 1920 × 1080 px (yours is ${testImg.naturalWidth} × ${testImg.naturalHeight} px).`);
+                return;
+            }
+            _applyVgOverlay(url, file.name, testImg);
+        };
+        testImg.onerror = function() {
+            URL.revokeObjectURL(url);
+            _showOverlayError('Could not read the image. Please try another file.');
+        };
+        testImg.src = url;
+    });
+
+    // Drag-and-drop on overlay drop zone
+    $('#vg-overlay-drop').on('dragover', function(e) { e.preventDefault(); $(this).addClass('drag-over'); });
+    $('#vg-overlay-drop').on('dragleave drop', function(e) { e.preventDefault(); $(this).removeClass('drag-over'); });
+    $('#vg-overlay-drop').on('drop', function(e) {
+        const file = e.originalEvent.dataTransfer.files[0];
+        if (!file) return;
+        $('#vg-overlay-input')[0].files;  // clear
+        // Reuse input change logic via synthetic assignment
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        const inp = document.getElementById('vg-overlay-input');
+        inp.files = dt.files;
+        $(inp).trigger('change');
+    });
+
+    $('#vg-overlay-remove').on('click', function(e) {
+        e.stopPropagation();
+        if (appConfig.vgOverlay) {
+            URL.revokeObjectURL(appConfig.vgOverlay.objectUrl);
+            appConfig.vgOverlay = null;
+        }
+        $('#vg-overlay-filled').hide();
+        $('#vg-overlay-empty').show();
+        $('#vg-overlay-thumb').attr('src', '');
+        $('#vg-overlay-live').hide().attr('src', '');
+        _clearOverlayError();
+    });
+
+    function _applyVgOverlay(url, filename, img) {
+        if (appConfig.vgOverlay) URL.revokeObjectURL(appConfig.vgOverlay.objectUrl);
+        appConfig.vgOverlay = { objectUrl: url, img };
+        $('#vg-overlay-thumb').attr('src', url);
+        $('#vg-overlay-filename').text(filename);
+        $('#vg-overlay-empty').hide();
+        $('#vg-overlay-filled').show();
+        _clearOverlayError();
+    }
+
+    function _showOverlayError(msg) {
+        $('#vg-overlay-error').text(msg).show();
+    }
+    function _clearOverlayError() {
+        $('#vg-overlay-error').hide().text('');
+    }
 
 
 
@@ -898,11 +1151,15 @@ $(document).ready(function() {
     populateCameraList();
 
     // --- Launch Kiosk ---
+    // Mobile duplicate button delegates to the main launch button
+    $('#btn-launch-booth-mobile').on('click', function() { $('#btn-launch-booth').trigger('click'); });
+
     $('#btn-launch-booth').on('click', async function() {
         appConfig.layout = $('input[name="layout"]:checked').val();
         const launchBtn = $(this);
         launchBtn.prop('disabled', true).text('Initializing Hardware...');
-        _stopCameraTest(); // always release the test preview stream before launching
+        _stopCameraTest();    // always release the test preview stream before launching
+        _stopVgCameraTest(); // also release VG test preview stream
 
         try {
         // ── Normal getUserMedia path ─────────────────────────────────────
@@ -917,6 +1174,16 @@ $(document).ready(function() {
                 videoConstraints.deviceId = { exact: appConfig.selectedCameraId };
             } else if (appConfig.facingMode) {
                 videoConstraints.facingMode = { ideal: appConfig.facingMode };
+            }
+            // For VG mode, override with VG-specific camera settings
+            if (isVgMode) {
+                delete videoConstraints.deviceId;
+                delete videoConstraints.facingMode;
+                if (appConfig.vgSelectedCameraId && appConfig.vgFacingMode === '') {
+                    videoConstraints.deviceId = { exact: appConfig.vgSelectedCameraId };
+                } else if (appConfig.vgFacingMode) {
+                    videoConstraints.facingMode = { ideal: appConfig.vgFacingMode };
+                }
             }
             const constraints = isVgMode
                 ? { video: videoConstraints, audio: true }
@@ -1184,11 +1451,23 @@ $(document).ready(function() {
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
+        const ol = document.getElementById('vg-overlay-live');
+        if (ol) { ol.style.display = 'none'; }
     }
 
     async function triggerVgSequence() {
         $('#vg-booth').show();
         const videoEl = $('#vg-camera-feed')[0];
+
+        // Show live overlay image on viewfinder during recording
+        const overlayLive = document.getElementById('vg-overlay-live');
+        if (appConfig.vgOverlay) {
+            overlayLive.src = appConfig.vgOverlay.objectUrl;
+            overlayLive.style.display = '';
+        } else {
+            overlayLive.style.display = 'none';
+            overlayLive.src = '';
+        }
 
         // Pre-record countdown
         const cdEl = document.getElementById('vg-countdown-overlay');
@@ -1203,7 +1482,38 @@ $(document).ready(function() {
         }
         cdEl.style.display = 'none';
 
-        const recordStream = currentStream;
+        // Build the stream to record.
+        // If an overlay is configured, composite camera + overlay on a canvas
+        // and record the canvas stream (video) + audio from currentStream.
+        let recordStream = currentStream;
+        if (appConfig.vgOverlay) {
+            const canvas = document.getElementById('vg-record-canvas');
+            canvas.width  = 1920;
+            canvas.height = 1080;
+            const ctx = canvas.getContext('2d');
+            const overlayImg = appConfig.vgOverlay.img;
+
+            // rAF loop: draw camera frame then overlay
+            function compositeFrame() {
+                ctx.save();
+                // Mirror horizontally to match how selfie cameras appear on screen
+                ctx.translate(1920, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(videoEl, 0, 0, 1920, 1080);
+                ctx.restore();
+                ctx.drawImage(overlayImg, 0, 0, 1920, 1080);
+                _vgFrameAnimId = requestAnimationFrame(compositeFrame);
+            }
+            compositeFrame();
+
+            const canvasVideoStream = canvas.captureStream(30);
+            const audioTracks = currentStream.getAudioTracks();
+            const combinedStream = new MediaStream([
+                ...canvasVideoStream.getVideoTracks(),
+                ...audioTracks
+            ]);
+            recordStream = combinedStream;
+        }
 
         // Start recording
         _vgChunks = [];
@@ -1248,6 +1558,7 @@ $(document).ready(function() {
             clearInterval(_vgTimerInterval);
             clearTimeout(_vgMaxTimer);
             if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
+            overlayLive.style.display = 'none';
             $('#vg-hud').hide();
             $('#vg-controls').hide();
             $('#vg-processing-overlay').fadeIn(200);
@@ -1306,8 +1617,8 @@ $(document).ready(function() {
 
         // Save locally (folder or download)
         try {
-            if (directoryHandle) {
-                const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+            if (vgDirectoryHandle) {
+                const fileHandle = await vgDirectoryHandle.getFileHandle(filename, { create: true });
                 const writable = await fileHandle.createWritable();
                 await writable.write(blob);
                 await writable.close();
@@ -1342,18 +1653,65 @@ $(document).ready(function() {
     }
     function showVgPreview(blobUrl) {
         return new Promise(resolve => {
-            const overlay  = document.getElementById('vg-preview-overlay');
-            const video    = document.getElementById('vg-preview-video');
-            const closeBtn = document.getElementById('btn-vg-preview-close');
-            const msg      = document.getElementById('vg-preview-msg');
+            const overlay      = document.getElementById('vg-preview-overlay');
+            const video        = document.getElementById('vg-preview-video');
+            const closeBtn     = document.getElementById('btn-vg-preview-close');
+            const msg          = document.getElementById('vg-preview-msg');
+            const seekBar      = document.getElementById('vg-seek-bar');
+            const playPauseBtn = document.getElementById('btn-vg-play-pause');
+            const muteBtn      = document.getElementById('btn-vg-mute');
+            const timeDisplay  = document.getElementById('vg-time-display');
             let loopCount = 0;
+
+            // Helper: format seconds as M:SS
+            function fmtTime(s) {
+                if (!isFinite(s)) return '0:00';
+                const m = Math.floor(s / 60);
+                return m + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+            }
 
             video.src = blobUrl;
             video.loop = false;
-            closeBtn.style.display = 'none';
+            video.muted = false;
+            seekBar.value = 0;
+            timeDisplay.textContent = '0:00 / 0:00';
+            playPauseBtn.textContent = '⏸';
+            muteBtn.textContent = '🔊';
             msg.style.display = '';
             msg.textContent = 'Playing back your message…';
             overlay.style.display = 'flex';
+
+            // Control bar event handlers
+            function onTimeUpdate() {
+                if (video.duration) {
+                    seekBar.value = (video.currentTime / video.duration) * 100;
+                    timeDisplay.textContent = fmtTime(video.currentTime) + ' / ' + fmtTime(video.duration);
+                }
+            }
+            function onLoadedMetadata() {
+                seekBar.value = 0;
+                timeDisplay.textContent = '0:00 / ' + fmtTime(video.duration);
+            }
+            function onSeek() {
+                if (video.duration) video.currentTime = (seekBar.value / 100) * video.duration;
+            }
+            function onPlayPause() {
+                if (video.paused) { video.play().catch(() => {}); } else { video.pause(); }
+            }
+            function onPlay()  { playPauseBtn.textContent = '⏸'; }
+            function onPause() { playPauseBtn.textContent = '▶'; }
+            function onMute() {
+                video.muted = !video.muted;
+                muteBtn.textContent = video.muted ? '🔇' : '🔊';
+            }
+
+            video.addEventListener('timeupdate', onTimeUpdate);
+            video.addEventListener('loadedmetadata', onLoadedMetadata);
+            video.addEventListener('play', onPlay);
+            video.addEventListener('pause', onPause);
+            seekBar.addEventListener('input', onSeek);
+            playPauseBtn.addEventListener('click', onPlayPause);
+            muteBtn.addEventListener('click', onMute);
 
             function onEnded() {
                 loopCount++;
@@ -1362,18 +1720,24 @@ $(document).ready(function() {
                     video.play().catch(() => {});
                 } else {
                     msg.style.display = 'none';
-                    closeBtn.style.display = '';
+                    playPauseBtn.textContent = '▶';
                 }
             }
-
             video.onended = onEnded;
 
             function doClose() {
+                // Remove all control bar listeners
+                video.removeEventListener('timeupdate', onTimeUpdate);
+                video.removeEventListener('loadedmetadata', onLoadedMetadata);
+                video.removeEventListener('play', onPlay);
+                video.removeEventListener('pause', onPause);
+                seekBar.removeEventListener('input', onSeek);
+                playPauseBtn.removeEventListener('click', onPlayPause);
+                muteBtn.removeEventListener('click', onMute);
                 video.onended = null;
                 video.pause();
                 video.src = '';
                 overlay.style.display = 'none';
-                closeBtn.style.display = 'none';
                 closeBtn.removeEventListener('click', doClose);
                 resolve();
             }
@@ -1381,8 +1745,8 @@ $(document).ready(function() {
             closeBtn.addEventListener('click', doClose);
 
             video.play().catch(() => {
-                msg.textContent = 'Tap to close.';
-                closeBtn.style.display = '';
+                msg.textContent = 'Tap play to preview your message.';
+                playPauseBtn.textContent = '▶';
             });
         });
     }
