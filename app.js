@@ -1047,8 +1047,11 @@ $(document).ready(function() {
     }
 
     // --- Video Overlay upload ---
-    $('#btn-pick-vg-overlay, #vg-overlay-drop').on('click', function(e) {
-        if ($(e.target).is('#vg-overlay-remove')) return;
+    // The #btn-pick-vg-overlay label already opens the file picker natively (safe on mobile).
+    // The drop-zone click handler only fires when clicking elsewhere on the drop zone.
+    $('#vg-overlay-drop').on('click', function(e) {
+        // Let label, remove button, and thumb handle themselves
+        if ($(e.target).closest('#btn-pick-vg-overlay, #vg-overlay-remove').length) return;
         $('#vg-overlay-input').trigger('click');
     });
 
@@ -1222,7 +1225,7 @@ $(document).ready(function() {
         _stitchResultBlob = null;
 
         try {
-            const blob = await _stitchVideos(urls, function(pct, label) {
+            const { blob, ext: stitchExt } = await _stitchVideos(urls, function(pct, label) {
                 barEl.style.width = pct + '%';
                 statusEl.textContent = label;
             });
@@ -1241,7 +1244,7 @@ $(document).ready(function() {
             const prefix = appConfig.eventName
                 ? appConfig.eventName.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '')
                 : 'guestbook';
-            const filename = `${prefix}_${ts}_Final.mp4`;
+            const filename = `${prefix}_${ts}_Final.${stitchExt}`;
 
             // Save to VG folder or trigger download
             try {
@@ -1287,7 +1290,7 @@ $(document).ready(function() {
 
     /**
      * Stitch an array of video blob URLs sequentially by replaying each on a
-     * canvas and recording the canvas stream with MediaRecorder.
+     * canvas and recording the canvas stream + audio via AudioContext.
      * Returns a Blob (video/mp4 or video/webm).
      */
     async function _stitchVideos(urls, onProgress) {
@@ -1303,10 +1306,21 @@ $(document).ready(function() {
             : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
             ? 'video/webm;codecs=vp8,opus'
             : 'video/webm';
+        const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
+
+        // AudioContext routes each clip's audio into the recorder
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        const audioDest = audioCtx.createMediaStreamDestination();
 
         const chunks = [];
         const canvasStream = canvas.captureStream(30);
-        const recorder = new MediaRecorder(canvasStream, {
+        // Combine canvas video + AudioContext audio destination into one stream
+        const combinedStream = new MediaStream([
+            ...canvasStream.getVideoTracks(),
+            ...audioDest.stream.getAudioTracks()
+        ]);
+        const recorder = new MediaRecorder(combinedStream, {
             mimeType,
             videoBitsPerSecond: 4000000
         });
@@ -1322,29 +1336,32 @@ $(document).ready(function() {
                 Math.round((i / urls.length) * 90),
                 `Rendering clip ${i + 1} of ${urls.length}…`
             );
-            await _playVideoOntoCanvas(ctx, urls[i], W, H);
+            await _playVideoOntoCanvas(ctx, urls[i], W, H, audioCtx, audioDest);
         }
 
         onProgress(95, 'Finalising…');
         recorder.stop();
         const resultBlob = await recorderDone;
+        audioCtx.close();
         onProgress(100, 'Done!');
-        return resultBlob;
+        return { blob: resultBlob, ext };
     }
 
     /**
      * Play a video (by blob URL) frame-by-frame onto a canvas context,
-     * waiting until the video ends before resolving.
+     * routing its audio through the provided AudioContext destination.
+     * Resolves when the video ends.
      */
-    function _playVideoOntoCanvas(ctx, url, W, H) {
+    function _playVideoOntoCanvas(ctx, url, W, H, audioCtx, audioDest) {
         return new Promise((resolve, reject) => {
             const vid = document.createElement('video');
             vid.src = url;
-            vid.muted = true;
+            vid.muted = false; // audio must be unmuted so AudioContext can capture it
+            vid.volume = 1;
             vid.playsInline = true;
-            vid.crossOrigin = 'anonymous';
 
             let rafId = null;
+            let sourceNode = null;
 
             function drawFrame() {
                 if (vid.paused || vid.ended) return;
@@ -1353,6 +1370,15 @@ $(document).ready(function() {
             }
 
             vid.onloadedmetadata = function() {
+                // Route this clip's audio into the shared AudioContext destination
+                if (audioCtx && audioDest) {
+                    try {
+                        sourceNode = audioCtx.createMediaElementSource(vid);
+                        sourceNode.connect(audioDest);
+                    } catch (e) {
+                        console.warn('[Stitch] Audio routing error:', e);
+                    }
+                }
                 vid.play().then(() => {
                     drawFrame();
                 }).catch(reject);
@@ -1360,8 +1386,8 @@ $(document).ready(function() {
 
             vid.onended = function() {
                 if (rafId) cancelAnimationFrame(rafId);
-                // Draw final frame
-                ctx.drawImage(vid, 0, 0, W, H);
+                ctx.drawImage(vid, 0, 0, W, H); // draw final frame
+                if (sourceNode) { try { sourceNode.disconnect(); } catch (_) {} }
                 vid.src = '';
                 resolve();
             };
@@ -1770,15 +1796,15 @@ $(document).ready(function() {
         _vgChunks = [];
         _vgElapsed = 0;
         _vgSaving = false; // reset save guard for this new recording session (also guards against a stale true from a previous session)
-        // Prefer VP8 over VP9: VP8 has broader hardware-acceleration support on
-        // kiosk/tablet devices, reducing CPU load and preventing lag/stuttering.
-        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+        // Prefer mp4 (H.264+AAC) — widest compatibility for saved files.
+        // Fall back to webm on browsers that don't support mp4 recording.
+        const mimeType = MediaRecorder.isTypeSupported('video/mp4')
+            ? 'video/mp4'
+            : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
             ? 'video/webm;codecs=vp8,opus'
             : MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
             ? 'video/webm;codecs=vp9,opus'
-            : MediaRecorder.isTypeSupported('video/webm')
-            ? 'video/webm'
-            : 'video/mp4';
+            : 'video/webm';
 
         // Explicit bitrate caps prevent the encoder from saturating the CPU.
         // 2.5 Mbps video + 128 kbps audio is more than enough for a guestbook clip.
