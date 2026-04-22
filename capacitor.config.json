@@ -1,0 +1,21 @@
+{
+  "appId": "com.photobooth.kiosk",
+  "appName": "Photo Booth",
+  "webDir": ".",
+  "server": {
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  },
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#000000",
+    "initialFocus": true,
+    "loggingBehavior": "none"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
