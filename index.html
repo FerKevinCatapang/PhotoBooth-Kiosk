@@ -536,33 +536,64 @@
                     </div>
 
                     <!-- Specific device dropdown -->
-                    <div class="settings-card" style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
+                    <div class="settings-card" style="display:flex; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
                         <div style="flex:1; min-width:0;">
                             <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Specific Camera Device</label>
                             <select id="camera-select" class="text-input" style="width:100%; max-width:420px; cursor:pointer;">
                                 <option value="">— detecting cameras… —</option>
                             </select>
-                            <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Only relevant when <em>Use Specific Camera</em> is selected above. Plug in a camera and click Refresh.</p>
+                            <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Select <em>Use Specific Camera</em> above, plug in your camera, then tap <strong>↺ Refresh</strong>.</p>
+                            <!-- Camera diagnostic output — populated by JS -->
+                            <div id="camera-diag" style="margin-top:0.55rem; font-size:0.8rem; line-height:1.6; color:#374151;"></div>
                         </div>
-                        <button id="btn-refresh-cameras" class="btn-outline" style="white-space:nowrap; flex-shrink:0;">
-                            ↺ Refresh
-                        </button>
+                        <div style="display:flex; flex-direction:column; gap:0.5rem; flex-shrink:0; padding-top:1.4rem;">
+                            <button id="btn-refresh-cameras" class="btn-outline" style="white-space:nowrap;">↺ Refresh</button>
+                            <button id="btn-test-camera"    class="btn-outline" style="white-space:nowrap;">▶ Test</button>
+                        </div>
                     </div>
 
                     <!-- DJI / IP Camera fallback -->
                     <div class="settings-card" style="margin-top:0.75rem;">
+
+                        <!-- Live test preview (hidden until ▶ Test is clicked) -->
+                        <div id="camera-test-card" style="display:none; margin-bottom:1rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                                <span style="font-weight:600; font-size:0.88rem; color:#374151;">📷 Camera Preview</span>
+                                <button id="btn-stop-camera-test" class="btn-outline" style="font-size:0.8rem; padding:0.3rem 0.7rem;">⏹ Stop</button>
+                            </div>
+                            <video id="camera-test-preview" autoplay playsinline muted
+                                   style="width:100%; max-height:260px; border-radius:8px; background:#000; display:block; object-fit:contain;"></video>
+                            <p id="camera-test-info" style="margin:0.4rem 0 0; font-size:0.78rem; color:#6b7280;"></p>
+                        </div>
                         <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.5rem;">
                             📡 IP / Network Camera Stream URL
                             <span style="font-weight:400; color:#9ca3af; margin-left:0.35rem;">(optional — overrides camera selection above)</span>
                         </label>
                         <input type="url" id="ip-camera-url" class="text-input" placeholder="e.g. http://192.168.1.100:8080/video"
-                               style="margin-bottom:0.6rem;" autocomplete="off" autocorrect="off" spellcheck="false">
+                               style="margin-bottom:0.75rem;" autocomplete="off" autocorrect="off" spellcheck="false">
                         <div class="info-box" style="background:#f0f9ff; border-color:#bae6fd;">
-                            <svg style="flex-shrink:0; margin-top:2px;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                            <div>
-                                <p style="color:#0c4a6e; font-weight:600; margin-bottom:0.3rem;">How to use your DJI Action 5 Pro on any Android tablet or iPad</p>
-                                <p style="color:#0369a1;"><strong>Option 1 – USB (recommended):</strong> Put the camera in <em>USB Camera (UVC)</em> mode via Settings → Connect → USB Connection, then plug it into your tablet. Hit <em>Refresh</em> above — it should appear in the dropdown. Works on Android (Chrome) and iPad with iPadOS 17 or later (Safari).</p>
-                                <p style="color:#0369a1; margin-top:0.4rem;"><strong>Option 2 – Wi-Fi MJPEG stream:</strong> Install <strong>IP Webcam</strong> (Android) or <strong>Camo</strong> (iOS) on a second phone/tablet and point it at the DJI camera, or run <a href="https://github.com/bluenviron/mediamtx" target="_blank" rel="noopener" style="color:#be185d;">MediaMTX</a> on a computer to re-stream the DJI RTSP feed as an MJPEG HTTP stream. Enter the MJPEG URL in the field above (e.g. <code>http://192.168.x.x:8080/video</code>). Both devices must be on the same Wi-Fi network.</p>
+                            <svg style="flex-shrink:0; margin-top:3px;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            <div style="min-width:0;">
+                                <p style="color:#0c4a6e; font-weight:700; font-size:0.9rem; margin-bottom:0.5rem;">🎬 Using the DJI Osmo Action 5 Pro via USB — step by step</p>
+                                <ol style="color:#0369a1; padding-left:1.25rem; margin:0 0 0.6rem; line-height:1.85; font-size:0.83rem;">
+                                    <li>On the camera: swipe down from the top edge → tap the <strong>⚙ gear icon</strong></li>
+                                    <li>Scroll to <strong>General</strong> → tap <strong>USB Connection</strong> → select <strong>USB Camera (UVC)</strong></li>
+                                    <li>Use a USB-C cable that supports <strong>data transfer</strong> (not a charge-only cable — check the packaging)</li>
+                                    <li>Plug the DJI into your Android tablet. When a popup appears, tap <strong>Allow</strong></li>
+                                    <li>Open this page in <strong>Chrome</strong> (not Samsung Internet, Firefox, or WebView)</li>
+                                    <li>Select <strong>Use Specific Camera</strong> in the Camera Side section above, then tap <strong>↺ Refresh</strong></li>
+                                    <li>The DJI should appear in the dropdown (often listed as <em>"USB Camera"</em> or <em>"USB Video"</em>)</li>
+                                    <li>Select it, then tap <strong>▶ Test</strong> to confirm you can see a live preview</li>
+                                </ol>
+                                <p style="color:#dc2626; font-size:0.82rem; font-weight:600; margin-bottom:0.3rem;">Still not showing after Refresh?</p>
+                                <ul style="color:#0369a1; padding-left:1.2rem; margin:0 0 0.6rem; line-height:1.7; font-size:0.82rem;">
+                                    <li>Android Settings → Apps → Chrome → Permissions → Camera → set to <strong>Allow</strong></li>
+                                    <li>Try a different USB-C cable — many cables are charge-only</li>
+                                    <li>Confirm the DJI screen still shows <em>UVC</em> after plugging in (some cables reset the mode)</li>
+                                    <li>Unplug, wait 5 seconds, replug, then tap Refresh again</li>
+                                </ul>
+                                <hr style="border:none; border-top:1px solid #bae6fd; margin:0.5rem 0;">
+                                <p style="color:#0369a1; font-size:0.82rem;"><strong>No USB luck? Wi-Fi fallback:</strong> Install <strong>IP Webcam</strong> (free) on a spare Android phone, start the server, and paste the MJPEG stream URL (e.g. <code>http://192.168.x.x:8080/video</code>) into the field above. Both devices must be on the same Wi-Fi network.</p>
                             </div>
                         </div>
                     </div>

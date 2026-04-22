@@ -723,11 +723,28 @@ $(document).ready(function() {
 
     // --- Camera selection ---
     async function populateCameraList() {
+        const diag = document.getElementById('camera-diag');
+        const setDiag = (html) => { if (diag) diag.innerHTML = html; };
+        setDiag('<span style="color:#9ca3af;">Scanning for cameras…</span>');
+
         try {
-            // A brief getUserMedia is needed first so labels are not empty (browser security)
-            await navigator.mediaDevices.getUserMedia({ video: true })
-                .then(s => s.getTracks().forEach(t => t.stop()))
-                .catch(() => {});
+            // getUserMedia must be called first so the browser reveals device labels.
+            // Try both front and environment to unlock labels for all physical cameras
+            // (some Android tablets require a separate permission call per camera group).
+            const permResults = await Promise.allSettled([
+                navigator.mediaDevices.getUserMedia({ video: true }),
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+            ]);
+            permResults.forEach(r => {
+                if (r.status === 'fulfilled') r.value.getTracks().forEach(t => t.stop());
+            });
+            const allDenied = permResults.every(r => r.status === 'rejected');
+            if (allDenied) {
+                const err = permResults[0].reason;
+                setDiag(`<span style="color:#dc2626;">⚠ Camera permission denied (${err.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
+                document.getElementById('camera-select').innerHTML = '<option value="">— permission denied —</option>';
+                return;
+            }
 
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoInputs = devices.filter(d => d.kind === 'videoinput');
@@ -737,14 +754,16 @@ $(document).ready(function() {
             sel.innerHTML = '';
             if (videoInputs.length === 0) {
                 sel.innerHTML = '<option value="">No cameras found</option>';
+                setDiag('<span style="color:#dc2626;">⚠ No cameras detected. Plug in the camera, make sure it is in UVC mode, then tap Refresh.</span>');
                 return;
             }
+
             videoInputs.forEach((cam, i) => {
                 const opt = document.createElement('option');
                 opt.value = cam.deviceId;
                 opt.textContent = cam.label || ('Camera ' + (i + 1));
                 // Auto-prefer USB/external cameras and known action cameras (DJI, GoPro, etc.)
-                const lbl = cam.label.toLowerCase();
+                const lbl = (cam.label || '').toLowerCase();
                 if (!appConfig.selectedCameraId &&
                     (lbl.includes('usb') || lbl.includes('external') ||
                      lbl.includes('dji') || lbl.includes('action') || lbl.includes('gopro'))) {
@@ -752,12 +771,26 @@ $(document).ready(function() {
                 }
                 sel.appendChild(opt);
             });
+
             // Restore previously chosen camera if still available
             if (prevValue && [...sel.options].some(o => o.value === prevValue)) {
                 sel.value = prevValue;
             }
             appConfig.selectedCameraId = sel.value;
+
+            // Build diagnostic list so user can see what the browser actually found
+            const lines = videoInputs.map((cam, i) => {
+                const lbl = cam.label || '<em style="color:#f59e0b;">no label — tap Refresh after granting camera permission</em>';
+                const shortId = cam.deviceId ? ' <span style="color:#9ca3af;font-family:monospace;font-size:0.72rem;">' + cam.deviceId.slice(0, 10) + '…</span>' : '';
+                return `<span style="display:block;">[${i + 1}] ${lbl}${shortId}</span>`;
+            }).join('');
+            const hint = videoInputs.some(c => !c.label)
+                ? '<span style="color:#f59e0b; display:block; margin-top:3px;">⚠ Some cameras have no label — grant camera permission and tap Refresh.</span>'
+                : '';
+            setDiag(`<span style="font-weight:600;">${videoInputs.length} camera(s) detected:</span><span style="display:block; margin-top:2px;">${lines}</span>${hint}`);
+
         } catch (e) {
+            setDiag(`<span style="color:#dc2626;">⚠ Error: ${e.name} — ${e.message}</span>`);
             console.warn('populateCameraList:', e);
         }
     }
@@ -769,6 +802,50 @@ $(document).ready(function() {
     $('#ip-camera-url').on('input', function() {
         appConfig.ipCameraUrl = this.value.trim();
     });
+
+    // --- Test Camera (live preview in settings) ---
+    let _testStream = null;
+
+    function _stopCameraTest() {
+        if (_testStream) { _testStream.getTracks().forEach(t => t.stop()); _testStream = null; }
+        const pv = document.getElementById('camera-test-preview');
+        if (pv) pv.srcObject = null;
+        $('#camera-test-card').hide();
+        $('#btn-test-camera').text('▶ Test');
+    }
+
+    $('#btn-test-camera').on('click', async function() {
+        const btn = $(this);
+        if (_testStream) { _stopCameraTest(); return; }
+
+        btn.prop('disabled', true).text('Opening…');
+        const diag = document.getElementById('camera-diag');
+        try {
+            const deviceId = appConfig.selectedCameraId;
+            const constraints = deviceId
+                ? { video: { deviceId: { exact: deviceId } } }
+                : { video: appConfig.facingMode ? { facingMode: appConfig.facingMode } : true };
+
+            _testStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const pv = document.getElementById('camera-test-preview');
+            pv.srcObject = _testStream;
+
+            // Show resolution info once track is active
+            const track = _testStream.getVideoTracks()[0];
+            const settings = track.getSettings();
+            const info = document.getElementById('camera-test-info');
+            if (info) info.textContent = `${track.label}  ·  ${settings.width || '?'} × ${settings.height || '?'}`;
+
+            $('#camera-test-card').show();
+            btn.prop('disabled', false).text('⏹ Stop Test');
+        } catch (e) {
+            btn.prop('disabled', false).text('▶ Test');
+            const msg = `<span style="color:#dc2626;">⚠ Could not open camera: <strong>${e.name}</strong> — ${e.message}</span>`;
+            if (diag) diag.innerHTML = msg;
+        }
+    });
+
+    $('#btn-stop-camera-test').on('click', function() { _stopCameraTest(); });
 
     // --- Capture Settings Tabs ---
     document.querySelectorAll('.capture-tab-btn').forEach(function(btn) {
@@ -830,6 +907,7 @@ $(document).ready(function() {
         appConfig.layout = $('input[name="layout"]:checked').val();
         const launchBtn = $(this);
         launchBtn.prop('disabled', true).text('Initializing Hardware...');
+        _stopCameraTest(); // always release the test preview stream before launching
 
         try {
             // ── IP / Network camera (MJPEG stream) ──────────────────────────
@@ -889,7 +967,15 @@ $(document).ready(function() {
             
         } catch (err) {
             console.error("Camera error:", err);
-            alert("Camera access denied. Cannot start kiosk mode.");
+            let hint = '';
+            if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+                hint = '\n\nThe selected camera was not found. Unplug and replug the USB cable, confirm UVC mode is active on the camera, then tap Refresh in Camera Settings.';
+            } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                hint = '\n\nCamera permission was denied. Go to Android Settings → Apps → Chrome → Permissions → Camera → Allow, then try again.';
+            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+                hint = '\n\nThe camera is in use by another app, or the USB connection dropped. Unplug and replug, close other camera apps, then try again.';
+            }
+            alert(`Camera error: ${err.name}\n${err.message}${hint}`);
         } finally {
             launchBtn.prop('disabled', false).text('🚀 Launch Kiosk Mode');
         }
