@@ -382,6 +382,7 @@
                 <a href="#" class="nav-item" data-target="panel-capture"><span class="icon">📸</span> Capture settings</a>
                 
                 <div class="nav-section">ADVANCED</div>
+                <a href="#" class="nav-item" data-target="panel-photo-layout"><span class="icon">📐</span> Photo Layout</a>
                 <a href="#" class="nav-item" data-target="panel-welcome"><span class="icon">📱</span> Welcome screen</a>
                 <a href="#" class="nav-item" data-target="panel-template"><span class="icon">🖼️</span> Photo Template</a>
                 <a href="#" class="nav-item" data-target="panel-printer"><span class="icon">🖨️</span> Printer Setup</a>
@@ -552,50 +553,15 @@
                         </div>
                     </div>
 
-                    <!-- DJI / IP Camera fallback -->
-                    <div class="settings-card" style="margin-top:0.75rem;">
-
-                        <!-- Live test preview (hidden until ▶ Test is clicked) -->
-                        <div id="camera-test-card" style="display:none; margin-bottom:1rem;">
-                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                                <span style="font-weight:600; font-size:0.88rem; color:#374151;">📷 Camera Preview</span>
-                                <button id="btn-stop-camera-test" class="btn-outline" style="font-size:0.8rem; padding:0.3rem 0.7rem;">⏹ Stop</button>
-                            </div>
-                            <video id="camera-test-preview" autoplay playsinline muted
-                                   style="width:100%; max-height:260px; border-radius:8px; background:#000; display:block; object-fit:contain;"></video>
-                            <p id="camera-test-info" style="margin:0.4rem 0 0; font-size:0.78rem; color:#6b7280;"></p>
+                    <!-- Live test preview (hidden until ▶ Test is clicked) -->
+                    <div id="camera-test-card" class="settings-card" style="display:none; margin-top:0.75rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                            <span style="font-weight:600; font-size:0.88rem; color:#374151;">📷 Camera Preview</span>
+                            <button id="btn-stop-camera-test" class="btn-outline" style="font-size:0.8rem; padding:0.3rem 0.7rem;">⏹ Stop</button>
                         </div>
-                        <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.5rem;">
-                            📡 IP / Network Camera Stream URL
-                            <span style="font-weight:400; color:#9ca3af; margin-left:0.35rem;">(optional — overrides camera selection above)</span>
-                        </label>
-                        <input type="url" id="ip-camera-url" class="text-input" placeholder="e.g. http://192.168.1.100:8080/video"
-                               style="margin-bottom:0.75rem;" autocomplete="off" autocorrect="off" spellcheck="false">
-                        <div class="info-box" style="background:#f0f9ff; border-color:#bae6fd;">
-                            <svg style="flex-shrink:0; margin-top:3px;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                            <div style="min-width:0;">
-                                <p style="color:#0c4a6e; font-weight:700; font-size:0.9rem; margin-bottom:0.5rem;">🎬 Using the DJI Osmo Action 5 Pro via USB — step by step</p>
-                                <ol style="color:#0369a1; padding-left:1.25rem; margin:0 0 0.6rem; line-height:1.85; font-size:0.83rem;">
-                                    <li>On the camera: swipe down from the top edge → tap the <strong>⚙ gear icon</strong></li>
-                                    <li>Scroll to <strong>General</strong> → tap <strong>USB Connection</strong> → select <strong>USB Camera (UVC)</strong></li>
-                                    <li>Use a USB-C cable that supports <strong>data transfer</strong> (not a charge-only cable — check the packaging)</li>
-                                    <li>Plug the DJI into your Android tablet. When a popup appears, tap <strong>Allow</strong></li>
-                                    <li>Open this page in <strong>Chrome</strong> (not Samsung Internet, Firefox, or WebView)</li>
-                                    <li>Select <strong>Use Specific Camera</strong> in the Camera Side section above, then tap <strong>↺ Refresh</strong></li>
-                                    <li>The DJI should appear in the dropdown (often listed as <em>"USB Camera"</em> or <em>"USB Video"</em>)</li>
-                                    <li>Select it, then tap <strong>▶ Test</strong> to confirm you can see a live preview</li>
-                                </ol>
-                                <p style="color:#dc2626; font-size:0.82rem; font-weight:600; margin-bottom:0.3rem;">Still not showing after Refresh?</p>
-                                <ul style="color:#0369a1; padding-left:1.2rem; margin:0 0 0.6rem; line-height:1.7; font-size:0.82rem;">
-                                    <li>Android Settings → Apps → Chrome → Permissions → Camera → set to <strong>Allow</strong></li>
-                                    <li>Try a different USB-C cable — many cables are charge-only</li>
-                                    <li>Confirm the DJI screen still shows <em>UVC</em> after plugging in (some cables reset the mode)</li>
-                                    <li>Unplug, wait 5 seconds, replug, then tap Refresh again</li>
-                                </ul>
-                                <hr style="border:none; border-top:1px solid #bae6fd; margin:0.5rem 0;">
-                                <p style="color:#0369a1; font-size:0.82rem;"><strong>No USB luck? Wi-Fi fallback:</strong> Install <strong>IP Webcam</strong> (free) on a spare Android phone, start the server, and paste the MJPEG stream URL (e.g. <code>http://192.168.x.x:8080/video</code>) into the field above. Both devices must be on the same Wi-Fi network.</p>
-                            </div>
-                        </div>
+                        <video id="camera-test-preview" autoplay playsinline muted
+                               style="width:100%; max-height:260px; border-radius:8px; background:#000; display:block; object-fit:contain;"></video>
+                        <p id="camera-test-info" style="margin:0.4rem 0 0; font-size:0.78rem; color:#6b7280;"></p>
                     </div>
                 </div>
 
@@ -642,6 +608,130 @@
                             <span class="toggle-label" id="toggle-social-label">ON</span>
                         </label>
                     </div>
+                </div>
+
+
+                <div class="settings-section">
+                    <h3 class="section-title">Countdown</h3>
+                    <div class="settings-card">
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label>Countdown before photo 1</label>
+                                <div class="slider-value"><span id="val-cd-1">5</span> sec</div>
+                            </div>
+                            <input type="range" id="setting-cd-1" min="1" max="10" value="5" class="custom-range">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label>Countdown before other photos</label>
+                                <div class="slider-value"><span id="val-cd-others">5</span> sec</div>
+                            </div>
+                            <input type="range" id="setting-cd-others" min="1" max="10" value="5" class="custom-range">
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <label>Photo review time (Preview)</label>
+                                <div class="slider-value"><span id="val-review">4</span> sec</div>
+                            </div>
+                            <input type="range" id="setting-review" min="1" max="10" value="4" class="custom-range">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3 class="section-title">Save Destination</h3>
+                    <div class="settings-card">
+                        <div class="radio-group" style="margin-bottom: 1rem;">
+                            <label class="storage-card">
+                                <input type="radio" name="storage" value="local" checked id="radio-local">
+                                <div class="card-content">
+                                    <span class="title">Local Folder</span>
+                                </div>
+                            </label>
+                            <label class="storage-card">
+                                <input type="radio" name="storage" value="drive">
+                                <div class="card-content">
+                                    <span class="title">Make.com Webhook</span>
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <div id="local-folder-config" class="folder-picker-box">
+                            <p class="subtitle" style="margin-bottom: 0.5rem;">Choose where local photos will be saved seamlessly.</p>
+                            <div class="flex-row-align">
+                                <button id="btn-select-dir" class="btn-outline">Select Save Folder</button>
+                                <span id="dir-status" class="dir-status-text">No folder selected (Will prompt download)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                </div><!-- /cap-tab-photobooth -->
+
+                <!-- TAB: Video Guestbook -->
+                <div id="cap-tab-videoguestbook" class="cap-tab-content" style="display:none;">
+
+                    <!-- Camera (shared, already configured in PhotoBooth tab) -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Camera</h3>
+                        <div class="settings-card" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                            <p style="margin:0; font-size:0.88rem; color:#6b7280;">Camera selection is shared with the <strong>PhotoBooth</strong> tab — configure it there.</p>
+                        </div>
+                    </div>
+
+                    <!-- Max Recording Duration -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Recording Duration</h3>
+                        <div class="settings-card">
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Maximum recording length</label>
+                                    <div class="slider-value"><span id="val-vg-duration">60</span> sec</div>
+                                </div>
+                                <input type="range" id="setting-vg-duration" min="10" max="180" step="5" value="60" class="custom-range">
+                            </div>
+                            <div class="slider-group" style="margin-top:1rem; border-top:1px solid #f3f4f6; padding-top:1rem;">
+                                <div class="slider-header">
+                                    <label>Countdown before recording</label>
+                                    <div class="slider-value"><span id="val-vg-countdown">3</span> sec</div>
+                                </div>
+                                <input type="range" id="setting-vg-countdown" min="1" max="10" value="3" class="custom-range">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Prompt Text -->
+                    <div class="settings-section">
+                        <h3 class="section-title">On-Screen Prompt</h3>
+                        <div class="settings-card">
+                            <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.5rem;">Prompt shown to guests before recording</label>
+                            <input type="text" id="setting-vg-prompt" class="text-input" value="Share a message for the happy couple!" style="width:100%;">
+                            <p style="margin:0.4rem 0 0; font-size:0.78rem; color:#9ca3af;">Displayed on the kiosk welcome screen when Video Guestbook mode is active.</p>
+                        </div>
+                    </div>
+
+                    <!-- Save Destination -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Save Destination</h3>
+                        <div class="settings-card">
+                            <p style="font-size:0.88rem; color:#6b7280; margin-bottom:0.75rem;">Video files (.webm) are saved to the same destination configured in the <strong>PhotoBooth</strong> tab (Local Folder or download). When Google Drive is enabled, videos are uploaded to a <strong>Video Guestbook</strong> sub-folder inside your main captures folder.</p>
+                            <div class="settings-card" style="background:#f9fafb; border:1px dashed #d1d5db; padding:0.85rem 1rem; margin-bottom:0;">
+                                <p style="margin:0; font-size:0.85rem; color:#374151;">Files are named: <code style="background:#f3f4f6; border-radius:4px; padding:1px 5px; font-size:0.82rem;">EventName_YYYYMMDD_HHMMSS.webm</code></p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div><!-- /cap-tab-videoguestbook -->
+
+            </div>
+
+            <!-- PANEL: PHOTO LAYOUT -->
+            <div id="panel-photo-layout" class="admin-panel" style="display: none;">
+                <div class="content-header">
+                    <h1>Photo Layout</h1>
                 </div>
 
                 <div class="settings-section">
@@ -866,121 +956,6 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="settings-section">
-                    <h3 class="section-title">Countdown</h3>
-                    <div class="settings-card">
-                        <div class="slider-group">
-                            <div class="slider-header">
-                                <label>Countdown before photo 1</label>
-                                <div class="slider-value"><span id="val-cd-1">5</span> sec</div>
-                            </div>
-                            <input type="range" id="setting-cd-1" min="1" max="10" value="5" class="custom-range">
-                        </div>
-
-                        <div class="slider-group">
-                            <div class="slider-header">
-                                <label>Countdown before other photos</label>
-                                <div class="slider-value"><span id="val-cd-others">5</span> sec</div>
-                            </div>
-                            <input type="range" id="setting-cd-others" min="1" max="10" value="5" class="custom-range">
-                        </div>
-
-                        <div class="slider-group">
-                            <div class="slider-header">
-                                <label>Photo review time (Preview)</label>
-                                <div class="slider-value"><span id="val-review">4</span> sec</div>
-                            </div>
-                            <input type="range" id="setting-review" min="1" max="10" value="4" class="custom-range">
-                        </div>
-                    </div>
-                </div>
-
-                <div class="settings-section">
-                    <h3 class="section-title">Save Destination</h3>
-                    <div class="settings-card">
-                        <div class="radio-group" style="margin-bottom: 1rem;">
-                            <label class="storage-card">
-                                <input type="radio" name="storage" value="local" checked id="radio-local">
-                                <div class="card-content">
-                                    <span class="title">Local Folder</span>
-                                </div>
-                            </label>
-                            <label class="storage-card">
-                                <input type="radio" name="storage" value="drive">
-                                <div class="card-content">
-                                    <span class="title">Make.com Webhook</span>
-                                </div>
-                            </label>
-                        </div>
-                        
-                        <div id="local-folder-config" class="folder-picker-box">
-                            <p class="subtitle" style="margin-bottom: 0.5rem;">Choose where local photos will be saved seamlessly.</p>
-                            <div class="flex-row-align">
-                                <button id="btn-select-dir" class="btn-outline">Select Save Folder</button>
-                                <span id="dir-status" class="dir-status-text">No folder selected (Will prompt download)</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                </div><!-- /cap-tab-photobooth -->
-
-                <!-- TAB: Video Guestbook -->
-                <div id="cap-tab-videoguestbook" class="cap-tab-content" style="display:none;">
-
-                    <!-- Camera (shared, already configured in PhotoBooth tab) -->
-                    <div class="settings-section">
-                        <h3 class="section-title">Camera</h3>
-                        <div class="settings-card" style="display:flex; align-items:center; gap:0.75rem; padding:1rem 1.25rem;">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                            <p style="margin:0; font-size:0.88rem; color:#6b7280;">Camera selection is shared with the <strong>PhotoBooth</strong> tab — configure it there.</p>
-                        </div>
-                    </div>
-
-                    <!-- Max Recording Duration -->
-                    <div class="settings-section">
-                        <h3 class="section-title">Recording Duration</h3>
-                        <div class="settings-card">
-                            <div class="slider-group">
-                                <div class="slider-header">
-                                    <label>Maximum recording length</label>
-                                    <div class="slider-value"><span id="val-vg-duration">60</span> sec</div>
-                                </div>
-                                <input type="range" id="setting-vg-duration" min="10" max="180" step="5" value="60" class="custom-range">
-                            </div>
-                            <div class="slider-group" style="margin-top:1rem; border-top:1px solid #f3f4f6; padding-top:1rem;">
-                                <div class="slider-header">
-                                    <label>Countdown before recording</label>
-                                    <div class="slider-value"><span id="val-vg-countdown">3</span> sec</div>
-                                </div>
-                                <input type="range" id="setting-vg-countdown" min="1" max="10" value="3" class="custom-range">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Prompt Text -->
-                    <div class="settings-section">
-                        <h3 class="section-title">On-Screen Prompt</h3>
-                        <div class="settings-card">
-                            <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.5rem;">Prompt shown to guests before recording</label>
-                            <input type="text" id="setting-vg-prompt" class="text-input" value="Share a message for the happy couple!" style="width:100%;">
-                            <p style="margin:0.4rem 0 0; font-size:0.78rem; color:#9ca3af;">Displayed on the kiosk welcome screen when Video Guestbook mode is active.</p>
-                        </div>
-                    </div>
-
-                    <!-- Save Destination -->
-                    <div class="settings-section">
-                        <h3 class="section-title">Save Destination</h3>
-                        <div class="settings-card">
-                            <p style="font-size:0.88rem; color:#6b7280; margin-bottom:0.75rem;">Video files (.webm) are saved to the same destination configured in the <strong>PhotoBooth</strong> tab (Local Folder or download). When Google Drive is enabled, videos are uploaded to a <strong>Video Guestbook</strong> sub-folder inside your main captures folder.</p>
-                            <div class="settings-card" style="background:#f9fafb; border:1px dashed #d1d5db; padding:0.85rem 1rem; margin-bottom:0;">
-                                <p style="margin:0; font-size:0.85rem; color:#374151;">Files are named: <code style="background:#f3f4f6; border-radius:4px; padding:1px 5px; font-size:0.82rem;">EventName_YYYYMMDD_HHMMSS.webm</code></p>
-                            </div>
-                        </div>
-                    </div>
-
-                </div><!-- /cap-tab-videoguestbook -->
 
             </div>
 
@@ -1462,8 +1437,6 @@
         <div id="live-booth" class="booth-container" style="display:none;">
             <div class="viewfinder">
                 <video id="camera-feed" autoplay playsinline></video>
-                <!-- MJPEG stream from an IP/network camera (DJI via IP Webcam, etc.) -->
-                <img id="ip-cam-feed" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover;" alt="" crossorigin="anonymous">
                 <canvas id="photo-canvas" style="display:none;"></canvas>
                 
                 <div id="countdown-overlay" style="display:none;"></div>
@@ -1508,6 +1481,15 @@
                     <h2>Saving video…</h2>
                 </div>
             </div>
+        </div>
+
+        <!-- ========== VIDEO GUESTBOOK PREVIEW OVERLAY ========== -->
+        <div id="vg-preview-overlay" style="display:none; position:absolute; inset:0; z-index:50; background:rgba(0,0,0,0.97); flex-direction:column; align-items:center; justify-content:center; padding:1.5rem;">
+            <video id="vg-preview-video" playsinline style="max-width:100%; max-height:72vh; display:block; border-radius:10px; box-shadow:0 0 40px rgba(0,0,0,0.6);"></video>
+            <p id="vg-preview-msg" style="color:#9ca3af; margin-top:1.1rem; font-size:1rem; font-weight:500; letter-spacing:0.01em;">Playing back your message…</p>
+            <button id="btn-vg-preview-close" style="display:none; margin-top:1.25rem; padding:0.9rem 2.75rem; background:#be185d; color:#fff; border:none; border-radius:999px; font-size:1.1rem; font-weight:700; cursor:pointer; letter-spacing:0.03em; box-shadow:0 4px 18px rgba(190,24,93,0.45);">
+                ✓ Close Preview
+            </button>
         </div>
 
         <!-- ========== SOCIAL SHARE OVERLAY ========== -->

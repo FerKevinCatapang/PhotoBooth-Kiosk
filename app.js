@@ -42,7 +42,6 @@ let appConfig = {
     printServer: '',     // e.g. "http://192.168.1.50:3000"
     selectedCameraId: '', // deviceId chosen in Capture Settings
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
-    ipCameraUrl: '',      // MJPEG stream URL for external cameras (e.g. DJI via IP Webcam app)
 
     // Google Drive (Method A - browser OAuth)
     driveUpload: false,
@@ -799,10 +798,6 @@ $(document).ready(function() {
         appConfig.selectedCameraId = this.value;
     });
 
-    $('#ip-camera-url').on('input', function() {
-        appConfig.ipCameraUrl = this.value.trim();
-    });
-
     // --- Test Camera (live preview in settings) ---
     let _testStream = null;
 
@@ -910,32 +905,7 @@ $(document).ready(function() {
         _stopCameraTest(); // always release the test preview stream before launching
 
         try {
-            // ── IP / Network camera (MJPEG stream) ──────────────────────────
-            if (appConfig.ipCameraUrl) {
-                const ipImg = document.getElementById('ip-cam-feed');
-                ipImg.src = appConfig.ipCameraUrl;
-                currentStream = null;
-
-                // Wait briefly for the first frame to arrive (up to 6 s)
-                await new Promise((resolve, reject) => {
-                    let done = false;
-                    const finish = (ok) => { if (!done) { done = true; ok ? resolve() : reject(new Error('IP camera stream failed to load. Check the URL and network.')); } };
-                    ipImg.onload  = () => finish(true);
-                    ipImg.onerror = () => finish(false);
-                    setTimeout(() => finish(true), 6000); // proceed after timeout even if no onload event
-                });
-
-                document.getElementById('camera-feed').style.display = 'none';
-                ipImg.style.display = 'block';
-                applyKioskViewfinderSize();
-                $('#admin-dashboard').hide();
-                $('#kiosk-mode').fadeIn(400);
-                resetToWelcomeScreen();
-                launchBtn.prop('disabled', false).text('🚀 Launch Kiosk Mode');
-                return;
-            }
-
-            // ── Normal getUserMedia path ─────────────────────────────────────
+        // ── Normal getUserMedia path ─────────────────────────────────────
             // Build video constraints: specific device takes priority, then facingMode.
             // Video Guestbook uses a lower resolution (1080p max) to prevent encoder
             // lag and stuttering; PhotoBooth uses the highest available for still quality.
@@ -984,10 +954,6 @@ $(document).ready(function() {
     $('#btn-exit-kiosk').on('click', function() {
         stopVgRecordingIfActive();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
-        // Clean up IP camera stream
-        const ipImg = document.getElementById('ip-cam-feed');
-        if (ipImg) { ipImg.src = ''; ipImg.style.display = 'none'; }
-        document.getElementById('camera-feed').style.display = '';
         $('#kiosk-mode').hide();
         $('#vg-booth').hide();
         $('#live-booth').hide();
@@ -1048,13 +1014,8 @@ $(document).ready(function() {
     function resetToWelcomeScreen() {
         // Hide capture screens
         $('#photo-canvas').hide();
-        // Show the appropriate camera feed element
-        if (appConfig.ipCameraUrl) {
-            $('#ip-cam-feed').show();
-            $('#camera-feed').hide();
-        } else {
-            $('#camera-feed').show();
-        }
+        // Show the camera feed element
+        $('#camera-feed').show();
         $('#processing-overlay').hide();
         $('#live-booth').hide();
         $('#vg-booth').hide();
@@ -1118,10 +1079,7 @@ $(document).ready(function() {
 
     async function triggerCaptureSequence() {
         $('#live-booth').show();
-        // Use the MJPEG img element if in IP camera mode, otherwise the normal video feed
-        const video = appConfig.ipCameraUrl
-            ? $('#ip-cam-feed')[0]
-            : $('#camera-feed')[0];
+        const video = $('#camera-feed')[0];
         const previewCanvas = $('#photo-canvas')[0];
         const previewCtx = previewCanvas.getContext('2d');
 
@@ -1240,6 +1198,7 @@ $(document).ready(function() {
             cdEl.classList.remove('cd-pop');
             void cdEl.offsetWidth; // reflow to restart animation
             cdEl.classList.add('cd-pop');
+            _playBeep(i === 1 ? 880 : 660, 0.12); // countdown beep
             await new Promise(r => setTimeout(r, 1000));
         }
         cdEl.style.display = 'none';
@@ -1376,11 +1335,58 @@ $(document).ready(function() {
         $('#vg-timer').text('0:00');
         $('#vg-processing-overlay').fadeOut(200);
 
-        // Brief thank-you pause then return to welcome
-        await new Promise(r => setTimeout(r, 1500));
+        // Show preview with autoplay × 3, then close button
+        await showVgPreview(galleryBlobUrl);
         $('#vg-booth').hide();
         resetToWelcomeScreen();
     }
+    function showVgPreview(blobUrl) {
+        return new Promise(resolve => {
+            const overlay  = document.getElementById('vg-preview-overlay');
+            const video    = document.getElementById('vg-preview-video');
+            const closeBtn = document.getElementById('btn-vg-preview-close');
+            const msg      = document.getElementById('vg-preview-msg');
+            let loopCount = 0;
+
+            video.src = blobUrl;
+            video.loop = false;
+            closeBtn.style.display = 'none';
+            msg.style.display = '';
+            msg.textContent = 'Playing back your message…';
+            overlay.style.display = 'flex';
+
+            function onEnded() {
+                loopCount++;
+                if (loopCount < 3) {
+                    video.currentTime = 0;
+                    video.play().catch(() => {});
+                } else {
+                    msg.style.display = 'none';
+                    closeBtn.style.display = '';
+                }
+            }
+
+            video.onended = onEnded;
+
+            function doClose() {
+                video.onended = null;
+                video.pause();
+                video.src = '';
+                overlay.style.display = 'none';
+                closeBtn.style.display = 'none';
+                closeBtn.removeEventListener('click', doClose);
+                resolve();
+            }
+
+            closeBtn.addEventListener('click', doClose);
+
+            video.play().catch(() => {
+                msg.textContent = 'Tap to close.';
+                closeBtn.style.display = '';
+            });
+        });
+    }
+
     // =========================================================
 
     /**
@@ -1418,14 +1424,8 @@ $(document).ready(function() {
 
         ctx.save();
         // Mirror horizontally for selfie/getUserMedia cameras.
-        // IP camera streams (DJI Action 5 Pro etc.) are not mirrored.
-        const isIpCamera = !!appConfig.ipCameraUrl;
-        if (!isIpCamera) {
-            ctx.translate(x + slotW, y);
-            ctx.scale(-1, 1);
-        } else {
-            ctx.translate(x, y);
-        }
+        ctx.translate(x + slotW, y);
+        ctx.scale(-1, 1);
         ctx.drawImage(src, srcX, srcY, srcW, srcH, 0, 0, slotW, slotH);
         ctx.restore();
 
@@ -1705,6 +1705,32 @@ $(document).ready(function() {
         ctx.textBaseline = 'alphabetic';
     }
 
+    // ==================== AUDIO BEEPS ====================
+    let _audioCtx = null;
+    function _getAudioCtx() {
+        if (!_audioCtx || _audioCtx.state === 'closed') {
+            _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (_audioCtx.state === 'suspended') _audioCtx.resume();
+        return _audioCtx;
+    }
+    function _playBeep(freq, duration, volume) {
+        try {
+            const ctx = _getAudioCtx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(volume || 0.45, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + duration);
+        } catch (e) { /* audio not available */ }
+    }
+    // =========================================================
+
     function runCountdown(seconds) {
         return new Promise(resolve => {
             let count = seconds;
@@ -1713,6 +1739,7 @@ $(document).ready(function() {
             overlay.removeClass('active').hide();
             void overlay[0].offsetWidth;
             overlay.text(count).show();
+            _playBeep(count === 1 ? 880 : 660, 0.12); // beep on initial display
             requestAnimationFrame(() => overlay.addClass('active'));
             
             const interval = setInterval(() => {
@@ -1721,9 +1748,11 @@ $(document).ready(function() {
                     overlay.removeClass('active');
                     void overlay[0].offsetWidth; 
                     overlay.text(count).addClass('active');
+                    _playBeep(count === 1 ? 880 : 660, 0.12); // beep on each number
                 } else {
                     clearInterval(interval);
                     overlay.removeClass('active');
+                    _playBeep(1100, 0.08); // shutter beep
                     // Resolve only AFTER hide so next countdown never races with this one
                     setTimeout(() => { overlay.hide(); resolve(); }, 250);
                 }
