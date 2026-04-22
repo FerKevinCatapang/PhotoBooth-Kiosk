@@ -42,6 +42,7 @@ let appConfig = {
     printServer: '',     // e.g. "http://192.168.1.50:3000"
     selectedCameraId: '', // deviceId chosen in Capture Settings
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
+    ipCameraUrl: '',      // MJPEG stream URL for external cameras (e.g. DJI via IP Webcam app)
 
     // Google Drive (Method A - browser OAuth)
     driveUpload: false,
@@ -742,9 +743,11 @@ $(document).ready(function() {
                 const opt = document.createElement('option');
                 opt.value = cam.deviceId;
                 opt.textContent = cam.label || ('Camera ' + (i + 1));
-                // Auto-prefer USB/external cameras
+                // Auto-prefer USB/external cameras and known action cameras (DJI, GoPro, etc.)
+                const lbl = cam.label.toLowerCase();
                 if (!appConfig.selectedCameraId &&
-                    (cam.label.toLowerCase().includes('usb') || cam.label.toLowerCase().includes('external'))) {
+                    (lbl.includes('usb') || lbl.includes('external') ||
+                     lbl.includes('dji') || lbl.includes('action') || lbl.includes('gopro'))) {
                     opt.selected = true;
                 }
                 sel.appendChild(opt);
@@ -761,6 +764,10 @@ $(document).ready(function() {
 
     $('#camera-select').on('change', function() {
         appConfig.selectedCameraId = this.value;
+    });
+
+    $('#ip-camera-url').on('input', function() {
+        appConfig.ipCameraUrl = this.value.trim();
     });
 
     // --- Capture Settings Tabs ---
@@ -825,6 +832,32 @@ $(document).ready(function() {
         launchBtn.prop('disabled', true).text('Initializing Hardware...');
 
         try {
+            // ── IP / Network camera (MJPEG stream) ──────────────────────────
+            if (appConfig.ipCameraUrl) {
+                const ipImg = document.getElementById('ip-cam-feed');
+                ipImg.src = appConfig.ipCameraUrl;
+                currentStream = null;
+
+                // Wait briefly for the first frame to arrive (up to 6 s)
+                await new Promise((resolve, reject) => {
+                    let done = false;
+                    const finish = (ok) => { if (!done) { done = true; ok ? resolve() : reject(new Error('IP camera stream failed to load. Check the URL and network.')); } };
+                    ipImg.onload  = () => finish(true);
+                    ipImg.onerror = () => finish(false);
+                    setTimeout(() => finish(true), 6000); // proceed after timeout even if no onload event
+                });
+
+                document.getElementById('camera-feed').style.display = 'none';
+                ipImg.style.display = 'block';
+                applyKioskViewfinderSize();
+                $('#admin-dashboard').hide();
+                $('#kiosk-mode').fadeIn(400);
+                resetToWelcomeScreen();
+                launchBtn.prop('disabled', false).text('🚀 Launch Kiosk Mode');
+                return;
+            }
+
+            // ── Normal getUserMedia path ─────────────────────────────────────
             // Build video constraints: specific device takes priority, then facingMode.
             // Video Guestbook uses a lower resolution (1080p max) to prevent encoder
             // lag and stuttering; PhotoBooth uses the highest available for still quality.
@@ -865,6 +898,10 @@ $(document).ready(function() {
     $('#btn-exit-kiosk').on('click', function() {
         stopVgRecordingIfActive();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
+        // Clean up IP camera stream
+        const ipImg = document.getElementById('ip-cam-feed');
+        if (ipImg) { ipImg.src = ''; ipImg.style.display = 'none'; }
+        document.getElementById('camera-feed').style.display = '';
         $('#kiosk-mode').hide();
         $('#vg-booth').hide();
         $('#live-booth').hide();
@@ -925,7 +962,13 @@ $(document).ready(function() {
     function resetToWelcomeScreen() {
         // Hide capture screens
         $('#photo-canvas').hide();
-        $('#camera-feed').show();
+        // Show the appropriate camera feed element
+        if (appConfig.ipCameraUrl) {
+            $('#ip-cam-feed').show();
+            $('#camera-feed').hide();
+        } else {
+            $('#camera-feed').show();
+        }
         $('#processing-overlay').hide();
         $('#live-booth').hide();
         $('#vg-booth').hide();
@@ -989,12 +1032,15 @@ $(document).ready(function() {
 
     async function triggerCaptureSequence() {
         $('#live-booth').show();
-        const video = $('#camera-feed')[0];
+        // Use the MJPEG img element if in IP camera mode, otherwise the normal video feed
+        const video = appConfig.ipCameraUrl
+            ? $('#ip-cam-feed')[0]
+            : $('#camera-feed')[0];
         const previewCanvas = $('#photo-canvas')[0];
         const previewCtx = previewCanvas.getContext('2d');
 
-        const fW = video.videoWidth;
-        const fH = video.videoHeight;
+        const fW = video.videoWidth  || video.naturalWidth  || video.width;
+        const fH = video.videoHeight || video.naturalHeight || video.height;
 
         const { cWidth, cHeight, photoSlots } = computeLayout(fW, fH);
 
@@ -1274,8 +1320,9 @@ $(document).ready(function() {
         }
 
         const src = source || video;
-        const fW = src.width  || src.videoWidth;
-        const fH = src.height || src.videoHeight;
+        // Support both <video> (videoWidth) and <img> (naturalWidth) sources
+        const fW = src.videoWidth  || src.naturalWidth  || src.width;
+        const fH = src.videoHeight || src.naturalHeight || src.height;
 
         const scale = Math.max(slotW / fW, slotH / fH);
         const srcW  = Math.round(slotW / scale);
@@ -1284,10 +1331,15 @@ $(document).ready(function() {
         const srcY  = Math.max(0, Math.round((fH - srcH) / 2));
 
         ctx.save();
-        // Mirror horizontally — video feed is shown mirrored (selfie UX);
-        // the saved photo is also mirrored so text / pose reads naturally in prints.
-        ctx.translate(x + slotW, y);
-        ctx.scale(-1, 1);
+        // Mirror horizontally for selfie/getUserMedia cameras.
+        // IP camera streams (DJI Action 5 Pro etc.) are not mirrored.
+        const isIpCamera = !!appConfig.ipCameraUrl;
+        if (!isIpCamera) {
+            ctx.translate(x + slotW, y);
+            ctx.scale(-1, 1);
+        } else {
+            ctx.translate(x, y);
+        }
         ctx.drawImage(src, srcX, srcY, srcW, srcH, 0, 0, slotW, slotH);
         ctx.restore();
 
