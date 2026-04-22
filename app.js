@@ -1029,7 +1029,7 @@ $(document).ready(function() {
     function updateAdvancedNavForMode(mode) {
         const isVg = mode === 'videoguestbook';
         $('#nav-photo-layout, #nav-template, #nav-printer').toggle(!isVg);
-        $('#nav-video-overlay').toggle(isVg);
+        $('#nav-video-overlay, #nav-stitch').toggle(isVg);
         // If a photo-only panel is active while switching to VG, go to dashboard
         if (isVg) {
             const active = $('.nav-item.active').data('target');
@@ -1037,10 +1037,10 @@ $(document).ready(function() {
                 $('[data-target="panel-dashboard"]').trigger('click');
             }
         }
-        // If video-overlay panel is active while switching to PhotoBooth, go to dashboard
+        // If VG-only panels are active while switching to PhotoBooth, go to dashboard
         if (!isVg) {
             const active = $('.nav-item.active').data('target');
-            if (active === 'panel-video-overlay') {
+            if (active === 'panel-video-overlay' || active === 'panel-stitch') {
                 $('[data-target="panel-dashboard"]').trigger('click');
             }
         }
@@ -1120,6 +1120,257 @@ $(document).ready(function() {
     }
     function _clearOverlayError() {
         $('#vg-overlay-error').hide().text('');
+    }
+
+    // =========================================================
+    // STITCH PANEL
+    // =========================================================
+
+    // Refresh the stitch grid whenever the panel is opened
+    $(document).on('click', '[data-target="panel-stitch"]', function() {
+        _refreshStitchPanel();
+    });
+
+    function _refreshStitchPanel() {
+        const grid    = document.getElementById('stitch-grid');
+        const empty   = document.getElementById('stitch-empty');
+        const ctrls   = document.getElementById('stitch-controls');
+        const result  = document.getElementById('stitch-result');
+        const progWrap= document.getElementById('stitch-progress-wrap');
+
+        result.style.display   = 'none';
+        progWrap.style.display = 'none';
+        $('#btn-stitch-run').prop('disabled', true);
+        $('#stitch-selected-count').text('');
+
+        if (capturedVideos.length === 0) {
+            empty.style.display = 'block';
+            grid.style.display  = 'none';
+            ctrls.style.display = 'none';
+            return;
+        }
+
+        empty.style.display = 'none';
+        grid.style.display  = 'grid';
+        ctrls.style.display = 'block';
+
+        grid.innerHTML = '';
+        capturedVideos.forEach((src, idx) => {
+            const num = capturedVideos.length - idx;
+            const item = document.createElement('div');
+            item.className = 'stitch-item';
+            item.dataset.idx = idx;
+            item.innerHTML = `
+                <label class="stitch-item-label">
+                    <input type="checkbox" class="stitch-check" data-idx="${idx}">
+                    <div class="stitch-thumb-wrap">
+                        <video src="${src}" preload="metadata" muted playsinline class="stitch-thumb"></video>
+                        <div class="gallery-play-icon">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </div>
+                        <div class="stitch-check-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
+                    </div>
+                    <span class="stitch-item-label-text">Clip #${num}</span>
+                </label>`;
+            grid.appendChild(item);
+        });
+
+        _updateStitchButtonState();
+    }
+
+    function _updateStitchButtonState() {
+        const count = $('.stitch-check:checked').length;
+        $('#btn-stitch-run').prop('disabled', count < 2);
+        $('#stitch-selected-count').text(count > 0 ? `${count} clip${count !== 1 ? 's' : ''} selected` : '');
+    }
+
+    $(document).on('change', '.stitch-check', function() {
+        const idx = $(this).data('idx');
+        $(this).closest('.stitch-item').toggleClass('stitch-item-selected', this.checked);
+        _updateStitchButtonState();
+    });
+
+    $('#btn-stitch-select-all').on('click', function() {
+        $('.stitch-check').prop('checked', true);
+        $('.stitch-item').addClass('stitch-item-selected');
+        _updateStitchButtonState();
+    });
+
+    $('#btn-stitch-clear').on('click', function() {
+        $('.stitch-check').prop('checked', false);
+        $('.stitch-item').removeClass('stitch-item-selected');
+        _updateStitchButtonState();
+    });
+
+    let _stitchResultBlob = null;
+
+    $('#btn-stitch-run').on('click', async function() {
+        const indices = [];
+        $('.stitch-check:checked').each(function() { indices.push(parseInt($(this).data('idx'))); });
+        if (indices.length < 2) return;
+
+        const urls = indices.map(i => capturedVideos[i]);
+        const progWrap = document.getElementById('stitch-progress-wrap');
+        const statusEl = document.getElementById('stitch-status-text');
+        const barEl    = document.getElementById('stitch-progress-bar');
+        const resultEl = document.getElementById('stitch-result');
+        const resultFn = document.getElementById('stitch-result-filename');
+
+        progWrap.style.display = 'block';
+        resultEl.style.display = 'none';
+        $('#btn-stitch-run').prop('disabled', true);
+        _stitchResultBlob = null;
+
+        try {
+            const blob = await _stitchVideos(urls, function(pct, label) {
+                barEl.style.width = pct + '%';
+                statusEl.textContent = label;
+            });
+
+            _stitchResultBlob = blob;
+
+            // Build filename
+            const now = new Date();
+            const ts = now.getFullYear()
+                + String(now.getMonth() + 1).padStart(2, '0')
+                + String(now.getDate()).padStart(2, '0')
+                + '_'
+                + String(now.getHours()).padStart(2, '0')
+                + String(now.getMinutes()).padStart(2, '0')
+                + String(now.getSeconds()).padStart(2, '0');
+            const prefix = appConfig.eventName
+                ? appConfig.eventName.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '')
+                : 'guestbook';
+            const filename = `${prefix}_${ts}_Final.mp4`;
+
+            // Save to VG folder or trigger download
+            try {
+                if (vgDirectoryHandle) {
+                    const fh = await vgDirectoryHandle.getFileHandle(filename, { create: true });
+                    const wr = await fh.createWritable();
+                    await wr.write(blob);
+                    await wr.close();
+                    resultFn.textContent = `Saved to folder as: ${filename}`;
+                } else {
+                    resultFn.textContent = `File ready: ${filename} — click Download below`;
+                }
+            } catch (saveErr) {
+                console.error('[Stitch] Save error:', saveErr);
+                resultFn.textContent = `Could not save to folder. Click Download below.`;
+            }
+
+            progWrap.style.display = 'none';
+            barEl.style.width = '0%';
+            resultEl.style.display = 'block';
+            $('#btn-stitch-run').prop('disabled', false);
+
+            // Wire download button
+            $('#btn-stitch-download').off('click.stitch').on('click.stitch', function() {
+                if (!_stitchResultBlob) return;
+                const dlUrl = URL.createObjectURL(_stitchResultBlob);
+                const a = document.createElement('a');
+                a.href = dlUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
+            });
+
+        } catch (err) {
+            console.error('[Stitch] Error:', err);
+            statusEl.textContent = `Error: ${err.message}`;
+            barEl.style.width = '0%';
+            $('#btn-stitch-run').prop('disabled', false);
+        }
+    });
+
+    /**
+     * Stitch an array of video blob URLs sequentially by replaying each on a
+     * canvas and recording the canvas stream with MediaRecorder.
+     * Returns a Blob (video/mp4 or video/webm).
+     */
+    async function _stitchVideos(urls, onProgress) {
+        const W = 1920, H = 1080;
+        const canvas = document.createElement('canvas');
+        canvas.width  = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+
+        // Pick best supported MIME for the final file (prefer mp4)
+        const mimeType = MediaRecorder.isTypeSupported('video/mp4')
+            ? 'video/mp4'
+            : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+            ? 'video/webm;codecs=vp8,opus'
+            : 'video/webm';
+
+        const chunks = [];
+        const canvasStream = canvas.captureStream(30);
+        const recorder = new MediaRecorder(canvasStream, {
+            mimeType,
+            videoBitsPerSecond: 4000000
+        });
+        recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+
+        const recorderDone = new Promise(resolve => {
+            recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
+        });
+        recorder.start(200);
+
+        for (let i = 0; i < urls.length; i++) {
+            onProgress(
+                Math.round((i / urls.length) * 90),
+                `Rendering clip ${i + 1} of ${urls.length}…`
+            );
+            await _playVideoOntoCanvas(ctx, urls[i], W, H);
+        }
+
+        onProgress(95, 'Finalising…');
+        recorder.stop();
+        const resultBlob = await recorderDone;
+        onProgress(100, 'Done!');
+        return resultBlob;
+    }
+
+    /**
+     * Play a video (by blob URL) frame-by-frame onto a canvas context,
+     * waiting until the video ends before resolving.
+     */
+    function _playVideoOntoCanvas(ctx, url, W, H) {
+        return new Promise((resolve, reject) => {
+            const vid = document.createElement('video');
+            vid.src = url;
+            vid.muted = true;
+            vid.playsInline = true;
+            vid.crossOrigin = 'anonymous';
+
+            let rafId = null;
+
+            function drawFrame() {
+                if (vid.paused || vid.ended) return;
+                ctx.drawImage(vid, 0, 0, W, H);
+                rafId = requestAnimationFrame(drawFrame);
+            }
+
+            vid.onloadedmetadata = function() {
+                vid.play().then(() => {
+                    drawFrame();
+                }).catch(reject);
+            };
+
+            vid.onended = function() {
+                if (rafId) cancelAnimationFrame(rafId);
+                // Draw final frame
+                ctx.drawImage(vid, 0, 0, W, H);
+                vid.src = '';
+                resolve();
+            };
+
+            vid.onerror = function() {
+                if (rafId) cancelAnimationFrame(rafId);
+                reject(new Error(`Failed to load video: ${url}`));
+            };
+        });
     }
 
 
