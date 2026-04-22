@@ -324,7 +324,7 @@ button { transition: opacity 0.1s, transform 0.1s; }
 
 /* Storage & Folder Selection */
 .radio-group { display: flex; gap: 1rem; }
-.storage-card { flex: 1; }
+.storage-card { flex: 1; cursor: pointer; }
 .storage-card input { display: none; }
 .storage-card .card-content { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; cursor: pointer; text-align: center; }
 .storage-card input:checked + .card-content { border-color: #be185d; background: #fdf2f8; color: #be185d; font-weight: 600; }

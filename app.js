@@ -148,9 +148,14 @@ $(document).ready(function() {
     });
 
     // --- Storage ---
-    $('input[name="storage"]').on('change', function() {
-        appConfig.storage = $(this).val();
-        if(appConfig.storage === 'local') {
+    // Use a click handler on the label instead of a change handler on the hidden radio input.
+    // In Android/iOS WebViews, clicking a <label> that wraps a display:none radio can update
+    // the DOM :checked state without firing the JS change event, so slideDown/slideUp would
+    // never run.  Listening to the click on the label itself is reliable across all platforms.
+    $('input[name="storage"]').closest('.storage-card').on('click', function() {
+        const val = $(this).find('input[name="storage"]').val();
+        appConfig.storage = val;
+        if (val === 'local') {
             $('#local-folder-config').slideDown();
             $('#pb-drive-config').slideUp();
         } else {
@@ -994,9 +999,11 @@ $(document).ready(function() {
     $('#btn-stop-vg-camera-test').on('click', function() { _stopVgCameraTest(); });
 
     // --- VG Storage ---
-    $('input[name="vg-storage"]').on('change', function() {
-        appConfig.vgStorage = $(this).val();
-        if (appConfig.vgStorage === 'local') {
+    // Same fix: use click on the label rather than change on the hidden radio input.
+    $('input[name="vg-storage"]').closest('.storage-card').on('click', function() {
+        const val = $(this).find('input[name="vg-storage"]').val();
+        appConfig.vgStorage = val;
+        if (val === 'local') {
             $('#vg-local-folder-config').slideDown();
             $('#vg-drive-config').slideUp();
         } else {
