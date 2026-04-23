@@ -1137,49 +1137,70 @@ $(document).ready(function() {
     // ──────────────────────────────────────────────────────────────────────────
 
     // --- Wireless / IP Camera stream (MJPEG URL) ---
-    let _wirelessHiddenVideo = null;
+    let _wirelessState = null; // { img, canvas, stopRaf }
 
     /**
-     * Opens a wireless camera stream from an MJPEG/IP camera URL.
-     * Creates a hidden <video> element that loads the URL, then returns a
-     * MediaStream via captureStream() so the rest of the app can treat it
-     * exactly like a getUserMedia stream.
-     * For VG mode an audio track from the microphone is appended.
+     * Opens a wireless MJPEG camera stream using an <img> element bridged
+     * through a canvas. <img> supports MJPEG (multipart/x-mixed-replace) on
+     * both Chrome desktop and Android Chrome, unlike <video>.
+     * canvas.captureStream(30) produces a real MediaStream so the rest of the
+     * app (VG recorder, PB capture canvas) works without changes.
      */
     async function _openWirelessCameraStream(url, isVgMode) {
-        // Clean up any previous hidden video
-        if (_wirelessHiddenVideo) {
-            _wirelessHiddenVideo.src = '';
-            _wirelessHiddenVideo.load();
-            if (_wirelessHiddenVideo.parentNode) _wirelessHiddenVideo.parentNode.removeChild(_wirelessHiddenVideo);
-            _wirelessHiddenVideo = null;
-        }
+        _stopWirelessHiddenVideo(); // clean up any previous state
 
-        const vid = document.createElement('video');
-        vid.muted = true;
-        vid.autoplay = true;
-        vid.playsInline = true;
-        vid.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;';
-        vid.src = url;
-        document.body.appendChild(vid);
-        _wirelessHiddenVideo = vid;
+        const img = document.createElement('img');
+        img.style.cssText = 'position:fixed;opacity:0;pointer-events:none;left:0;top:0;width:1px;height:1px;';
+        document.body.appendChild(img);
 
+        // Wait for the first MJPEG frame to arrive
         await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('Wireless camera stream timed out (15 s). Check the URL and that the device is on the same network.')), 15000);
-            vid.oncanplay = () => { clearTimeout(timeout); resolve(); };
-            vid.onerror   = () => { clearTimeout(timeout); reject(new Error('Cannot load stream from: ' + url + '\nEnsure the IP camera app is running and the URL is correct.')); };
-            vid.load();
+            const timeout = setTimeout(() => {
+                img.src = '';
+                if (img.parentNode) img.parentNode.removeChild(img);
+                reject(new Error('Wireless camera stream timed out (15 s). Check the URL and that the device is on the same network.'));
+            }, 15000);
+            img.onload  = () => { clearTimeout(timeout); resolve(); };
+            img.onerror = () => {
+                clearTimeout(timeout);
+                if (img.parentNode) img.parentNode.removeChild(img);
+                reject(new Error('Cannot load stream from: ' + url + '\nEnsure the IP camera app is running and the URL is correct.'));
+            };
+            img.src = url;
         });
-        await vid.play();
 
-        const captureStreamFn = vid.captureStream || vid.mozCaptureStream;
-        if (!captureStreamFn) throw new Error('captureStream() is not supported by this browser.');
-        const videoStream = captureStreamFn.call(vid);
+        // Bridge: draw MJPEG img frames into a canvas via rAF
+        const canvas = document.createElement('canvas');
+        canvas.width  = img.naturalWidth  || 1280;
+        canvas.height = img.naturalHeight || 720;
+        canvas.style.cssText = 'position:fixed;opacity:0;pointer-events:none;left:0;top:0;';
+        document.body.appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+
+        let _rafId = null;
+        function drawFrame() {
+            if (img.naturalWidth > 0) {
+                if (canvas.width  !== img.naturalWidth)  canvas.width  = img.naturalWidth;
+                if (canvas.height !== img.naturalHeight) canvas.height = img.naturalHeight;
+                ctx.drawImage(img, 0, 0);
+            }
+            _rafId = requestAnimationFrame(drawFrame);
+        }
+        drawFrame();
+
+        _wirelessState = {
+            img,
+            canvas,
+            stopRaf: () => { if (_rafId) cancelAnimationFrame(_rafId); }
+        };
+
+        const captureFn = canvas.captureStream || canvas.mozCaptureStream;
+        if (!captureFn) throw new Error('canvas.captureStream() is not supported by this browser.');
+        const videoStream = captureFn.call(canvas, 30);
 
         if (isVgMode) {
             const audioConstraint = appConfig.vgSelectedMicId
-                ? { deviceId: { exact: appConfig.vgSelectedMicId } }
-                : true;
+                ? { deviceId: { exact: appConfig.vgSelectedMicId } } : true;
             try {
                 const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
                 return new MediaStream([...videoStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
@@ -1191,11 +1212,12 @@ $(document).ready(function() {
     }
 
     function _stopWirelessHiddenVideo() {
-        if (_wirelessHiddenVideo) {
-            _wirelessHiddenVideo.src = '';
-            _wirelessHiddenVideo.load();
-            if (_wirelessHiddenVideo.parentNode) _wirelessHiddenVideo.parentNode.removeChild(_wirelessHiddenVideo);
-            _wirelessHiddenVideo = null;
+        if (_wirelessState) {
+            _wirelessState.stopRaf();
+            _wirelessState.img.src = '';
+            if (_wirelessState.img.parentNode) _wirelessState.img.parentNode.removeChild(_wirelessState.img);
+            if (_wirelessState.canvas.parentNode) _wirelessState.canvas.parentNode.removeChild(_wirelessState.canvas);
+            _wirelessState = null;
         }
     }
 
@@ -1282,6 +1304,7 @@ $(document).ready(function() {
 
     function _stopCameraTest() {
         if (_testStream) { _testStream.getTracks().forEach(t => t.stop()); _testStream = null; }
+        _stopWirelessHiddenVideo();
         const pv = document.getElementById('camera-test-preview');
         if (pv) { pv.srcObject = null; pv.src = ''; pv.load(); }
         $('#camera-test-card').hide();
@@ -1299,21 +1322,15 @@ $(document).ready(function() {
         // ── Wireless / IP Camera URL path ─────────────────────────────────────
         if (appConfig.wirelessCameraUrl) {
             try {
-                pv.muted = true;
-                pv.src = appConfig.wirelessCameraUrl;
-                try {
-                    await pv.play();
-                } catch (playErr) {
-                    // AbortError is expected for streaming sources when play() races
-                    // the initial load — the video continues playing automatically.
-                    if (playErr.name !== 'AbortError') throw playErr;
-                }
+                const stream = await _openWirelessCameraStream(appConfig.wirelessCameraUrl, false);
+                _testStream = stream; // stored so _stopCameraTest() stops tracks & cleanup
+                pv.srcObject = stream;
                 const info = document.getElementById('camera-test-info');
                 if (info) info.textContent = `Wireless stream: ${appConfig.wirelessCameraUrl}`;
                 $('#camera-test-card').show();
                 btn.prop('disabled', false).text('⏹ Stop Test');
             } catch (e) {
-                pv.src = '';
+                _stopWirelessHiddenVideo();
                 btn.prop('disabled', false).text('▶ Test');
                 if (diag) diag.innerHTML = `<span style="color:#dc2626;">⚠ Could not open wireless stream: ${e.message}</span>`;
             }
@@ -1486,6 +1503,7 @@ $(document).ready(function() {
 
     function _stopVgCameraTest() {
         if (_vgTestStream) { _vgTestStream.getTracks().forEach(t => t.stop()); _vgTestStream = null; }
+        _stopWirelessHiddenVideo();
         const pv = document.getElementById('vg-camera-test-preview');
         if (pv) { pv.srcObject = null; pv.src = ''; pv.load(); }
         $('#vg-camera-test-card').hide();
@@ -1503,19 +1521,15 @@ $(document).ready(function() {
         // ── Wireless / IP Camera URL path ─────────────────────────────────────
         if (appConfig.vgWirelessCameraUrl) {
             try {
-                pv.muted = true;
-                pv.src = appConfig.vgWirelessCameraUrl;
-                try {
-                    await pv.play();
-                } catch (playErr) {
-                    if (playErr.name !== 'AbortError') throw playErr;
-                }
+                const stream = await _openWirelessCameraStream(appConfig.vgWirelessCameraUrl, false);
+                _vgTestStream = stream;
+                pv.srcObject = stream;
                 const info = document.getElementById('vg-camera-test-info');
                 if (info) info.textContent = `Wireless stream: ${appConfig.vgWirelessCameraUrl}`;
                 $('#vg-camera-test-card').show();
                 btn.prop('disabled', false).text('⏹ Stop Test');
             } catch (e) {
-                pv.src = '';
+                _stopWirelessHiddenVideo();
                 btn.prop('disabled', false).text('▶ Test');
                 if (diag) diag.innerHTML = `<span style="color:#dc2626;">⚠ Could not open wireless stream: ${e.message}</span>`;
             }
@@ -2102,40 +2116,17 @@ $(document).ready(function() {
                 ((isVgMode && appConfig.vgFacingMode === '') || (!isVgMode && appConfig.facingMode === ''));
 
             if (usesWireless) {
-                // Set src directly on the feed element — the same approach that works
-                // in the Test preview. MJPEG streams fire onerror on hidden <video>
-                // elements (wrong MIME type for captureStream), but render fine when
-                // assigned directly to the visible feed element.
+                // canvas.captureStream() from the <img>+canvas bridge works on both
+                // Chrome desktop and Android Chrome; <video src=MJPEG> does not.
+                currentStream = await _openWirelessCameraStream(wirelessUrl, isVgMode);
                 if (isVgMode) {
                     const vgFeedEl = $('#vg-camera-feed')[0];
-                    vgFeedEl.srcObject = null;
-                    vgFeedEl.src = wirelessUrl;
-                    vgFeedEl.muted = true;
-                    try { await vgFeedEl.play(); } catch (e) { if (e.name !== 'AbortError') throw e; }
-
-                    // Build currentStream for recording: video from captureStream() on
-                    // the feed element, plus mic audio from getUserMedia.
-                    const captureFn = vgFeedEl.captureStream || vgFeedEl.mozCaptureStream;
-                    const videoTracks = captureFn ? captureFn.call(vgFeedEl).getVideoTracks() : [];
-                    const audioConstraint = appConfig.vgSelectedMicId
-                        ? { deviceId: { exact: appConfig.vgSelectedMicId } } : true;
-                    let audioTracks = [];
-                    try {
-                        const micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
-                        audioTracks = micStream.getAudioTracks();
-                    } catch (_) { /* proceed without mic */ }
-                    currentStream = new MediaStream([...videoTracks, ...audioTracks]);
-
+                    vgFeedEl.srcObject = currentStream;
                     if (appConfig.vgSelectedSpeakerId && typeof vgFeedEl.setSinkId === 'function') {
                         try { await vgFeedEl.setSinkId(appConfig.vgSelectedSpeakerId); } catch (_) {}
                     }
                 } else {
-                    const feedEl = $('#camera-feed')[0];
-                    feedEl.srcObject = null;
-                    feedEl.src = wirelessUrl;
-                    feedEl.muted = true;
-                    try { await feedEl.play(); } catch (e) { if (e.name !== 'AbortError') throw e; }
-                    currentStream = null; // PB capture uses drawImage(video) — no MediaStream needed
+                    $('#camera-feed')[0].srcObject = currentStream;
                     applyKioskViewfinderSize();
                 }
                 $('#admin-dashboard').hide();
