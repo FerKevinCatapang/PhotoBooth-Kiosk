@@ -175,22 +175,6 @@ const LAYOUT_DEFS = {
 
 $(document).ready(function() {
 
-    // --- Admin theme toggle (dark / light) ---
-    (function initTheme() {
-        const DARK_KEY = 'pb-admin-dark';
-        function _applyTheme(dark) {
-            document.body.classList.toggle('admin-dark', dark);
-            $('#theme-icon').text(dark ? '\u2600\ufe0f' : '\ud83c\udf19');
-            $('#theme-label').text(dark ? 'Light Mode' : 'Dark Mode');
-        }
-        _applyTheme(localStorage.getItem(DARK_KEY) === '1');
-        $('#btn-theme-toggle').on('click', function() {
-            const isDark = document.body.classList.toggle('admin-dark');
-            localStorage.setItem(DARK_KEY, isDark ? '1' : '0');
-            $('#theme-icon').text(isDark ? '\u2600\ufe0f' : '\ud83c\udf19');
-            $('#theme-label').text(isDark ? 'Light Mode' : 'Dark Mode');
-        });
-    })();
     updateDashboardGallery();
 
     // --- Tabs ---
@@ -3874,10 +3858,65 @@ $(document).ready(function() {
             setTimeout(() => $item.removeClass('viewer-item-new'), 600);
         }
 
-        // Wait for PeerJS to load (it's deferred)
+        // ── Wake Lock: keep screen on while viewer is open ──────
+        let _viewerWakeLock = null;
+        async function _acquireWakeLock() {
+            if (!('wakeLock' in navigator)) return;
+            try {
+                _viewerWakeLock = await navigator.wakeLock.request('screen');
+                _viewerWakeLock.addEventListener('release', function() { _viewerWakeLock = null; });
+            } catch (e) {
+                console.warn('[Viewer] Wake Lock:', e.message);
+            }
+        }
+        // Wake lock is released when the page is hidden; re-acquire on return
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible' && !_viewerWakeLock) _acquireWakeLock();
+        });
+        _acquireWakeLock();
+
+        // ── Gallery persistence across page refreshes (sessionStorage) ──
+        const _storeKey = 'lv_gallery_' + hostId;
+        const STORE_MAX = 20;
+
+        function _storedItems() {
+            try { return JSON.parse(sessionStorage.getItem(_storeKey) || '[]'); }
+            catch (e) { return []; }
+        }
+        function _saveItem(msg, type) {
+            try {
+                const items = _storedItems();
+                items.unshift({ type: type, data: msg.data, filename: msg.filename, ts: msg.ts, duration: msg.duration, driveUrl: msg.driveUrl || null });
+                if (items.length > STORE_MAX) items.length = STORE_MAX;
+                sessionStorage.setItem(_storeKey, JSON.stringify(items));
+            } catch (e) { /* quota exceeded — skip caching this item */ }
+        }
+        function _saveUpdateDrive(filename, driveUrl) {
+            try {
+                const items = _storedItems();
+                const item = items.find(function(i) { return i.filename === filename; });
+                if (item) { item.driveUrl = driveUrl; sessionStorage.setItem(_storeKey, JSON.stringify(items)); }
+            } catch (e) {}
+        }
+
+        // Restore previously received captures after a page refresh
+        (function _restoreGallery() {
+            const saved = _storedItems();
+            if (!saved.length) return;
+            // saved is newest-first; reverse so repeated prepend keeps newest on top
+            saved.slice().reverse().forEach(function(item) {
+                _viewerAddItem(item, item.type);
+            });
+        })();
+
+        // ── WebRTC connection with auto-reconnect ─────────────────
+        let _viewerPeer = null;
         function connectToHost() {
             if (typeof Peer === 'undefined') { setTimeout(connectToHost, 200); return; }
+            // Destroy any previous peer before creating a new one
+            if (_viewerPeer) { try { _viewerPeer.destroy(); } catch (e) {} _viewerPeer = null; }
             const peer = new Peer();
+            _viewerPeer = peer;
             peer.on('open', function() {
                 const conn = peer.connect(hostId, { reliable: true });
                 conn.on('open', function() {
@@ -3894,23 +3933,27 @@ $(document).ready(function() {
                             _viewerSeenIds.add(msg._id);
                         }
                         if      (msg.type === 'hello')        { if (msg.eventName) $('#viewer-event-name').text(msg.eventName); }
-                        else if (msg.type === 'photo')        { _viewerAddItem(msg, 'photo'); }
-                        else if (msg.type === 'video')        { _viewerAddItem(msg, 'video'); }
-                        else if (msg.type === 'drive-update') { _viewerUpdateDrive(msg.filename, msg.driveUrl); }
+                        else if (msg.type === 'photo')        { _viewerAddItem(msg, 'photo');  _saveItem(msg, 'photo'); }
+                        else if (msg.type === 'video')        { _viewerAddItem(msg, 'video');  _saveItem(msg, 'video'); }
+                        else if (msg.type === 'drive-update') { _viewerUpdateDrive(msg.filename, msg.driveUrl); _saveUpdateDrive(msg.filename, msg.driveUrl); }
                     } catch (e) { /* ignore malformed */ }
                 });
                 conn.on('close', function() {
-                    $('#viewer-status-dot').css('background', '#ef4444');
-                    $('#viewer-status-text').text('Disconnected');
+                    $('#viewer-status-dot').css('background', '#f59e0b');
+                    $('#viewer-status-text').text('Reconnecting…');
+                    setTimeout(connectToHost, 3000);
                 });
                 conn.on('error', function() {
-                    $('#viewer-status-dot').css('background', '#ef4444');
-                    $('#viewer-status-text').text('Connection error');
+                    $('#viewer-status-dot').css('background', '#f59e0b');
+                    $('#viewer-status-text').text('Reconnecting…');
+                    setTimeout(connectToHost, 3000);
                 });
             });
             peer.on('error', function(err) {
-                $('#viewer-status-dot').css('background', '#ef4444');
-                $('#viewer-status-text').text('Error: ' + err.type);
+                console.warn('[Viewer] Peer error:', err.type);
+                $('#viewer-status-dot').css('background', '#f59e0b');
+                $('#viewer-status-text').text('Reconnecting…');
+                setTimeout(connectToHost, 4000);
             });
         }
         connectToHost();
