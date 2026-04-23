@@ -3265,6 +3265,7 @@ $(document).ready(function() {
 
         _lvPeer.on('connection', function(conn) {
             conn.on('open', function() {
+                if (_lvConns.includes(conn)) return; // guard: some browsers fire 'open' twice
                 _lvConns.push(conn);
                 _lvSetStatus(_lvConns.length + ' viewer' + (_lvConns.length > 1 ? 's' : '') + ' connected', true);
                 // Send current event name so viewer shows it in the header
@@ -3306,6 +3307,8 @@ $(document).ready(function() {
     // Broadcast a JSON message to all connected viewers
     function _lvBroadcast(msgObj) {
         if (!_lvConns.length) return;
+        // Add a unique ID so the viewer can deduplicate if the same message arrives twice
+        msgObj._id = Math.random().toString(36).slice(2) + Date.now().toString(36);
         const json = JSON.stringify(msgObj);
         _lvConns.forEach(conn => {
             try { if (conn.open) conn.send(json); }
@@ -3390,6 +3393,15 @@ $(document).ready(function() {
         function _viewerOpenPhoto(dataUrl) {
             $('#viewer-lb-img').attr('src', dataUrl).show();
             $('#viewer-lb-qr-wrap').hide();
+            $('#viewer-lb-video-note').hide();
+            $('#viewer-lightbox').css('display', 'flex');
+        }
+        function _viewerOpenVideoNoLink(thumbDataUrl) {
+            // No Drive link: show thumbnail (or blank) with an explanatory note
+            if (thumbDataUrl) $('#viewer-lb-img').attr('src', thumbDataUrl).show();
+            else $('#viewer-lb-img').hide();
+            $('#viewer-lb-qr-wrap').hide();
+            $('#viewer-lb-video-note').show();
             $('#viewer-lightbox').css('display', 'flex');
         }
         function _viewerOpenQr(driveUrl) {
@@ -3402,18 +3414,22 @@ $(document).ready(function() {
             });
             $('#viewer-lb-drive-url').text(driveUrl);
             $('#viewer-lb-qr-wrap').show();
+            $('#viewer-lb-video-note').hide();
             $('#viewer-lightbox').css('display', 'flex');
         }
         function _viewerCloseLb() {
             $('#viewer-lightbox').hide();
             $('#viewer-lb-img').attr('src', '');
             $('#viewer-lb-qr').empty();
+            $('#viewer-lb-video-note').hide();
         }
         $('#viewer-lb-close').on('click', _viewerCloseLb);
         $('#viewer-lightbox').on('click', function(e) { if (e.target === this) _viewerCloseLb(); });
 
         // Map filename → $item for drive-update lookups
         const _viewerItems = {};
+        // Deduplicate messages by their _id field
+        const _viewerSeenIds = new Set();
 
         function _viewerUpdateDrive(filename, driveUrl) {
             const $item = _viewerItems[filename];
@@ -3454,7 +3470,7 @@ $(document).ready(function() {
             const qrBtnHtml = driveUrl ? '<button class="viewer-qr-btn">&#x1F4F1; QR</button>' : '';
 
             const $item = $(`
-                <div class="viewer-item viewer-item-new" data-filename="${(msg.filename||'').replace(/"/g,'')}"
+                <div class="viewer-item viewer-item-new" data-type="${type}" data-filename="${(msg.filename||'').replace(/"/g,'')}"
                      ${driveUrl ? 'data-drive-url="' + driveUrl + '"' : ''}>
                     <div class="viewer-item-media" style="position:relative;width:100%;padding-top:${type==='video'?'56.25%':'75%'};overflow:hidden;border-radius:8px 8px 0 0;cursor:pointer;">
                         <div style="position:absolute;inset:0;">${mediaHtml}</div>
@@ -3467,18 +3483,21 @@ $(document).ready(function() {
                 </div>
             `);
 
-            // Click media → open photo in lightbox (or QR if video + drive available)
+            // Tap media area:
+            //   Photo  → open full image in lightbox
+            //   Video + Drive link → open Drive URL in new tab so browser/Drive app plays it
+            //   Video + no Drive   → show thumbnail in lightbox with explanatory note
             $item.find('.viewer-item-media').on('click', function() {
                 const dUrl = $item.attr('data-drive-url') || null;
                 if (type === 'photo') {
                     if (msg.data) _viewerOpenPhoto(msg.data);
                 } else {
-                    if (dUrl)       _viewerOpenQr(dUrl);
-                    else if (msg.data) _viewerOpenPhoto(msg.data);
+                    if (dUrl) window.open(dUrl, '_blank');
+                    else      _viewerOpenVideoNoLink(msg.data);
                 }
             });
 
-            // QR button (shown if driveUrl present at time of capture)
+            // QR button: always shows the Drive QR code overlay
             $item.find('.viewer-qr-btn').on('click', function(e) {
                 e.stopPropagation();
                 const dUrl = $item.attr('data-drive-url') || driveUrl;
@@ -3505,6 +3524,11 @@ $(document).ready(function() {
                 conn.on('data', function(raw) {
                     try {
                         const msg = JSON.parse(raw);
+                        // Deduplicate: skip messages we've already processed
+                        if (msg._id) {
+                            if (_viewerSeenIds.has(msg._id)) return;
+                            _viewerSeenIds.add(msg._id);
+                        }
                         if      (msg.type === 'hello')        { if (msg.eventName) $('#viewer-event-name').text(msg.eventName); }
                         else if (msg.type === 'photo')        { _viewerAddItem(msg, 'photo'); }
                         else if (msg.type === 'video')        { _viewerAddItem(msg, 'video'); }
