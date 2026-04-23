@@ -53,6 +53,8 @@ let appConfig = {
     printServer: '',     // e.g. "http://192.168.1.50:3000"
     selectedCameraId: '', // deviceId chosen in Capture Settings
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
+    wirelessCameraUrl: '',    // PB: MJPEG/IP camera stream URL (overrides device when set)
+    vgWirelessCameraUrl: '',  // VG: MJPEG/IP camera stream URL (overrides device when set)
 
     // Disclaimer (shared for Photo Booth and Video Guestbook)
     disclaimerEnabled: false,
@@ -1134,6 +1136,69 @@ $(document).ready(function() {
 
     // ──────────────────────────────────────────────────────────────────────────
 
+    // --- Wireless / IP Camera stream (MJPEG URL) ---
+    let _wirelessHiddenVideo = null;
+
+    /**
+     * Opens a wireless camera stream from an MJPEG/IP camera URL.
+     * Creates a hidden <video> element that loads the URL, then returns a
+     * MediaStream via captureStream() so the rest of the app can treat it
+     * exactly like a getUserMedia stream.
+     * For VG mode an audio track from the microphone is appended.
+     */
+    async function _openWirelessCameraStream(url, isVgMode) {
+        // Clean up any previous hidden video
+        if (_wirelessHiddenVideo) {
+            _wirelessHiddenVideo.src = '';
+            _wirelessHiddenVideo.load();
+            if (_wirelessHiddenVideo.parentNode) _wirelessHiddenVideo.parentNode.removeChild(_wirelessHiddenVideo);
+            _wirelessHiddenVideo = null;
+        }
+
+        const vid = document.createElement('video');
+        vid.muted = true;
+        vid.autoplay = true;
+        vid.playsInline = true;
+        vid.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;';
+        vid.src = url;
+        document.body.appendChild(vid);
+        _wirelessHiddenVideo = vid;
+
+        await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Wireless camera stream timed out (15 s). Check the URL and that the device is on the same network.')), 15000);
+            vid.oncanplay = () => { clearTimeout(timeout); resolve(); };
+            vid.onerror   = () => { clearTimeout(timeout); reject(new Error('Cannot load stream from: ' + url + '\nEnsure the IP camera app is running and the URL is correct.')); };
+            vid.load();
+        });
+        await vid.play();
+
+        const captureStreamFn = vid.captureStream || vid.mozCaptureStream;
+        if (!captureStreamFn) throw new Error('captureStream() is not supported by this browser.');
+        const videoStream = captureStreamFn.call(vid);
+
+        if (isVgMode) {
+            const audioConstraint = appConfig.vgSelectedMicId
+                ? { deviceId: { exact: appConfig.vgSelectedMicId } }
+                : true;
+            try {
+                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
+                return new MediaStream([...videoStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
+            } catch (_) {
+                return videoStream; // no mic — proceed without audio
+            }
+        }
+        return videoStream;
+    }
+
+    function _stopWirelessHiddenVideo() {
+        if (_wirelessHiddenVideo) {
+            _wirelessHiddenVideo.src = '';
+            _wirelessHiddenVideo.load();
+            if (_wirelessHiddenVideo.parentNode) _wirelessHiddenVideo.parentNode.removeChild(_wirelessHiddenVideo);
+            _wirelessHiddenVideo = null;
+        }
+    }
+
     // --- Camera selection ---
     async function populateCameraList() {
         const diag = document.getElementById('camera-diag');
@@ -1218,17 +1283,38 @@ $(document).ready(function() {
     function _stopCameraTest() {
         if (_testStream) { _testStream.getTracks().forEach(t => t.stop()); _testStream = null; }
         const pv = document.getElementById('camera-test-preview');
-        if (pv) pv.srcObject = null;
+        if (pv) { pv.srcObject = null; pv.src = ''; pv.load(); }
         $('#camera-test-card').hide();
         $('#btn-test-camera').text('▶ Test');
     }
 
     $('#btn-test-camera').on('click', async function() {
         const btn = $(this);
-        if (_testStream) { _stopCameraTest(); return; }
+        if (_testStream || $('#camera-test-card').is(':visible')) { _stopCameraTest(); return; }
 
         btn.prop('disabled', true).text('Opening…');
         const diag = document.getElementById('camera-diag');
+        const pv = document.getElementById('camera-test-preview');
+
+        // ── Wireless / IP Camera URL path ─────────────────────────────────────
+        if (appConfig.wirelessCameraUrl) {
+            try {
+                pv.src = appConfig.wirelessCameraUrl;
+                pv.muted = true;
+                await pv.play();
+                const info = document.getElementById('camera-test-info');
+                if (info) info.textContent = `Wireless stream: ${appConfig.wirelessCameraUrl}`;
+                $('#camera-test-card').show();
+                btn.prop('disabled', false).text('⏹ Stop Test');
+            } catch (e) {
+                pv.src = '';
+                btn.prop('disabled', false).text('▶ Test');
+                if (diag) diag.innerHTML = `<span style="color:#dc2626;">⚠ Could not open wireless stream: ${e.message}</span>`;
+            }
+            return;
+        }
+
+        // ── Normal getUserMedia path ──────────────────────────────────────────
         try {
             const deviceId = appConfig.selectedCameraId;
             const constraints = deviceId
@@ -1236,7 +1322,6 @@ $(document).ready(function() {
                 : { video: appConfig.facingMode ? { facingMode: appConfig.facingMode } : true };
 
             _testStream = await navigator.mediaDevices.getUserMedia(constraints);
-            const pv = document.getElementById('camera-test-preview');
             pv.srcObject = _testStream;
 
             // Show resolution info once track is active
@@ -1255,6 +1340,14 @@ $(document).ready(function() {
     });
 
     $('#btn-stop-camera-test').on('click', function() { _stopCameraTest(); });
+
+    // Wireless URL input handlers
+    $('#pb-wireless-camera-url').on('input', function() {
+        appConfig.wirelessCameraUrl = this.value.trim();
+    });
+    $('#vg-wireless-camera-url').on('input', function() {
+        appConfig.vgWirelessCameraUrl = this.value.trim();
+    });
 
     // --- Capture Settings Tabs ---
     document.querySelectorAll('.capture-tab-btn').forEach(function(btn) {
@@ -1388,17 +1481,38 @@ $(document).ready(function() {
     function _stopVgCameraTest() {
         if (_vgTestStream) { _vgTestStream.getTracks().forEach(t => t.stop()); _vgTestStream = null; }
         const pv = document.getElementById('vg-camera-test-preview');
-        if (pv) pv.srcObject = null;
+        if (pv) { pv.srcObject = null; pv.src = ''; pv.load(); }
         $('#vg-camera-test-card').hide();
         $('#btn-test-vg-camera').text('▶ Test');
     }
 
     $('#btn-test-vg-camera').on('click', async function() {
         const btn = $(this);
-        if (_vgTestStream) { _stopVgCameraTest(); return; }
+        if (_vgTestStream || $('#vg-camera-test-card').is(':visible')) { _stopVgCameraTest(); return; }
 
         btn.prop('disabled', true).text('Opening…');
         const diag = document.getElementById('vg-camera-diag');
+        const pv = document.getElementById('vg-camera-test-preview');
+
+        // ── Wireless / IP Camera URL path ─────────────────────────────────────
+        if (appConfig.vgWirelessCameraUrl) {
+            try {
+                pv.src = appConfig.vgWirelessCameraUrl;
+                pv.muted = true;
+                await pv.play();
+                const info = document.getElementById('vg-camera-test-info');
+                if (info) info.textContent = `Wireless stream: ${appConfig.vgWirelessCameraUrl}`;
+                $('#vg-camera-test-card').show();
+                btn.prop('disabled', false).text('⏹ Stop Test');
+            } catch (e) {
+                pv.src = '';
+                btn.prop('disabled', false).text('▶ Test');
+                if (diag) diag.innerHTML = `<span style="color:#dc2626;">⚠ Could not open wireless stream: ${e.message}</span>`;
+            }
+            return;
+        }
+
+        // ── Normal getUserMedia path ──────────────────────────────────────────
         try {
             const deviceId = appConfig.vgSelectedCameraId;
             const constraints = deviceId && appConfig.vgFacingMode === ''
@@ -1406,7 +1520,6 @@ $(document).ready(function() {
                 : { video: appConfig.vgFacingMode ? { facingMode: appConfig.vgFacingMode } : true };
 
             _vgTestStream = await navigator.mediaDevices.getUserMedia(constraints);
-            const pv = document.getElementById('vg-camera-test-preview');
             pv.srcObject = _vgTestStream;
 
             const track = _vgTestStream.getVideoTracks()[0];
@@ -1971,11 +2084,35 @@ $(document).ready(function() {
         _stopVgCameraTest(); // also release VG test preview stream
 
         try {
+            const isVgMode = appConfig.captureMode === 'videoguestbook';
+
+            // ── Wireless / IP Camera URL path ─────────────────────────────────
+            const wirelessUrl = isVgMode ? appConfig.vgWirelessCameraUrl : appConfig.wirelessCameraUrl;
+            const usesWireless = wirelessUrl &&
+                ((isVgMode && appConfig.vgFacingMode === '') || (!isVgMode && appConfig.facingMode === ''));
+
+            if (usesWireless) {
+                currentStream = await _openWirelessCameraStream(wirelessUrl, isVgMode);
+                if (isVgMode) {
+                    const vgFeedEl = $('#vg-camera-feed')[0];
+                    vgFeedEl.srcObject = currentStream;
+                    if (appConfig.vgSelectedSpeakerId && typeof vgFeedEl.setSinkId === 'function') {
+                        try { await vgFeedEl.setSinkId(appConfig.vgSelectedSpeakerId); } catch (_) {}
+                    }
+                } else {
+                    $('#camera-feed')[0].srcObject = currentStream;
+                    applyKioskViewfinderSize();
+                }
+                $('#admin-dashboard').hide();
+                $('#kiosk-mode').fadeIn(400);
+                resetToWelcomeScreen();
+                return;
+            }
+
         // ── Normal getUserMedia path ─────────────────────────────────────
             // Build video constraints: specific device takes priority, then facingMode.
             // Video Guestbook uses a lower resolution (1080p max) to prevent encoder
             // lag and stuttering; PhotoBooth uses the highest available for still quality.
-            const isVgMode = appConfig.captureMode === 'videoguestbook';
             const videoConstraints = isVgMode
                 ? { width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 30, max: 30 } }
                 : { width: { ideal: 4096 }, height: { ideal: 3072 } };
@@ -2043,6 +2180,7 @@ $(document).ready(function() {
     $('#btn-exit-kiosk').on('click', function() {
         stopVgRecordingIfActive();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
+        _stopWirelessHiddenVideo();
         $('#kiosk-mode').hide();
         $('#vg-booth').hide();
         $('#live-booth').hide();
