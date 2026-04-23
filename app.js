@@ -54,9 +54,9 @@ let appConfig = {
 
     // Disclaimer (shared for Photo Booth and Video Guestbook)
     disclaimerEnabled: false,
-    disclaimerHeader: 'Do you agree with the terms?',
+    disclaimerHeader: 'Media Release Agreement',
     disclaimerOrg: 'Name of Organization',
-    disclaimerText: 'I hereby grant the {Name of Organization} permission to use my likeness in a photograph, video, or other digital media (\u201cphoto\u201d) in any and all of its publications, including web-based publications, without payment or other consideration.\n\nI understand and agree that all photos will become the property of the {Name of Organization} and will not be returned.\n\nI hereby irrevocably authorize the {Name of Organization} to edit, alter, copy, exhibit, publish, or distribute these photos for any lawful purpose. In addition, I waive any right to inspect or approve the finished product wherein my likeness appears. Additionally, I waive any right to royalties or other compensation arising or related to the use of the photo.\n\nI hereby hold harmless, release, and forever discharge the {Name of Organization} from all claims, demands, and causes of action which I, my heirs, representatives, executors, administrators, or any other persons acting on my behalf or on behalf of my estate have or may have by reason of this authorization.\n\nI HAVE READ AND UNDERSTAND THE ABOVE PHOTO RELEASE.',
+    disclaimerText: 'By proceeding, I grant {Name of Organization} the right to use my photos and videos from this event for promotional and publication purposes without compensation. I understand these files become the property of the organization, and I waive the right to review the final media or claim royalties. I also release {Name of Organization} from any legal claims or liability related to the use of my likeness.\n\nI HAVE READ AND UNDERSTAND THE ABOVE PHOTO RELEASE.',
     // Google Drive — Photo Booth (Method A - browser OAuth)
     driveFolderName: 'Photo Booth Captures',
     _driveAccessToken: null,
