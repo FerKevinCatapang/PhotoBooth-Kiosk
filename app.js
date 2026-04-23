@@ -52,17 +52,11 @@ let appConfig = {
     selectedCameraId: '', // deviceId chosen in Capture Settings
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
 
-    // Disclaimer — Photo Booth
+    // Disclaimer (shared for Photo Booth and Video Guestbook)
     disclaimerEnabled: false,
     disclaimerHeader: 'Do you agree with the terms?',
     disclaimerOrg: 'Name of Organization',
     disclaimerText: 'I hereby grant the {Name of Organization} permission to use my likeness in a photograph, video, or other digital media (\u201cphoto\u201d) in any and all of its publications, including web-based publications, without payment or other consideration.\n\nI understand and agree that all photos will become the property of the {Name of Organization} and will not be returned.\n\nI hereby irrevocably authorize the {Name of Organization} to edit, alter, copy, exhibit, publish, or distribute these photos for any lawful purpose. In addition, I waive any right to inspect or approve the finished product wherein my likeness appears. Additionally, I waive any right to royalties or other compensation arising or related to the use of the photo.\n\nI hereby hold harmless, release, and forever discharge the {Name of Organization} from all claims, demands, and causes of action which I, my heirs, representatives, executors, administrators, or any other persons acting on my behalf or on behalf of my estate have or may have by reason of this authorization.\n\nI HAVE READ AND UNDERSTAND THE ABOVE PHOTO RELEASE.',
-    // Disclaimer — Video Guestbook
-    vgDisclaimerEnabled: false,
-    vgDisclaimerHeader: 'Do you agree with the terms?',
-    vgDisclaimerOrg: 'Name of Organization',
-    vgDisclaimerText: 'I hereby grant the {Name of Organization} permission to use my likeness in a photograph, video, or other digital media (\u201cphoto\u201d) in any and all of its publications, including web-based publications, without payment or other consideration.\n\nI understand and agree that all photos will become the property of the {Name of Organization} and will not be returned.\n\nI hereby irrevocably authorize the {Name of Organization} to edit, alter, copy, exhibit, publish, or distribute these photos for any lawful purpose. In addition, I waive any right to inspect or approve the finished product wherein my likeness appears. Additionally, I waive any right to royalties or other compensation arising or related to the use of the photo.\n\nI hereby hold harmless, release, and forever discharge the {Name of Organization} from all claims, demands, and causes of action which I, my heirs, representatives, executors, administrators, or any other persons acting on my behalf or on behalf of my estate have or may have by reason of this authorization.\n\nI HAVE READ AND UNDERSTAND THE ABOVE PHOTO RELEASE.',
-
     // Google Drive — Photo Booth (Method A - browser OAuth)
     driveFolderName: 'Photo Booth Captures',
     _driveAccessToken: null,
@@ -401,54 +395,29 @@ $(document).ready(function() {
         return text.replace(/\{Name of Organization\}/g, org || 'the Organisation');
     }
 
-    // --- Disclaimer — Photo Booth admin settings ---
-    (function initPbDisclaimer() {
-        $('#pb-disclaimer-header').val(appConfig.disclaimerHeader);
-        $('#pb-disclaimer-org').val(appConfig.disclaimerOrg);
-        $('#pb-disclaimer-text').val(appConfig.disclaimerText);
+    // --- Disclaimer — shared admin settings ---
+    (function initDisclaimer() {
+        $('#disclaimer-header').val(appConfig.disclaimerHeader);
+        $('#disclaimer-org').val(appConfig.disclaimerOrg);
+        $('#disclaimer-text').val(appConfig.disclaimerText);
 
-        function _syncPbDisclaimer() {
+        function _sync() {
             const on = appConfig.disclaimerEnabled;
-            $('#toggle-pb-disclaimer').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
-            $('#toggle-pb-disclaimer-label').text(on ? 'ON' : 'OFF');
-            $('#pb-disclaimer-config').toggle(on);
+            $('#toggle-disclaimer').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
+            $('#toggle-disclaimer-label').text(on ? 'ON' : 'OFF');
+            $('#disclaimer-config').toggle(on);
         }
-        _syncPbDisclaimer();
+        _sync();
 
-        $('#toggle-pb-disclaimer').on('change', function() {
+        $('#toggle-disclaimer').on('change', function() {
             appConfig.disclaimerEnabled = this.checked;
-            $('#toggle-pb-disclaimer-label').text(this.checked ? 'ON' : 'OFF');
+            $('#toggle-disclaimer-label').text(this.checked ? 'ON' : 'OFF');
             $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-            $('#pb-disclaimer-config').toggle(this.checked);
+            $('#disclaimer-config').toggle(this.checked);
         });
-        $('#pb-disclaimer-org').on('input', function() { appConfig.disclaimerOrg = this.value; });
-        $('#pb-disclaimer-header').on('input', function() { appConfig.disclaimerHeader = this.value || 'Do you agree with the terms?'; });
-        $('#pb-disclaimer-text').on('input', function() { appConfig.disclaimerText = this.value; });
-    })();
-
-    // --- Disclaimer — Video Guestbook admin settings ---
-    (function initVgDisclaimer() {
-        $('#vg-disclaimer-header').val(appConfig.vgDisclaimerHeader);
-        $('#vg-disclaimer-org').val(appConfig.vgDisclaimerOrg);
-        $('#vg-disclaimer-text').val(appConfig.vgDisclaimerText);
-
-        function _syncVgDisclaimer() {
-            const on = appConfig.vgDisclaimerEnabled;
-            $('#toggle-vg-disclaimer').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
-            $('#toggle-vg-disclaimer-label').text(on ? 'ON' : 'OFF');
-            $('#vg-disclaimer-config').toggle(on);
-        }
-        _syncVgDisclaimer();
-
-        $('#toggle-vg-disclaimer').on('change', function() {
-            appConfig.vgDisclaimerEnabled = this.checked;
-            $('#toggle-vg-disclaimer-label').text(this.checked ? 'ON' : 'OFF');
-            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-            $('#vg-disclaimer-config').toggle(this.checked);
-        });
-        $('#vg-disclaimer-org').on('input', function() { appConfig.vgDisclaimerOrg = this.value; });
-        $('#vg-disclaimer-header').on('input', function() { appConfig.vgDisclaimerHeader = this.value || 'Do you agree with the terms?'; });
-        $('#vg-disclaimer-text').on('input', function() { appConfig.vgDisclaimerText = this.value; });
+        $('#disclaimer-org').on('input', function() { appConfig.disclaimerOrg = this.value; });
+        $('#disclaimer-header').on('input', function() { appConfig.disclaimerHeader = this.value || 'Do you agree with the terms?'; });
+        $('#disclaimer-text').on('input', function() { appConfig.disclaimerText = this.value; });
     })();
 
     // --- Prompts — Video Guestbook admin settings ---
@@ -1968,11 +1937,11 @@ $(document).ready(function() {
 
     // --- Kiosk Logic (Video Guestbook) ---
     $('#btn-start-vg-session').on('click', async function() {
-        if (appConfig.vgDisclaimerEnabled) {
+        if (appConfig.disclaimerEnabled) {
             const accepted = await showDisclaimerDialog(
-                appConfig.vgDisclaimerHeader,
-                appConfig.vgDisclaimerText,
-                appConfig.vgDisclaimerOrg
+                appConfig.disclaimerHeader,
+                appConfig.disclaimerText,
+                appConfig.disclaimerOrg
             );
             if (!accepted) return; // session forfeited — do nothing, no saves
         }
@@ -2040,6 +2009,10 @@ $(document).ready(function() {
             $('#live-ws-subtitle').text(appConfig.welcomeSubtitle || $('#edit-subtitle').val());
         }
 
+        // Show recent captures button if there are any captures
+        const totalCaptures = capturedPhotos.length + capturedVideos.length;
+        $('#btn-recent-captures').toggle(totalCaptures > 0);
+
         $('#guest-welcome').removeClass('hidden');
         // Resume welcome video if it was paused
         const kv = $('#ws-video-bg')[0];
@@ -2047,6 +2020,98 @@ $(document).ready(function() {
             kv.play();
         }
     }
+
+    // ==================== RECENT CAPTURES KIOSK MODAL ====================
+    (function initRecentCapturesModal() {
+        let _rcmItems = []; // [{type:'photo'|'video', src:string}]
+        let _rcmIdx   = 0;
+
+        function _buildItems() {
+            _rcmItems = [];
+            capturedPhotos.forEach(function(src) { _rcmItems.push({ type: 'photo', src: src }); });
+            capturedVideos.forEach(function(src) { _rcmItems.push({ type: 'video', src: src }); });
+        }
+
+        function _openModal() {
+            _buildItems();
+            const $modal = $('#recent-captures-modal');
+            const $grid  = $('#rcm-grid').empty();
+            const $empty = $('#rcm-empty');
+            if (_rcmItems.length === 0) {
+                $empty.css('display', 'flex');
+                $grid.hide();
+            } else {
+                $empty.hide();
+                $grid.show();
+                _rcmItems.forEach(function(item, idx) {
+                    if (item.type === 'photo') {
+                        const $card = $('<div class="rcm-card" data-idx="' + idx + '"><img src="' + item.src + '" alt=""><div class="rcm-badge">📸</div></div>');
+                        $grid.append($card);
+                    } else {
+                        const $card = $('<div class="rcm-card rcm-card-video" data-idx="' + idx + '"><video src="' + item.src + '" muted playsinline preload="metadata"></video><div class="rcm-badge">🎬</div><div class="rcm-play-icon">▶</div></div>');
+                        $grid.append($card);
+                        // Seek to a frame for thumbnail
+                        const vid = $card.find('video')[0];
+                        vid.addEventListener('loadedmetadata', function() { vid.currentTime = Math.min(0.5, vid.duration * 0.1); }, { once: true });
+                    }
+                });
+            }
+            $modal.css('display', 'flex');
+        }
+
+        function _openLightbox(idx) {
+            _rcmIdx = idx;
+            _renderLightbox();
+            $('#rcm-lightbox').css('display', 'flex');
+        }
+
+        function _renderLightbox() {
+            const item = _rcmItems[_rcmIdx];
+            if (!item) return;
+            const $img   = $('#rcm-lb-img');
+            const $video = $('#rcm-lb-video');
+            if (item.type === 'photo') {
+                $video.hide().attr('src', '')[0].pause();
+                $img.attr('src', item.src).show();
+            } else {
+                $img.hide().attr('src', '');
+                $video.attr('src', item.src).show()[0].play();
+            }
+            $('#rcm-lb-counter').text((_rcmIdx + 1) + ' / ' + _rcmItems.length);
+            $('#btn-rcm-lb-prev').toggle(_rcmIdx > 0);
+            $('#btn-rcm-lb-next').toggle(_rcmIdx < _rcmItems.length - 1);
+        }
+
+        function _closeLightbox() {
+            $('#rcm-lb-video')[0].pause();
+            $('#rcm-lightbox').hide();
+        }
+
+        // Event bindings
+        $('#btn-recent-captures').on('click', function(e) {
+            e.stopPropagation();
+            _openModal();
+        });
+
+        $('#btn-close-rcm').on('click', function() {
+            _closeLightbox();
+            $('#recent-captures-modal').hide();
+        });
+
+        $(document).on('click', '.rcm-card', function() {
+            _openLightbox(parseInt($(this).data('idx'), 10));
+        });
+
+        $('#btn-rcm-lb-close').on('click', _closeLightbox);
+
+        $('#btn-rcm-lb-prev').on('click', function() {
+            if (_rcmIdx > 0) { _rcmIdx--; _renderLightbox(); }
+        });
+
+        $('#btn-rcm-lb-next').on('click', function() {
+            if (_rcmIdx < _rcmItems.length - 1) { _rcmIdx++; _renderLightbox(); }
+        });
+    })();
 
     // ==================== DRIVE: SET FILE PUBLIC ====================
     // Makes a Drive file readable by anyone with the link (so QR scan works)
@@ -2313,7 +2378,7 @@ $(document).ready(function() {
             await new Promise(r => setTimeout(r, 1000));
         }
         cdEl.style.display = 'none';
-        if (_sidebarEl) _sidebarEl.style.display = 'none';
+        // Sidebar stays visible during recording (it's an HTML overlay — not burned into the video stream)
 
         // Build the stream to record.
         // If an overlay is configured, composite camera + overlay on a canvas
@@ -2392,6 +2457,7 @@ $(document).ready(function() {
             clearTimeout(_vgMaxTimer);
             if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
             overlayLive.style.display = 'none';
+            $('#vg-prompt-sidebar').hide();
             $('#vg-hud').hide();
             $('#vg-controls').hide();
             $('#vg-processing-overlay').fadeIn(200);
@@ -2411,9 +2477,10 @@ $(document).ready(function() {
             const secs = _vgElapsed % 60;
             $('#vg-timer').text(mins + ':' + String(secs).padStart(2, '0'));
             const left = appConfig.vgMaxDuration - _vgElapsed;
-            if (left <= 10) {
-                $('#vg-time-left').text(left + 's left').show();
-            }
+            const mLeft = Math.floor(left / 60);
+            const sLeft = left % 60;
+            const leftTxt = mLeft > 0 ? mLeft + ':' + String(sLeft).padStart(2, '0') + ' left' : left + 's left';
+            $('#vg-time-left').text(leftTxt).css('color', left <= 10 ? '#fca5a5' : 'rgba(255,255,255,0.7)');
         }, 1000);
 
         // Auto-stop at max duration
@@ -2514,7 +2581,6 @@ $(document).ready(function() {
             const bgImg    = document.getElementById('vg-ty-bg-img');
             const gradient = document.getElementById('vg-ty-gradient');
             const doneBtn  = document.getElementById('btn-vg-ty-done');
-            const bar      = document.getElementById('vg-ty-progress-bar');
             const secs     = Math.max(2, appConfig.vgThankYouDuration || 5);
 
             // Apply background image if configured
@@ -2528,32 +2594,18 @@ $(document).ready(function() {
                 gradient.style.display = 'none';
             }
 
-            // Reset and show progress bar
-            bar.style.transition = 'none';
-            bar.style.width = '100%';
             overlay.style.display = 'flex';
-
             let timerId = null;
 
             function advance() {
                 clearTimeout(timerId);
-                bar.style.transition = 'none';
-                bar.style.width = '0%';
                 overlay.style.display = 'none';
                 doneBtn.removeEventListener('click', advance);
                 resolve();
             }
 
             doneBtn.addEventListener('click', advance);
-
-            // Kick off shrinking bar after one paint
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    bar.style.transition = 'width ' + secs + 's linear';
-                    bar.style.width = '0%';
-                    timerId = setTimeout(advance, secs * 1000);
-                });
-            });
+            timerId = setTimeout(advance, secs * 1000);
         });
     }
     function showVgPreview(blobUrl) {

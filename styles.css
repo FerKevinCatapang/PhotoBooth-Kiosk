@@ -409,7 +409,7 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
 .vg-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: vg-blink 1s step-start infinite; flex-shrink: 0; }
 @keyframes vg-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 .vg-timer { font-size: 2.5rem; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.6); line-height: 1; }
-.vg-time-left { font-size: 1rem; font-weight: 600; color: #fca5a5; text-shadow: 0 1px 4px rgba(0,0,0,0.5); display: none; }
+.vg-time-left { font-size: 1rem; font-weight: 600; color: rgba(255,255,255,0.7); text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
 /* VG Stop button */
 #vg-controls { position: absolute; bottom: 2.5rem; left: 50%; transform: translateX(-50%); z-index: 25; }
 .vg-stop-btn { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; background: rgba(239,68,68,0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 2px solid rgba(255,255,255,0.4); border-radius: 999px; padding: 0.9rem 2rem; color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer; transition: background 0.2s, transform 0.15s; }
@@ -1291,22 +1291,6 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
     text-shadow: 0 4px 20px rgba(0,0,0,0.4);
     letter-spacing: -0.02em;
 }
-#btn-vg-ty-done {
-    margin-top: 2.5rem;
-    padding: 0.9rem 3rem;
-    font-size: clamp(1rem, 2.5vw, 1.25rem);
-    background: rgba(255,255,255,0.15);
-    border: 2px solid rgba(255,255,255,0.55);
-    color: #fff;
-    border-radius: 999px;
-    font-weight: 700;
-    cursor: pointer;
-    letter-spacing: 0.04em;
-    backdrop-filter: blur(4px);
-    transition: background 0.15s, transform 0.1s;
-}
-#btn-vg-ty-done:hover  { background: rgba(255,255,255,0.28); }
-#btn-vg-ty-done:active { transform: scale(0.96); }
 .vg-ty-progress-wrap {
     width: min(360px, 70vw);
     height: 4px;
@@ -1360,4 +1344,89 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
     line-height: 1.45;
     margin: 0;
     text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+}
+
+#btn-vg-ty-done {
+    position: relative;
+    z-index: 2;
+    margin-top: 0;
+    padding: 1rem 3.5rem;
+    font-size: clamp(1rem, 2.5vw, 1.35rem);
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.55);
+    color: #fff;
+    border-radius: 999px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s, transform 0.1s;
+}
+#btn-vg-ty-done:hover  { background: rgba(255,255,255,0.28); }
+#btn-vg-ty-done:active { transform: scale(0.96); }
+
+/* ==============================================
+   RECENT CAPTURES KIOSK BUTTON + MODAL
+   ============================================== */
+.recent-captures-btn {
+    position: absolute;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff;
+    border-radius: 999px;
+    padding: 0.55rem 1.1rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    z-index: 5;
+    transition: background 0.15s;
+}
+.recent-captures-btn:hover { background: rgba(0,0,0,0.65); }
+
+.rcm-card {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    aspect-ratio: 1;
+    background: #1e293b;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+.rcm-card:hover { transform: scale(1.03); box-shadow: 0 8px 28px rgba(0,0,0,0.6); }
+.rcm-card img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.rcm-card-video video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    pointer-events: none;
+}
+.rcm-badge {
+    position: absolute;
+    top: 0.4rem; left: 0.4rem;
+    font-size: 1rem;
+    background: rgba(0,0,0,0.55);
+    border-radius: 6px;
+    padding: 0.15rem 0.3rem;
+    line-height: 1;
+}
+.rcm-play-icon {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    color: rgba(255,255,255,0.85);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.7);
+    pointer-events: none;
 }
