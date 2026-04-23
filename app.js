@@ -405,7 +405,6 @@ $(document).ready(function() {
             const on = appConfig.disclaimerEnabled;
             $('#toggle-disclaimer').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
             $('#toggle-disclaimer-label').text(on ? 'ON' : 'OFF');
-            $('#disclaimer-config').toggle(on);
         }
         _sync();
 
@@ -413,7 +412,6 @@ $(document).ready(function() {
             appConfig.disclaimerEnabled = this.checked;
             $('#toggle-disclaimer-label').text(this.checked ? 'ON' : 'OFF');
             $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-            $('#disclaimer-config').toggle(this.checked);
         });
         $('#disclaimer-org').on('input', function() { appConfig.disclaimerOrg = this.value; });
         $('#disclaimer-header').on('input', function() { appConfig.disclaimerHeader = this.value || 'Do you agree with the terms?'; });
@@ -2469,6 +2467,11 @@ $(document).ready(function() {
         _vgMediaRecorder.start(500); // collect chunks every 500ms
         $('#vg-hud').show();
         $('#vg-controls').show();
+        // Re-assert prompt sidebar visibility during recording (DOM overlay — not in the recorded stream)
+        if (_activePromptText) {
+            const _sEl = document.getElementById('vg-prompt-sidebar');
+            if (_sEl) _sEl.style.display = 'flex';
+        }
 
         // Update HUD timer every second
         _vgTimerInterval = setInterval(function() {
@@ -2569,10 +2572,10 @@ $(document).ready(function() {
 
         // Show preview with autoplay × 3, then close button
         await showVgPreview(galleryBlobUrl);
-        $('#vg-booth').hide();
         if (appConfig.vgThankYouEnabled) {
             await showVgThankYou();
         }
+        $('#vg-booth').hide();
         resetToWelcomeScreen();
     }
     function showVgThankYou() {
