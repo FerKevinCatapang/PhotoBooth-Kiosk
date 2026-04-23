@@ -783,3 +783,126 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
     .info-box { padding: 0.7rem 0.85rem; }
     .template-hint-bar { flex-direction: column; gap: 0.5rem; }
 }
+
+/* ==============================================
+   SAVE DESTINATION CHECKBOXES
+   ============================================== */
+.save-dest-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+}
+.save-dest-card {
+    cursor: pointer;
+    display: block;
+}
+.save-dest-card input[type="checkbox"] {
+    display: none;
+}
+.save-dest-inner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border: 2px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    background: #fff;
+    transition: border-color 0.15s, background 0.15s;
+    user-select: none;
+}
+.save-dest-card input:checked + .save-dest-inner {
+    border-color: #be185d;
+    background: #fdf2f8;
+}
+.save-dest-icon {
+    font-size: 1.4rem;
+    flex-shrink: 0;
+}
+.save-dest-title {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #374151;
+    flex: 1;
+}
+.save-dest-card input:checked + .save-dest-inner .save-dest-title {
+    color: #be185d;
+}
+.save-dest-check {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #be185d;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+.save-dest-card input:checked + .save-dest-inner .save-dest-check {
+    opacity: 1;
+}
+@media (max-width: 480px) {
+    .save-dest-grid { grid-template-columns: 1fr; }
+}
+
+/* ==============================================
+   SHARE OVERLAY — QR BUTTON
+   ============================================== */
+.share-btn-qr { background: #1d4ed8; }
+
+/* ==============================================
+   QR CODE OVERLAY MODAL
+   ============================================== */
+.qr-modal {
+    background: #fff;
+    border-radius: 20px;
+    padding: 2rem 2.25rem 1.75rem;
+    text-align: center;
+    max-width: 360px;
+    width: 90%;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.9rem;
+}
+.qr-modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+}
+.qr-modal-sub {
+    font-size: 0.88rem;
+    color: #6b7280;
+    margin: 0;
+    line-height: 1.5;
+}
+#qr-code-container {
+    padding: 0.75rem;
+    background: #fff;
+    border: 2px solid #e5e7eb;
+    border-radius: 12px;
+    display: inline-block;
+}
+#qr-code-container img,
+#qr-code-container canvas {
+    display: block;
+}
+.qr-modal-url {
+    font-size: 0.72rem;
+    color: #9ca3af;
+    word-break: break-all;
+    margin: 0;
+    max-width: 280px;
+}
+.qr-close-btn {
+    margin-top: 0.25rem;
+    padding: 0.7rem 2rem;
+    background: #be185d;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(190,24,93,0.4);
+    transition: filter 0.15s;
+}
+.qr-close-btn:hover { filter: brightness(1.08); }

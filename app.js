@@ -7,7 +7,8 @@ let capturedVideos = []; // In-memory database of captured video guestbook blob 
 
 let appConfig = {
     layout: '4x6-1',
-    storage: 'local',
+    saveLocal: true,          // PB: save to local folder
+    saveDrive: false,         // PB: upload to Google Drive
     countdownFirst: 5,
     countdownOthers: 5,
     reviewTime: 4,
@@ -24,7 +25,8 @@ let appConfig = {
     vgCountdown: 3,           // countdown before recording starts
     vgSelectedCameraId: '',   // VG-specific camera device ID
     vgFacingMode: 'user',     // VG-specific facing mode
-    vgStorage: 'local',       // VG-specific save destination
+    vgSaveLocal: true,        // VG: save to local folder
+    vgSaveDrive: false,       // VG: upload to Google Drive (uses VG-specific Drive config below)
     vgOverlay: null,          // { objectUrl, img } or null — PNG overlay burned into recordings
     // Printer settings
     printCopies: 1,
@@ -48,11 +50,16 @@ let appConfig = {
     selectedCameraId: '', // deviceId chosen in Capture Settings
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
 
-    // Google Drive (Method A - browser OAuth)
+    // Google Drive — Photo Booth (Method A - browser OAuth)
     driveFolderName: 'Photo Booth Captures',
     _driveAccessToken: null,
     _driveFolderId: null,
-    _driveVgFolderId: null
+
+    // Google Drive — Video Guestbook (independent credentials)
+    vgDriveFolderName: 'Video Guestbook Captures',
+    vgDriveClientId: '',
+    _vgDriveAccessToken: null,
+    _vgDriveFolderId: null,
 };
 
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
@@ -147,20 +154,22 @@ $(document).ready(function() {
         appConfig.reviewTime = parseInt(val);
     });
 
-    // --- Storage ---
-    // Use a click handler on the label instead of a change handler on the hidden radio input.
-    // In Android/iOS WebViews, clicking a <label> that wraps a display:none radio can update
-    // the DOM :checked state without firing the JS change event, so slideDown/slideUp would
-    // never run.  Listening to the click on the label itself is reliable across all platforms.
-    $('input[name="storage"]').closest('.storage-card').on('click', function() {
-        const val = $(this).find('input[name="storage"]').val();
-        appConfig.storage = val;
-        if (val === 'local') {
+    // --- Storage (Photo Booth) — checkbox toggles (both local + drive can be active) ---
+    $('#chk-save-local').on('change', function() {
+        appConfig.saveLocal = this.checked;
+        if (this.checked) {
             $('#local-folder-config').slideDown();
-            $('#pb-drive-config').slideUp();
         } else {
             $('#local-folder-config').slideUp();
+        }
+    });
+
+    $('#chk-save-drive').on('change', function() {
+        appConfig.saveDrive = this.checked;
+        if (this.checked) {
             $('#pb-drive-config').slideDown();
+        } else {
+            $('#pb-drive-config').slideUp();
         }
     });
 
@@ -538,7 +547,6 @@ $(document).ready(function() {
                     if (resp.error) { reject(new Error(resp.error)); return; }
                     appConfig._driveAccessToken = resp.access_token;
                     appConfig._driveFolderId = null; // reset folder cache on new token
-                    appConfig._driveVgFolderId = null;
                     resolve(resp.access_token);
                 }
             });
@@ -617,56 +625,29 @@ $(document).ready(function() {
         }
     }
 
-    // Find or create the "Video Guestbook" sub-folder inside the main captures folder
-    async function _driveEnsureVgFolder(token) {
-        if (appConfig._driveVgFolderId) return appConfig._driveVgFolderId;
-        const parentId = await _driveEnsureFolder(token);
-        const subName = 'Video Guestbook';
-        const query = encodeURIComponent(
-            `mimeType='application/vnd.google-apps.folder' and name='${subName}' and '${parentId}' in parents and trashed=false`
-        );
-        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
-            headers: { Authorization: 'Bearer ' + token }
-        });
-        const searchData = await searchResp.json();
-        if (searchData.files && searchData.files.length > 0) {
-            appConfig._driveVgFolderId = searchData.files[0].id;
-            return appConfig._driveVgFolderId;
-        }
-        // Create the sub-folder
-        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: subName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
-        });
-        const folder = await createResp.json();
-        appConfig._driveVgFolderId = folder.id;
-        return folder.id;
-    }
-
-    // Upload a video blob to the Video Guestbook sub-folder in Drive
+    // Upload a video blob using the VG-specific Drive credentials
     async function uploadVgToDrive(blob, filename) {
         try {
-            const token = await _driveEnsureToken();
-            const folderId = await _driveEnsureVgFolder(token);
+            const token = await _vgDriveEnsureToken();
+            const folderId = await _vgDriveEnsureFolder(token);
             const mimeType = blob.type || 'video/webm';
             const meta = JSON.stringify({ name: filename, parents: [folderId] });
             const form = new FormData();
             form.append('metadata', new Blob([meta], { type: 'application/json' }));
             form.append('file', blob, filename);
-            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
                 method: 'POST',
                 headers: { Authorization: 'Bearer ' + token },
                 body: form
             });
             if (!resp.ok) {
                 if (resp.status === 401) {
-                    appConfig._driveAccessToken = null;
-                    const token2 = await _driveEnsureToken();
+                    appConfig._vgDriveAccessToken = null;
+                    const token2 = await _vgDriveEnsureToken();
                     const form2 = new FormData();
                     form2.append('metadata', new Blob([meta], { type: 'application/json' }));
                     form2.append('file', blob, filename);
-                    const resp2 = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name', {
+                    const resp2 = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
                         method: 'POST',
                         headers: { Authorization: 'Bearer ' + token2 },
                         body: form2
@@ -687,7 +668,6 @@ $(document).ready(function() {
     $('#drive-folder-name').on('input', function() {
         appConfig.driveFolderName = this.value.trim() || 'Photo Booth Captures';
         appConfig._driveFolderId = null; // reset folder cache
-        appConfig._driveVgFolderId = null; // reset VG subfolder cache too
     });
 
     // UI: Sign in button
@@ -723,6 +703,112 @@ $(document).ready(function() {
         $('#btn-drive-signin').show();
         _driveSetStatus('Signed out', false);
     });
+
+    // ─── VIDEO GUESTBOOK — INDEPENDENT GOOGLE DRIVE AUTH ──────────────────────
+
+    function _getVgDriveClientId() {
+        const el = document.getElementById('vg-drive-client-id');
+        const inputVal = el ? el.value.trim() : '';
+        // Fall back to VG config, then PB config, then the hardcoded constant
+        return inputVal || appConfig.vgDriveClientId || _getDriveClientId();
+    }
+
+    function _vgDriveSetStatus(msg, isErr = false) {
+        const el = document.getElementById('vg-drive-auth-status');
+        if (el) { el.textContent = msg; el.style.color = isErr ? '#dc2626' : '#6b7280'; }
+    }
+
+    async function _vgDriveRequestToken() {
+        return new Promise((resolve, reject) => {
+            const clientId = _getVgDriveClientId();
+            const client = google.accounts.oauth2.initTokenClient({
+                client_id: clientId,
+                scope: 'https://www.googleapis.com/auth/drive.file',
+                callback: (response) => {
+                    if (response.error) { reject(new Error(response.error)); return; }
+                    appConfig._vgDriveAccessToken = response.access_token;
+                    resolve(response.access_token);
+                }
+            });
+            client.requestAccessToken();
+        });
+    }
+
+    async function _vgDriveEnsureToken() {
+        if (appConfig._vgDriveAccessToken) return appConfig._vgDriveAccessToken;
+        return _vgDriveRequestToken();
+    }
+
+    async function _vgDriveEnsureFolder(token) {
+        if (appConfig._vgDriveFolderId) return appConfig._vgDriveFolderId;
+        const folderName = appConfig.vgDriveFolderName || 'Video Guestbook Captures';
+        const query = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${folderName.replace(/'/g,"\\'")}' and trashed=false`);
+        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
+            headers: { Authorization: 'Bearer ' + token }
+        });
+        const searchData = await searchResp.json();
+        if (searchData.files && searchData.files.length > 0) {
+            appConfig._vgDriveFolderId = searchData.files[0].id;
+            return appConfig._vgDriveFolderId;
+        }
+        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder' })
+        });
+        const folder = await createResp.json();
+        appConfig._vgDriveFolderId = folder.id;
+        return folder.id;
+    }
+
+    // UI: VG Drive folder name input
+    $('#vg-drive-folder-name').on('input', function() {
+        appConfig.vgDriveFolderName = this.value.trim() || 'Video Guestbook Captures';
+        appConfig._vgDriveFolderId = null; // reset folder cache
+    });
+
+    // UI: VG Drive client ID input
+    $('#vg-drive-client-id').on('input', function() {
+        appConfig.vgDriveClientId = this.value.trim();
+        appConfig._vgDriveAccessToken = null;
+        appConfig._vgDriveFolderId = null;
+    });
+
+    // UI: VG Drive sign-in
+    $('#btn-vg-drive-signin').on('click', async function() {
+        const btn = $(this);
+        const clientId = _getVgDriveClientId();
+        if (!clientId || clientId.startsWith('YOUR_CLIENT')) {
+            _vgDriveSetStatus('Enter your Client ID above first.', true);
+            return;
+        }
+        btn.prop('disabled', true).text('Signing in…');
+        _vgDriveSetStatus('');
+        try {
+            await _vgDriveRequestToken();
+            _vgDriveSetStatus('✓ Connected — videos will upload automatically', false);
+            btn.hide();
+            $('#btn-vg-drive-signout').show();
+        } catch (e) {
+            _vgDriveSetStatus('Sign-in failed: ' + e.message, true);
+        } finally {
+            btn.prop('disabled', false).text('Sign in with Google');
+        }
+    });
+
+    // UI: VG Drive sign-out
+    $('#btn-vg-drive-signout').on('click', function() {
+        if (appConfig._vgDriveAccessToken) {
+            google.accounts.oauth2.revoke(appConfig._vgDriveAccessToken, () => {});
+        }
+        appConfig._vgDriveAccessToken = null;
+        appConfig._vgDriveFolderId = null;
+        $(this).hide();
+        $('#btn-vg-drive-signin').show();
+        _vgDriveSetStatus('Signed out', false);
+    });
+
+    // ──────────────────────────────────────────────────────────────────────────
 
     // --- Camera selection ---
     async function populateCameraList() {
@@ -998,17 +1084,22 @@ $(document).ready(function() {
 
     $('#btn-stop-vg-camera-test').on('click', function() { _stopVgCameraTest(); });
 
-    // --- VG Storage ---
-    // Same fix: use click on the label rather than change on the hidden radio input.
-    $('input[name="vg-storage"]').closest('.storage-card').on('click', function() {
-        const val = $(this).find('input[name="vg-storage"]').val();
-        appConfig.vgStorage = val;
-        if (val === 'local') {
+    // --- VG Storage — checkbox toggles (both local + drive can be active) ---
+    $('#chk-vg-save-local').on('change', function() {
+        appConfig.vgSaveLocal = this.checked;
+        if (this.checked) {
             $('#vg-local-folder-config').slideDown();
-            $('#vg-drive-config').slideUp();
         } else {
             $('#vg-local-folder-config').slideUp();
+        }
+    });
+
+    $('#chk-vg-save-drive').on('change', function() {
+        appConfig.vgSaveDrive = this.checked;
+        if (this.checked) {
             $('#vg-drive-config').slideDown();
+        } else {
+            $('#vg-drive-config').slideUp();
         }
     });
 
@@ -1587,11 +1678,70 @@ $(document).ready(function() {
         }
     }
 
+    // ==================== DRIVE: SET FILE PUBLIC ====================
+    // Makes a Drive file readable by anyone with the link (so QR scan works)
+    async function _driveSetPublic(token, fileId) {
+        try {
+            await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
+                method: 'POST',
+                headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role: 'reader', type: 'anyone' })
+            });
+        } catch (e) {
+            console.warn('[Drive] Could not set public permission:', e.message);
+        }
+    }
+    // ===============================================================
+
+    // ==================== QR CODE OVERLAY ==========================
+    let _currentPbDriveLink = null;  // stores Drive link for current PB capture
+    let _currentVgDriveLink = null;  // stores Drive link for current VG capture
+    let _qrInstance = null;
+
+    function showQrOverlay(url, caption) {
+        const container = document.getElementById('qr-code-container');
+        container.innerHTML = '';
+        if (_qrInstance) { try { _qrInstance.clear(); } catch(e) {} }
+        $('#qr-modal-title').text(caption || 'Scan to get your copy');
+        $('#qr-modal-url').text(url);
+        _qrInstance = new QRCode(container, {
+            text: url,
+            width: 240,
+            height: 240,
+            colorDark: '#111827',
+            colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
+        $('#qr-overlay').css('display', 'flex');
+    }
+
+    $('#btn-qr-close').on('click', function() {
+        $('#qr-overlay').hide();
+    });
+
+    // PB share overlay — QR button
+    $('#btn-share-qr').on('click', function() {
+        if (_currentPbDriveLink) {
+            showQrOverlay(_currentPbDriveLink, 'Scan to download your photo');
+        }
+    });
+
+    // VG preview overlay — QR button
+    $('#btn-vg-qr').on('click', function() {
+        if (_currentVgDriveLink) {
+            showQrOverlay(_currentVgDriveLink, 'Scan to download your video');
+        }
+    });
+    // ===============================================================
+
     // ==================== SOCIAL SHARING ====================
     let _shareObjectUrl = null;
     let _shareCountdownTimer = null;
 
     function showShareOverlay(canvas, dataUrl) {
+        // Reset QR state for this new capture
+        _currentPbDriveLink = null;
+        $('#btn-share-qr').hide();
         $('#share-preview-img').attr('src', dataUrl);
         // Build a blob URL for the Web Share API (file-level sharing)
         canvas.toBlob(blob => {
@@ -1896,29 +2046,42 @@ $(document).ready(function() {
         updateDashboardGallery();
 
         // Save locally (folder or download)
-        try {
-            if (vgDirectoryHandle) {
-                const fileHandle = await vgDirectoryHandle.getFileHandle(filename, { create: true });
-                const writable = await fileHandle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-            } else {
-                const dlUrl = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = dlUrl;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
+        if (appConfig.vgSaveLocal) {
+            try {
+                if (vgDirectoryHandle) {
+                    const fileHandle = await vgDirectoryHandle.getFileHandle(filename, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                } else {
+                    const dlUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = dlUrl;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
+                }
+            } catch (err) {
+                console.error('[VG] Save error:', err);
             }
-        } catch (err) {
-            console.error('[VG] Save error:', err);
         }
 
-        // Upload to Google Drive (Video Guestbook sub-folder) if enabled
-        if (appConfig.vgStorage === 'drive' && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
-            uploadVgToDrive(blob, filename).catch(e => console.warn('[Drive] VG upload failed:', e.message));
+        // Upload to Google Drive using VG-specific credentials if enabled
+        let _vgDriveLink = null;
+        if (appConfig.vgSaveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
+            uploadVgToDrive(blob, filename).then(async result => {
+                if (result && result.id) {
+                    await _driveSetPublic(appConfig._vgDriveAccessToken, result.id);
+                    _vgDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
+                    _currentVgDriveLink = _vgDriveLink;
+                    // Show QR button if preview is still open
+                    if ($('#vg-preview-overlay').is(':visible')) {
+                        $('#btn-vg-qr').fadeIn(200);
+                    }
+                }
+            }).catch(e => console.warn('[Drive] VG upload failed:', e.message));
         }
 
         // Reset HUD state
@@ -1942,6 +2105,10 @@ $(document).ready(function() {
             const muteBtn      = document.getElementById('btn-vg-mute');
             const timeDisplay  = document.getElementById('vg-time-display');
             let loopCount = 0;
+
+            // Reset QR state for this new recording
+            _currentVgDriveLink = null;
+            $('#btn-vg-qr').hide();
 
             // Helper: format seconds as M:SS
             function fmtTime(s) {
@@ -2083,7 +2250,8 @@ $(document).ready(function() {
 
         const filename = makeFilename();
 
-        if (appConfig.storage === 'local') {
+        // --- Save to local folder (or browser download as fallback) ---
+        if (appConfig.saveLocal) {
             try {
                 if (directoryHandle) {
                     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
@@ -2101,9 +2269,6 @@ $(document).ready(function() {
                     document.body.removeChild(downloadLink);
                 }
             } catch (err) { console.error('Save error:', err); }
-        } else {
-            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
-            await new Promise(r => setTimeout(r, 800));
         }
 
         // Print BEFORE showing preview
@@ -2118,12 +2283,24 @@ $(document).ready(function() {
         capturedPhotos.unshift(photoDataUrl);
         updateDashboardGallery();
 
-        // AUTO-UPLOAD TO GOOGLE DRIVE (Method A) — fire-and-forget, non-blocking
-        if (appConfig.storage === 'drive' && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
+        // --- Upload to Google Drive (fire-and-forget, non-blocking) ---
+        // Store the Drive link so QR button can use it when upload completes
+        let _pbDriveLink = null;
+        if (appConfig.saveDrive && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
-                    await uploadToDrive(blob, filename);
+                    const result = await uploadToDrive(blob, filename);
                     console.log('[Drive] Uploaded:', filename);
+                    if (result && result.id) {
+                        // Make the file publicly readable so guests can download via QR
+                        await _driveSetPublic(appConfig._driveAccessToken, result.id);
+                        _pbDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
+                        // Show QR button in share overlay (if it's still open)
+                        if ($('#share-overlay').is(':visible') && _pbDriveLink) {
+                            _currentPbDriveLink = _pbDriveLink;
+                            $('#btn-share-qr').fadeIn(200);
+                        }
+                    }
                 } catch (e) {
                     console.warn('[Drive] Upload failed:', e.message);
                 }
@@ -2808,9 +2985,10 @@ $(document).ready(function() {
     // Step 5: Storage
     $('input[name="wiz-storage"]').on('change', function() {
         const val = $(this).val();
-        appConfig.storage = val;
-        $(`input[name="storage"][value="${val}"]`).prop('checked', true);
-        const showFolder = val === 'local';
+        const isLocal = val === 'local';
+        appConfig.saveLocal = isLocal;
+        $('#chk-save-local').prop('checked', isLocal);
+        const showFolder = isLocal;
         $('#wiz-folder-config').toggle(showFolder);
         if (showFolder) { $('#local-folder-config').slideDown(); }
         else { $('#local-folder-config').slideUp(); }
