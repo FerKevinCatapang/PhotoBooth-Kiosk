@@ -80,15 +80,147 @@ let appConfig = {
     vgCustomPrompts: [],          // admin-added prompts appended to the active template pool
 
     // Preview after recording — Video Guestbook
-    vgPreviewEnabled: localStorage.getItem('vgPreviewEnabled') !== null
-        ? localStorage.getItem('vgPreviewEnabled') !== 'false'
-        : true,       // show the video playback overlay after each recording
+    vgPreviewEnabled: true,       // show the video playback overlay after each recording
 
     // Thank You screen — Video Guestbook
     vgThankYouEnabled: false,
     vgThankYouImage: null,        // { objectUrl: string } or null — custom background image
     vgThankYouDuration: 5,        // seconds before auto-advancing to welcome screen
 };
+
+// ─── CONFIG PERSISTENCE ───────────────────────────────────────────────────────
+// Serializable fields only — excludes object URLs, file handles, binary blobs,
+// and OAuth tokens which cannot survive a page reload anyway.
+const PERSIST_KEYS = [
+    'layout', 'captureMode',
+    'saveLocal', 'saveDrive',
+    'countdownFirst', 'countdownOthers', 'reviewTime',
+    'welcomeBg', 'welcomeTitle', 'welcomeSubtitle',
+    'photoMode', 'socialShare',
+    'eventName',
+    'selectedCameraId', 'facingMode', 'wirelessCameraUrl',
+    'printMode', 'printServer', 'printCopies', 'printQuality',
+    'paperSizeOverride', 'colorMode', 'borderless',
+    'driveFolderName',
+    'vgMaxDuration', 'vgCountdown', 'vgPromptText',
+    'vgSelectedCameraId', 'vgFacingMode', 'vgWirelessCameraUrl',
+    'vgSelectedMicId', 'vgSelectedSpeakerId',
+    'vgSaveLocal', 'vgSaveDrive',
+    'vgDriveFolderName', 'vgDriveClientId',
+    'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts',
+    'vgPreviewEnabled',
+    'vgThankYouEnabled', 'vgThankYouDuration',
+    'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
+];
+
+const CONFIG_STORAGE_KEY = 'pb_appConfig';
+
+function saveConfig() {
+    try {
+        const data = {};
+        PERSIST_KEYS.forEach(k => { data[k] = appConfig[k]; });
+        localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(data));
+    } catch (e) {
+        console.warn('[Config] Could not save settings:', e);
+    }
+}
+
+function loadConfig() {
+    try {
+        const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        PERSIST_KEYS.forEach(k => {
+            if (k in saved && saved[k] !== undefined) {
+                appConfig[k] = saved[k];
+            }
+        });
+    } catch (e) {
+        console.warn('[Config] Could not load settings:', e);
+    }
+}
+
+// Debounced auto-save: triggers 800 ms after the last config change
+let _saveTimer = null;
+function scheduleSave() {
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(saveConfig, 800);
+}
+
+// Always save right before the page unloads (tab close, refresh, navigation)
+window.addEventListener('beforeunload', saveConfig);
+
+// Apply saved config into appConfig now, before the DOM is ready
+loadConfig();
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── INDEXED DB — Binary Asset Persistence ────────────────────────────────────
+// localStorage is text-only (~5 MB cap). Binary blobs — welcome screen media,
+// photo template background, VG video overlay, VG thank-you image — are stored
+// in IndexedDB, which natively holds Blob objects and has a much larger quota.
+const IDB_NAME    = 'pb_assets_db';
+const IDB_VERSION = 1;
+const IDB_STORE   = 'assets';
+
+function _idbOpen() {
+    return new Promise(function(resolve, reject) {
+        const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+        req.onupgradeneeded = function(e) {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(IDB_STORE)) {
+                db.createObjectStore(IDB_STORE, { keyPath: 'key' });
+            }
+        };
+        req.onsuccess = function(e) { resolve(e.target.result); };
+        req.onerror   = function(e) { reject(e.target.error); };
+    });
+}
+
+async function idbSave(key, blob, meta) {
+    try {
+        const db = await _idbOpen();
+        await new Promise(function(resolve, reject) {
+            const tx    = db.transaction(IDB_STORE, 'readwrite');
+            const store = tx.objectStore(IDB_STORE);
+            store.put({ key: key, blob: blob, meta: meta || {} });
+            tx.oncomplete = resolve;
+            tx.onerror    = function(e) { reject(e.target.error); };
+        });
+    } catch (e) {
+        console.warn('[IDB] Save failed (' + key + '):', e);
+    }
+}
+
+async function idbLoad(key) {
+    try {
+        const db = await _idbOpen();
+        return await new Promise(function(resolve, reject) {
+            const tx    = db.transaction(IDB_STORE, 'readonly');
+            const store = tx.objectStore(IDB_STORE);
+            const req   = store.get(key);
+            req.onsuccess = function(e) { resolve(e.target.result || null); };
+            req.onerror   = function(e) { reject(e.target.error); };
+        });
+    } catch (e) {
+        console.warn('[IDB] Load failed (' + key + '):', e);
+        return null;
+    }
+}
+
+async function idbDelete(key) {
+    try {
+        const db = await _idbOpen();
+        await new Promise(function(resolve) {
+            const tx    = db.transaction(IDB_STORE, 'readwrite');
+            const store = tx.objectStore(IDB_STORE);
+            store.delete(key);
+            tx.oncomplete = resolve;
+        });
+    } catch (e) {
+        console.warn('[IDB] Delete failed (' + key + '):', e);
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
 // 1. Go to console.cloud.google.com → APIs & Services → Credentials
@@ -183,6 +315,124 @@ const LAYOUT_DEFS = {
 };
 
 $(document).ready(function() {
+    // Suppresses IDB re-save when restoring persisted blobs on page load
+    let _idbRestoring = false;
+
+    // ── Restore persisted settings into UI controls ───────────────────────────
+    function syncUiFromConfig() {
+        // Layout
+        $(`input[name="layout"][value="${appConfig.layout}"]`).prop('checked', true);
+
+        // Timing sliders
+        $('#setting-cd-1').val(appConfig.countdownFirst); $('#val-cd-1').text(appConfig.countdownFirst);
+        $('#setting-cd-others').val(appConfig.countdownOthers); $('#val-cd-others').text(appConfig.countdownOthers);
+        $('#setting-review').val(appConfig.reviewTime); $('#val-review').text(appConfig.reviewTime);
+
+        // PB Storage
+        $('#chk-save-local').prop('checked', appConfig.saveLocal);
+        if (!appConfig.saveLocal) $('#local-folder-config').hide();
+        $('#chk-save-drive').prop('checked', appConfig.saveDrive);
+        if (!appConfig.saveDrive) $('#drive-config').hide(); else $('#drive-config').show();
+
+        // Welcome Screen
+        $('#edit-bg-color').val(appConfig.welcomeBg);
+        $('#color-hex').text(appConfig.welcomeBg);
+        $('#edit-title').val(appConfig.welcomeTitle);
+        $('#prev-title, #live-ws-title').text(appConfig.welcomeTitle);
+        $('#edit-subtitle').val(appConfig.welcomeSubtitle);
+        $('#prev-subtitle, #live-ws-subtitle').text(appConfig.welcomeSubtitle);
+        $('#designer-preview, #guest-welcome').css('background-color', appConfig.welcomeBg);
+
+        // Event name
+        $('#event-name-input, #wiz-event-name').val(appConfig.eventName);
+
+        // PB Camera
+        $(`input[name="facing-mode"][value="${appConfig.facingMode}"]`).prop('checked', true);
+        if (appConfig.facingMode === '') $('#camera-specific-card').show(); else $('#camera-specific-card').hide();
+        if (appConfig.wirelessCameraUrl) $('#pb-wireless-camera-url').val(appConfig.wirelessCameraUrl);
+
+        // Photo Mode + Social Share
+        const pmOn = appConfig.photoMode;
+        $('#toggle-photo-mode').prop('checked', pmOn).closest('.toggle-switch').toggleClass('is-on', pmOn);
+        $('#toggle-photo-label').text(pmOn ? 'ON' : 'OFF');
+        $('#toggle-social-share').prop('checked', appConfig.socialShare).closest('.toggle-switch').toggleClass('is-on', appConfig.socialShare);
+        $('#toggle-social-label').text(appConfig.socialShare ? 'ON' : 'OFF');
+
+        // Printer
+        $('#print-copies-display').text(appConfig.printCopies);
+        $(`#sel-paper-size option[value="${appConfig.paperSizeOverride}"]`).prop('selected', true);
+        $(`#sel-color-mode option[value="${appConfig.colorMode}"]`).prop('selected', true);
+        $(`#sel-print-quality option[value="${appConfig.printQuality}"]`).prop('selected', true);
+        $('#toggle-borderless').prop('checked', appConfig.borderless).closest('.toggle-switch').toggleClass('is-on', appConfig.borderless);
+        $('#toggle-borderless-label').text(appConfig.borderless ? 'ON' : 'OFF');
+        $(`input[name="print-mode"][value="${appConfig.printMode}"]`).prop('checked', true);
+        $('#print-server-url').val(appConfig.printServer);
+        $('#print-server-config').toggle(appConfig.printMode === 'server');
+
+        // PB Drive
+        $('#drive-folder-name').val(appConfig.driveFolderName);
+
+        // Capture mode tab
+        const tabId = appConfig.captureMode === 'videoguestbook' ? 'cap-tab-videoguestbook' : 'cap-tab-photobooth';
+        document.querySelectorAll('.capture-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+        const activeBtn = document.querySelector(`.capture-tab-btn[data-cap-tab="${tabId}"]`);
+        if (activeBtn) activeBtn.classList.add('active');
+        document.querySelectorAll('.cap-tab-content').forEach(function(c) { c.style.display = 'none'; });
+        const activeTab = document.getElementById(tabId);
+        if (activeTab) activeTab.style.display = '';
+
+        // VG Camera
+        $(`input[name="vg-facing-mode"][value="${appConfig.vgFacingMode}"]`).prop('checked', true);
+        if (appConfig.vgFacingMode === '') $('#vg-camera-specific-card').show(); else $('#vg-camera-specific-card').hide();
+        if (appConfig.vgWirelessCameraUrl) $('#vg-wireless-camera-url').val(appConfig.vgWirelessCameraUrl);
+
+        // VG Timing sliders
+        $('#setting-vg-duration').val(appConfig.vgMaxDuration); $('#val-vg-duration').text(appConfig.vgMaxDuration);
+        $('#setting-vg-countdown').val(appConfig.vgCountdown); $('#val-vg-countdown').text(appConfig.vgCountdown);
+        $('#setting-vg-prompt').val(appConfig.vgPromptText);
+
+        // VG Storage
+        $('#chk-vg-save-local').prop('checked', appConfig.vgSaveLocal);
+        if (!appConfig.vgSaveLocal) $('#vg-local-folder-config').hide();
+        $('#chk-vg-save-drive').prop('checked', appConfig.vgSaveDrive);
+        if (!appConfig.vgSaveDrive) $('#vg-drive-config').hide(); else $('#vg-drive-config').show();
+
+        // VG Drive
+        $('#vg-drive-folder-name').val(appConfig.vgDriveFolderName);
+        if (appConfig.vgDriveClientId) $('#vg-drive-client-id').val(appConfig.vgDriveClientId);
+
+        // VG Prompts
+        const vpOn = appConfig.vgPromptsEnabled;
+        $('#toggle-vg-prompts').prop('checked', vpOn).closest('.toggle-switch').toggleClass('is-on', vpOn);
+        $('#toggle-vg-prompts-label').text(vpOn ? 'ON' : 'OFF');
+        $(`.prompt-cat-btn[data-cat="${appConfig.vgPromptCategory}"]`).addClass('active').siblings().removeClass('active');
+
+        // VG Preview
+        const prevOn = appConfig.vgPreviewEnabled;
+        $('#toggle-vg-preview').prop('checked', prevOn).closest('.toggle-switch').toggleClass('is-on', prevOn);
+        $('#toggle-vg-preview-label').text(prevOn ? 'ON' : 'OFF');
+
+        // VG Thank You
+        const tyOn = appConfig.vgThankYouEnabled;
+        $('#toggle-vg-thankyou').prop('checked', tyOn).closest('.toggle-switch').toggleClass('is-on', tyOn);
+        $('#toggle-ty-label').text(tyOn ? 'ON' : 'OFF');
+        $('#setting-ty-duration').val(appConfig.vgThankYouDuration);
+        $('#val-ty-duration').text(appConfig.vgThankYouDuration);
+
+        // Disclaimer
+        const disOn = appConfig.disclaimerEnabled;
+        $('#toggle-disclaimer').prop('checked', disOn).closest('.toggle-switch').toggleClass('is-on', disOn);
+        $('#toggle-disclaimer-label').text(disOn ? 'ON' : 'OFF');
+        $('#disclaimer-header').val(appConfig.disclaimerHeader);
+        $('#disclaimer-org').val(appConfig.disclaimerOrg);
+        $('#disclaimer-text').val(appConfig.disclaimerText);
+    }
+    syncUiFromConfig();
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Auto-save whenever any setting input/select/textarea changes (debounced).
+    // Excludes file inputs — those produce object URLs that cannot be persisted.
+    $(document).on('input change', 'input:not([type="file"]), select, textarea', scheduleSave);
 
     updateDashboardGallery();
 
@@ -315,6 +565,7 @@ $(document).ready(function() {
             $('#ws-image-bg').attr('src', objectUrl).show();
         }
         $('#guest-welcome').css('background-color', '');
+        if (!_idbRestoring) idbSave('welcome_media', file, { type: type });
     }
 
     function clearWelcomeMedia() {
@@ -337,6 +588,7 @@ $(document).ready(function() {
         $('#ws-media-filled').hide();
         $('#ws-media-thumb-wrap').empty();
         $('#ws-media-input').val('');
+        idbDelete('welcome_media');
     }
 
     // Click on upload zone opens file picker
@@ -499,6 +751,8 @@ $(document).ready(function() {
     })();
 
     // --- Thank You Screen — Video Guestbook admin settings ---
+    // Hoisted so restoreAssets() can call them after the IIFE runs
+    let _applyTyImage, _clearTyImage;
     (function initVgThankYou() {
         function _syncToggle() {
             const on = appConfig.vgThankYouEnabled;
@@ -510,7 +764,7 @@ $(document).ready(function() {
             $('#nav-vg-thankyou').toggle(isVg);
         }
 
-        function _applyTyImage(file) {
+        _applyTyImage = function(file) {
             if (appConfig.vgThankYouImage) {
                 URL.revokeObjectURL(appConfig.vgThankYouImage.objectUrl);
             }
@@ -525,9 +779,10 @@ $(document).ready(function() {
             // Preview frame
             $('#ty-preview-bg').attr('src', objectUrl).show();
             $('#ty-preview-frame').addClass('has-bg');
-        }
+            if (!_idbRestoring) idbSave('vg_thankyou', file);
+        };
 
-        function _clearTyImage() {
+        _clearTyImage = function() {
             if (appConfig.vgThankYouImage) {
                 URL.revokeObjectURL(appConfig.vgThankYouImage.objectUrl);
                 appConfig.vgThankYouImage = null;
@@ -538,7 +793,8 @@ $(document).ready(function() {
             $('#ty-media-input').val('');
             $('#ty-preview-bg').attr('src', '').hide();
             $('#ty-preview-frame').removeClass('has-bg');
-        }
+            idbDelete('vg_thankyou');
+        };
 
         // Duration slider
         $('#setting-ty-duration').val(appConfig.vgThankYouDuration).on('input', function() {
@@ -666,11 +922,13 @@ $(document).ready(function() {
     $('#btn-copies-up').on('click', function() {
         appConfig.printCopies = Math.min(10, appConfig.printCopies + 1);
         $('#print-copies-display').text(appConfig.printCopies);
+        scheduleSave();
     });
 
     $('#btn-copies-down').on('click', function() {
         appConfig.printCopies = Math.max(1, appConfig.printCopies - 1);
         $('#print-copies-display').text(appConfig.printCopies);
+        scheduleSave();
     });
 
     $('input[name="color-mode"]').on('change', function() {
@@ -761,6 +1019,7 @@ $(document).ready(function() {
             $('#bg-empty-state').hide();
             $('#bg-preview-state').show();
             drawTemplatePreview();
+            if (!_idbRestoring) idbSave('template_bg', file, { name: file.name });
         } catch(e) { console.error('Failed to load background image', e); }
     }
 
@@ -777,6 +1036,7 @@ $(document).ready(function() {
         $('#bg-preview-state').hide();
         $('#bg-empty-state').show();
         drawTemplatePreview();
+        idbDelete('template_bg');
     });
 
     // Drag-and-drop on background upload zone
@@ -1410,7 +1670,6 @@ $(document).ready(function() {
         _syncPreviewToggle();
         $('#toggle-vg-preview').on('change', function() {
             appConfig.vgPreviewEnabled = this.checked;
-            localStorage.setItem('vgPreviewEnabled', this.checked);
             $('#toggle-vg-preview-label').text(this.checked ? 'ON' : 'OFF');
             $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
         });
@@ -1739,7 +1998,7 @@ $(document).ready(function() {
                 _showOverlayError(`Image must be exactly 1920 × 1080 px (yours is ${testImg.naturalWidth} × ${testImg.naturalHeight} px).`);
                 return;
             }
-            _applyVgOverlay(url, file.name, testImg);
+            _applyVgOverlay(url, file.name, testImg, file);
         };
         testImg.onerror = function() {
             URL.revokeObjectURL(url);
@@ -1774,9 +2033,10 @@ $(document).ready(function() {
         $('#vg-overlay-thumb').attr('src', '');
         $('#vg-overlay-live').hide().attr('src', '');
         _clearOverlayError();
+        idbDelete('vg_overlay');
     });
 
-    function _applyVgOverlay(url, filename, img) {
+    function _applyVgOverlay(url, filename, img, fileBlob) {
         if (appConfig.vgOverlay) URL.revokeObjectURL(appConfig.vgOverlay.objectUrl);
         appConfig.vgOverlay = { objectUrl: url, img };
         $('#vg-overlay-thumb').attr('src', url);
@@ -1784,6 +2044,7 @@ $(document).ready(function() {
         $('#vg-overlay-empty').hide();
         $('#vg-overlay-filled').show();
         _clearOverlayError();
+        if (fileBlob) idbSave('vg_overlay', fileBlob, { name: filename });
     }
 
     function _showOverlayError(msg) {
@@ -4258,5 +4519,44 @@ $(document).ready(function() {
         }
         connectToHost();
     })();
+
+    // ─── RESTORE BINARY ASSETS FROM INDEXED DB ───────────────────────────────
+    // Runs after all admin UI handler functions have been defined.
+    // Re-applies any previously uploaded binary assets using blobs retrieved
+    // from IndexedDB so they survive page reloads without re-uploading.
+    (async function restoreAssets() {
+        // 1. Welcome Screen Media (image or video background)
+        const wm = await idbLoad('welcome_media');
+        if (wm) {
+            _idbRestoring = true;
+            applyWelcomeMedia(new File([wm.blob], 'welcome_media', { type: wm.blob.type }));
+            _idbRestoring = false;
+        }
+        // 2. Photo Template Background image
+        const tb = await idbLoad('template_bg');
+        if (tb) {
+            _idbRestoring = true;
+            await applyBgImage(new File([tb.blob], tb.meta.name || 'template_bg', { type: tb.blob.type }));
+            _idbRestoring = false;
+        }
+        // 3. VG Video Overlay (must be 1920×1080 PNG)
+        const vo = await idbLoad('vg_overlay');
+        if (vo) {
+            const voUrl  = URL.createObjectURL(vo.blob);
+            const voName = vo.meta.name || 'overlay.png';
+            const voImg  = new Image();
+            voImg.onload  = () => _applyVgOverlay(voUrl, voName, voImg); // no fileBlob → skips re-save
+            voImg.onerror = () => { URL.revokeObjectURL(voUrl); idbDelete('vg_overlay'); };
+            voImg.src = voUrl;
+        }
+        // 4. VG Thank You Screen background image
+        const ty = await idbLoad('vg_thankyou');
+        if (ty && _applyTyImage) {
+            _idbRestoring = true;
+            _applyTyImage(new File([ty.blob], 'thankyou_bg', { type: ty.blob.type }));
+            _idbRestoring = false;
+        }
+    })();
+    // ─────────────────────────────────────────────────────────────────────────
 
 });
