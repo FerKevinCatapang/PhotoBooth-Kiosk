@@ -54,9 +54,9 @@
 
                     <!-- Event Name -->
                     <div class="settings-card" style="padding:1.25rem 1.5rem; margin-bottom:1.5rem;">
-                        <label style="display:block; font-weight:600; font-size:0.92rem; color:#374151; margin-bottom:0.5rem;">Event Name <span style="color:#9ca3af; font-weight:400;">(optional)</span></label>
+                        <label style="display:block; font-weight:600; font-size:0.92rem; color:#374151; margin-bottom:0.5rem;">Event Name <span style="color:#be185d; font-weight:700;" title="Required when Google Drive is enabled">*</span></label>
                         <input type="text" id="wiz-event-name" class="text-input" placeholder="e.g. Smiths_Wedding or Birthday_Party" style="width:100%;">
-                        <p style="margin:0.4rem 0 0; font-size:0.78rem; color:#9ca3af;">Used as the filename prefix for every saved photo: <em>EventName_YYYYMMDD_HHMMSS.png</em></p>
+                        <p style="margin:0.4rem 0 0; font-size:0.78rem; color:#9ca3af;">Used as the filename prefix and as the <strong>Google Drive event sub-folder name</strong>: <em>EventName_YYYYMMDD_HHMMSS.png</em></p>
                     </div>
 
                     <div class="layout-size-group">
@@ -408,14 +408,24 @@
                 </div>
 
                 <!-- Event Name -->
-                <div class="settings-card" style="padding:1.25rem 1.5rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:1rem;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-                    <div style="flex:1; min-width:0;">
-                        <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Event Name</label>
-                        <input type="text" id="event-name-input" class="text-input" placeholder="e.g. Smiths_Wedding" style="width:100%; max-width:420px;">
-                    </div>
-                    <div style="font-size:0.78rem; color:#9ca3af; white-space:nowrap;">
-                        Saved as: <code id="filename-preview">photobooth_YYYYMMDD_HHMMSS.png</code>
+                <div class="settings-card" style="padding:1.25rem 1.5rem; margin-bottom:1.5rem;">
+                    <div style="display:flex; align-items:flex-start; gap:1rem;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0; margin-top:0.2rem;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                        <div style="flex:1; min-width:0;">
+                            <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">
+                                Event Name <span style="color:#be185d; font-weight:700;" title="Required when Google Drive is enabled">*</span>
+                            </label>
+                            <input type="text" id="event-name-input" class="text-input" placeholder="e.g. Smiths_Wedding" style="width:100%; max-width:420px;">
+                            <p style="margin:0.3rem 0 0; font-size:0.78rem; color:#9ca3af;">
+                                Used as the filename prefix and as the <strong>Google Drive sub-folder name</strong> for this event.
+                            </p>
+                            <div id="event-name-drive-warning" style="display:none; margin-top:0.5rem; padding:0.5rem 0.75rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:0.82rem; color:#dc2626; font-weight:500;">
+                                ⚠ Enter an Event Name — it is required to organise files into sub-folders on Google Drive.
+                            </div>
+                        </div>
+                        <div style="font-size:0.78rem; color:#9ca3af; white-space:nowrap; flex-shrink:0; padding-top:1.5rem;">
+                            Saved as: <code id="filename-preview">photobooth_YYYYMMDD_HHMMSS.png</code>
+                        </div>
                     </div>
                 </div>
                 <!-- Gallery Section -->
@@ -1546,7 +1556,7 @@
                 <!-- Video guestbook start button -->
                 <button id="btn-start-vg-session" class="circle-action-btn vg-action-btn" style="display:none;">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                    <span>Record</span>
+                    <span>Leave a Message</span>
                 </button>
             </div>
         </div>

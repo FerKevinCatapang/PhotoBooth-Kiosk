@@ -787,6 +787,11 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
 /* ==============================================
    SAVE DESTINATION CHECKBOXES
    ============================================== */
+/* Event Name field — highlighted when Drive is enabled but name is empty */
+.input-required-highlight {
+    border-color: #dc2626 !important;
+    box-shadow: 0 0 0 2px rgba(220,38,38,0.15) !important;
+}
 .save-dest-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

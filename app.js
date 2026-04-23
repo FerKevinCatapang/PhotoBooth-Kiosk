@@ -53,13 +53,15 @@ let appConfig = {
     // Google Drive — Photo Booth (Method A - browser OAuth)
     driveFolderName: 'Photo Booth Captures',
     _driveAccessToken: null,
-    _driveFolderId: null,
+    _driveFolderId: null,       // cached ID of the root PB folder
+    _driveEventFolderId: null,  // cached ID of the event sub-folder (reset on eventName change)
 
     // Google Drive — Video Guestbook (independent credentials)
     vgDriveFolderName: 'Video Guestbook Captures',
     vgDriveClientId: '',
     _vgDriveAccessToken: null,
-    _vgDriveFolderId: null,
+    _vgDriveFolderId: null,       // cached ID of the root VG folder
+    _vgDriveEventFolderId: null,  // cached ID of the event sub-folder (reset on eventName change)
 };
 
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
@@ -171,6 +173,7 @@ $(document).ready(function() {
         } else {
             $('#pb-drive-config').slideUp();
         }
+        _updateEventNameWarnings();
     });
 
     $('#btn-select-dir').on('click', async function() {
@@ -560,7 +563,7 @@ $(document).ready(function() {
         return _driveRequestToken();
     }
 
-    // Find or create the target folder; returns folderId
+    // Find or create the root PB folder; returns folderId
     async function _driveEnsureFolder(token) {
         if (appConfig._driveFolderId) return appConfig._driveFolderId;
         const folderName = appConfig.driveFolderName || 'Photo Booth Captures';
@@ -574,7 +577,7 @@ $(document).ready(function() {
             appConfig._driveFolderId = searchData.files[0].id;
             return appConfig._driveFolderId;
         }
-        // Create the folder
+        // Create the root folder
         const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -585,11 +588,37 @@ $(document).ready(function() {
         return folder.id;
     }
 
-    // Upload a Blob to Drive inside the configured folder
+    // Find or create the event sub-folder inside the root PB folder; returns its folderId
+    async function _driveEnsureEventFolder(token) {
+        if (appConfig._driveEventFolderId) return appConfig._driveEventFolderId;
+        const parentId = await _driveEnsureFolder(token);
+        const subName = appConfig.eventName ? appConfig.eventName.trim() : 'Default Event';
+        const query = encodeURIComponent(
+            `mimeType='application/vnd.google-apps.folder' and name='${subName.replace(/'/g,"\\'")}' and '${parentId}' in parents and trashed=false`
+        );
+        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
+            headers: { Authorization: 'Bearer ' + token }
+        });
+        const searchData = await searchResp.json();
+        if (searchData.files && searchData.files.length > 0) {
+            appConfig._driveEventFolderId = searchData.files[0].id;
+            return appConfig._driveEventFolderId;
+        }
+        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: subName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
+        });
+        const sub = await createResp.json();
+        appConfig._driveEventFolderId = sub.id;
+        return sub.id;
+    }
+
+    // Upload a Blob to Drive inside the event sub-folder
     async function uploadToDrive(blob, filename) {
         try {
             const token = await _driveEnsureToken();
-            const folderId = await _driveEnsureFolder(token);
+            const folderId = await _driveEnsureEventFolder(token);
             const meta = JSON.stringify({ name: filename, parents: [folderId] });
             const form = new FormData();
             form.append('metadata', new Blob([meta], { type: 'application/json' }));
@@ -625,11 +654,11 @@ $(document).ready(function() {
         }
     }
 
-    // Upload a video blob using the VG-specific Drive credentials
+    // Upload a video blob using the VG-specific Drive credentials into the event sub-folder
     async function uploadVgToDrive(blob, filename) {
         try {
             const token = await _vgDriveEnsureToken();
-            const folderId = await _vgDriveEnsureFolder(token);
+            const folderId = await _vgDriveEnsureEventFolder(token);
             const mimeType = blob.type || 'video/webm';
             const meta = JSON.stringify({ name: filename, parents: [folderId] });
             const form = new FormData();
@@ -759,6 +788,32 @@ $(document).ready(function() {
         const folder = await createResp.json();
         appConfig._vgDriveFolderId = folder.id;
         return folder.id;
+    }
+
+    // Find or create the event sub-folder inside the root VG folder; returns its folderId
+    async function _vgDriveEnsureEventFolder(token) {
+        if (appConfig._vgDriveEventFolderId) return appConfig._vgDriveEventFolderId;
+        const parentId = await _vgDriveEnsureFolder(token);
+        const subName = appConfig.eventName ? appConfig.eventName.trim() : 'Default Event';
+        const query = encodeURIComponent(
+            `mimeType='application/vnd.google-apps.folder' and name='${subName.replace(/'/g,"\\'")}' and '${parentId}' in parents and trashed=false`
+        );
+        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
+            headers: { Authorization: 'Bearer ' + token }
+        });
+        const searchData = await searchResp.json();
+        if (searchData.files && searchData.files.length > 0) {
+            appConfig._vgDriveEventFolderId = searchData.files[0].id;
+            return appConfig._vgDriveEventFolderId;
+        }
+        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: subName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
+        });
+        const sub = await createResp.json();
+        appConfig._vgDriveEventFolderId = sub.id;
+        return sub.id;
     }
 
     // UI: VG Drive folder name input
@@ -1101,6 +1156,7 @@ $(document).ready(function() {
         } else {
             $('#vg-drive-config').slideUp();
         }
+        _updateEventNameWarnings();
     });
 
     $('#btn-vg-select-dir').on('click', async function() {
@@ -2773,10 +2829,21 @@ $(document).ready(function() {
         const safe = name.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'photobooth';
         $('#filename-preview').text(safe + '_YYYYMMDD_HHMMSS.png');
     }
+
+    // Show/hide inline warning below the event name field when Drive is on but name is empty
+    function _updateEventNameWarnings() {
+        const needsName = (appConfig.saveDrive || appConfig.vgSaveDrive) && !appConfig.eventName;
+        $('#event-name-drive-warning').toggle(needsName);
+        $('#event-name-input').toggleClass('input-required-highlight', needsName);
+    }
     $('#event-name-input, #wiz-event-name').on('input', function() {
         appConfig.eventName = this.value.trim();
         $('#event-name-input, #wiz-event-name').val(appConfig.eventName);
+        // Reset event sub-folder cache so the new name creates a fresh sub-folder
+        appConfig._driveEventFolderId = null;
+        appConfig._vgDriveEventFolderId = null;
         _updateFilenamePreview();
+        _updateEventNameWarnings();
     });
 
     // =============================================
