@@ -1631,6 +1631,16 @@
                 </div>
 
                 <div class="settings-section">
+                    <h3 class="section-title">Network Address</h3>
+                    <div class="settings-card" style="padding:1.25rem 1.5rem;">
+                        <p style="margin:0 0 0.75rem; font-size:0.88rem; color:#374151;">The QR code only works on other devices when it points to this device's <strong>local network IP</strong>, not <code>localhost</code>. Enter the address mobile devices can reach this page at.</p>
+                        <label style="display:block; font-size:0.82rem; font-weight:600; color:#374151; margin-bottom:0.35rem;">Network address of this device</label>
+                        <input type="text" id="lv-network-addr" class="text-input" placeholder="e.g. http://192.168.1.100" style="width:100%; max-width:360px;">
+                        <p style="margin:0.5rem 0 0; font-size:0.78rem; color:#9ca3af;">Find it in: Wi-Fi settings → your connected network → IP address. Then enter <code>http://&lt;IP&gt;</code> here.</p>
+                    </div>
+                </div>
+
+                <div class="settings-section">
                     <h3 class="section-title">Session</h3>
                     <div class="settings-card" style="padding:1.5rem;">
                         <div id="lv-idle-state">
@@ -1685,6 +1695,18 @@
             <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
             <p style="margin:0.75rem 0 0; font-size:1rem; font-weight:500;">No captures yet</p>
             <p style="margin:0.25rem 0 0; font-size:0.85rem;">Photos and videos will appear here in real-time</p>
+        </div>
+        <!-- Viewer lightbox (fullscreen item expand + Drive QR) -->
+        <div id="viewer-lightbox" style="display:none; position:absolute; inset:0; z-index:10; background:rgba(0,0,0,0.92); align-items:center; justify-content:center; flex-direction:column; padding:1.5rem;">
+            <button id="viewer-lb-close" style="position:absolute; top:1rem; right:1.25rem; background:none; border:none; color:#f1f5f9; font-size:2rem; line-height:1; cursor:pointer;">&times;</button>
+            <!-- Photo view -->
+            <img id="viewer-lb-img" src="" alt="" style="display:none; max-width:92vw; max-height:82vh; border-radius:10px; object-fit:contain; box-shadow:0 20px 60px rgba(0,0,0,0.7);">
+            <!-- Drive QR view -->
+            <div id="viewer-lb-qr-wrap" style="display:none; text-align:center;">
+                <p style="color:#9ca3af; font-size:0.88rem; margin:0 0 0.75rem;">Scan to open &amp; download from Google Drive</p>
+                <div id="viewer-lb-qr" style="display:inline-block; background:#fff; border-radius:10px; padding:10px;"></div>
+                <p id="viewer-lb-drive-url" style="margin:0.75rem 0 0; font-size:0.75rem; color:#64748b; word-break:break-all; max-width:300px;"></p>
+            </div>
         </div>
     </div>
 

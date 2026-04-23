@@ -2244,6 +2244,8 @@ $(document).ready(function() {
                     // Store link in gallery parallel array and show QR button in thumbnail
                     capturedVideoDriveLinks[0] = _vgDriveLink;
                     _appendGalleryQrBtn(0, 'video', _vgDriveLink);
+                    // Notify live viewer peers
+                    lvBroadcastDriveUpdate(filename, _vgDriveLink);
                     // Show QR button if preview is still open
                     if ($('#vg-preview-overlay').is(':visible')) {
                         $('#btn-vg-qr').fadeIn(200);
@@ -2469,6 +2471,8 @@ $(document).ready(function() {
                         // Store link in gallery parallel array and show QR button in thumbnail
                         capturedPhotoDriveLinks[0] = _pbDriveLink;
                         _appendGalleryQrBtn(0, 'photo', _pbDriveLink);
+                        // Notify live viewer peers
+                        lvBroadcastDriveUpdate(filename, _pbDriveLink);
                         // Show QR button in share overlay (if it's still open)
                         if ($('#share-overlay').is(':visible') && _pbDriveLink) {
                             _currentPbDriveLink = _pbDriveLink;
@@ -3237,7 +3241,12 @@ $(document).ready(function() {
         }
         _lvPeer = new Peer(); // uses free peerjs.com cloud signaling
         _lvPeer.on('open', function(id) {
-            const viewerUrl = window.location.origin + window.location.pathname + '?viewer=' + id;
+            // Use admin-configured network address so other devices can reach this URL.
+            // If blank, fall back to window.location (works for same-browser testing only).
+            const addr = (appConfig.lvNetworkAddr || '').trim().replace(/\/+$/, '');
+            const viewerUrl = addr
+                ? addr + window.location.pathname + '?viewer=' + id
+                : window.location.origin + window.location.pathname + '?viewer=' + id;
             $('#lv-viewer-url').text(viewerUrl);
             // Render QR code
             $('#lv-qr-container').empty();
@@ -3306,63 +3315,185 @@ $(document).ready(function() {
         $('#lv-sent-count').text(_lvSentCount);
     }
 
-    // Capture a video thumbnail (first frame) as a small data URL
+    // Capture a video thumbnail (first frame) as a JPEG data URL.
+    // Uses loadedmetadata → seek to avoid the onloadeddata race condition.
     function _lvVideoThumb(blobUrl, callback) {
         const vid = document.createElement('video');
         const canvas = document.createElement('canvas');
+        let called = false;
+        function done(dataUrl, dur) {
+            if (called) return; called = true;
+            vid.src = ''; callback(dataUrl, dur);
+        }
+        const guard = setTimeout(() => done(null, 0), 5000); // never hang
         vid.preload = 'metadata';
         vid.muted = true;
-        vid.src = blobUrl;
-        vid.onloadeddata = function() {
-            vid.currentTime = 0.1;
+        vid.playsInline = true;
+        vid.onloadedmetadata = function() {
+            vid.currentTime = Math.min(0.5, (vid.duration || 1) * 0.1);
         };
         vid.onseeked = function() {
-            canvas.width  = Math.min(vid.videoWidth,  640);
-            canvas.height = Math.min(vid.videoHeight, 640);
-            const scale = Math.min(canvas.width / vid.videoWidth, canvas.height / vid.videoHeight);
-            canvas.width  = Math.round(vid.videoWidth  * scale);
-            canvas.height = Math.round(vid.videoHeight * scale);
+            clearTimeout(guard);
+            const W = Math.min(vid.videoWidth  || 640, 640);
+            const H = Math.min(vid.videoHeight || 360, 360);
+            const scale = Math.min(W / (vid.videoWidth || 640), H / (vid.videoHeight || 360));
+            canvas.width  = Math.round((vid.videoWidth  || 640) * scale);
+            canvas.height = Math.round((vid.videoHeight || 360) * scale);
             canvas.getContext('2d').drawImage(vid, 0, 0, canvas.width, canvas.height);
-            callback(canvas.toDataURL('image/jpeg', 0.7), Math.round(vid.duration || 0));
-            vid.src = '';
+            done(canvas.toDataURL('image/jpeg', 0.72), Math.round(vid.duration || 0));
         };
-        vid.onerror = function() { callback(null, 0); };
+        vid.onerror = function() { clearTimeout(guard); done(null, 0); };
+        vid.src = blobUrl;
     }
 
     // Call this whenever a new photo is captured and should be sent to viewers
     function lvBroadcastPhoto(dataUrl, filename) {
         if (!_lvConns.length) return;
-        _lvBroadcast({ type: 'photo', data: dataUrl, filename: filename, ts: Date.now() });
+        _lvBroadcast({ type: 'photo', data: dataUrl, filename: filename, ts: Date.now(), driveUrl: null });
     }
 
     // Call this whenever a new video is captured and should be sent to viewers
     function lvBroadcastVideo(blobUrl, filename) {
         if (!_lvConns.length) return;
         _lvVideoThumb(blobUrl, function(thumbDataUrl, duration) {
-            _lvBroadcast({ type: 'video', data: thumbDataUrl, filename: filename, ts: Date.now(), duration: duration });
+            // Even if thumbnail failed, still send the card with a null thumbnail
+            _lvBroadcast({ type: 'video', data: thumbDataUrl, filename: filename, ts: Date.now(), duration: duration, driveUrl: null });
         });
+    }
+
+    // Called after a Drive upload completes to update the viewer card with a QR button
+    function lvBroadcastDriveUpdate(filename, driveUrl) {
+        if (!_lvConns.length || !driveUrl) return;
+        _lvBroadcast({ type: 'drive-update', filename: filename, driveUrl: driveUrl });
     }
 
     // Host UI handlers
     $('#btn-lv-start').on('click', _lvStart);
     $('#btn-lv-stop').on('click', _lvStop);
 
+    // Save the network address the admin types in
+    $('#lv-network-addr').on('input', function() {
+        appConfig.lvNetworkAddr = $(this).val().trim();
+    });
+
     // ── Viewer mode ────────────────────────────────────────────
     (function initViewerMode() {
         const params = new URLSearchParams(window.location.search);
         const hostId = params.get('viewer');
-        if (!hostId) return; // normal host mode, nothing to do
+        if (!hostId) return; // normal host mode — nothing to do
 
         // Hide everything except the viewer overlay
         $('body > *').not('#viewer-mode').css('visibility', 'hidden');
         $('#viewer-mode').css('display', 'flex');
 
+        // ── Lightbox helpers ──
+        function _viewerOpenPhoto(dataUrl) {
+            $('#viewer-lb-img').attr('src', dataUrl).show();
+            $('#viewer-lb-qr-wrap').hide();
+            $('#viewer-lightbox').css('display', 'flex');
+        }
+        function _viewerOpenQr(driveUrl) {
+            $('#viewer-lb-img').hide().attr('src', '');
+            $('#viewer-lb-qr').empty();
+            new QRCode(document.getElementById('viewer-lb-qr'), {
+                text: driveUrl, width: 220, height: 220,
+                colorDark: '#1e293b', colorLight: '#fff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            $('#viewer-lb-drive-url').text(driveUrl);
+            $('#viewer-lb-qr-wrap').show();
+            $('#viewer-lightbox').css('display', 'flex');
+        }
+        function _viewerCloseLb() {
+            $('#viewer-lightbox').hide();
+            $('#viewer-lb-img').attr('src', '');
+            $('#viewer-lb-qr').empty();
+        }
+        $('#viewer-lb-close').on('click', _viewerCloseLb);
+        $('#viewer-lightbox').on('click', function(e) { if (e.target === this) _viewerCloseLb(); });
+
+        // Map filename → $item for drive-update lookups
+        const _viewerItems = {};
+
+        function _viewerUpdateDrive(filename, driveUrl) {
+            const $item = _viewerItems[filename];
+            if (!$item || !driveUrl) return;
+            $item.attr('data-drive-url', driveUrl);
+            const $footer = $item.find('.viewer-item-footer');
+            if (!$footer.find('.viewer-qr-btn').length) {
+                const $btn = $('<button class="viewer-qr-btn">&#x1F4F1; QR</button>');
+                $btn.on('click', function(e) { e.stopPropagation(); _viewerOpenQr(driveUrl); });
+                $footer.prepend($btn);
+            }
+        }
+
+        let _viewerCount = 0;
+        function _viewerAddItem(msg, type) {
+            _viewerCount++;
+            $('#viewer-empty').hide();
+            const ts  = new Date(msg.ts).toLocaleTimeString();
+            const dur = msg.duration ? ' (' + msg.duration + 's)' : '';
+            const label = type === 'video' ? 'Video' + dur : 'Photo';
+            const driveUrl = msg.driveUrl || null;
+
+            let mediaHtml = '';
+            if (type === 'photo') {
+                mediaHtml = msg.data
+                    ? `<img src="${msg.data}" alt="Photo" style="width:100%;height:100%;object-fit:cover;display:block;">`
+                    : `<div style="width:100%;height:100%;background:#1e293b;display:flex;align-items:center;justify-content:center;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`;
+            } else {
+                mediaHtml = msg.data
+                    ? `<img src="${msg.data}" alt="Video" style="width:100%;height:100%;object-fit:cover;display:block;opacity:0.9;">`
+                    : `<div style="width:100%;height:100%;background:#1e293b;display:flex;align-items:center;justify-content:center;"><svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" style="color:#475569;"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>`;
+                // Play icon overlay on thumbnail
+                if (msg.data) {
+                    mediaHtml += `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;"><div style="width:46px;height:46px;background:rgba(0,0,0,0.6);border-radius:50%;display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"/></svg></div></div>`;
+                }
+            }
+
+            const qrBtnHtml = driveUrl ? '<button class="viewer-qr-btn">&#x1F4F1; QR</button>' : '';
+
+            const $item = $(`
+                <div class="viewer-item viewer-item-new" data-filename="${(msg.filename||'').replace(/"/g,'')}"
+                     ${driveUrl ? 'data-drive-url="' + driveUrl + '"' : ''}>
+                    <div class="viewer-item-media" style="position:relative;width:100%;padding-top:${type==='video'?'56.25%':'75%'};overflow:hidden;border-radius:8px 8px 0 0;cursor:pointer;">
+                        <div style="position:absolute;inset:0;">${mediaHtml}</div>
+                    </div>
+                    <div class="viewer-item-footer" style="padding:0.4rem 0.6rem;display:flex;align-items:center;gap:0.4rem;">
+                        ${qrBtnHtml}
+                        <span style="font-size:0.78rem;font-weight:600;color:#f1f5f9;flex:1;">${label}</span>
+                        <span style="font-size:0.72rem;color:#64748b;">${ts}</span>
+                    </div>
+                </div>
+            `);
+
+            // Click media → open photo in lightbox (or QR if video + drive available)
+            $item.find('.viewer-item-media').on('click', function() {
+                const dUrl = $item.attr('data-drive-url') || null;
+                if (type === 'photo') {
+                    if (msg.data) _viewerOpenPhoto(msg.data);
+                } else {
+                    if (dUrl)       _viewerOpenQr(dUrl);
+                    else if (msg.data) _viewerOpenPhoto(msg.data);
+                }
+            });
+
+            // QR button (shown if driveUrl present at time of capture)
+            $item.find('.viewer-qr-btn').on('click', function(e) {
+                e.stopPropagation();
+                const dUrl = $item.attr('data-drive-url') || driveUrl;
+                if (dUrl) _viewerOpenQr(dUrl);
+            });
+
+            if (msg.filename) _viewerItems[msg.filename] = $item;
+
+            $('#viewer-gallery').prepend($item);
+            setTimeout(() => $item.removeClass('viewer-item-new'), 600);
+        }
+
         // Wait for PeerJS to load (it's deferred)
         function connectToHost() {
-            if (typeof Peer === 'undefined') {
-                setTimeout(connectToHost, 200);
-                return;
-            }
+            if (typeof Peer === 'undefined') { setTimeout(connectToHost, 200); return; }
             const peer = new Peer();
             peer.on('open', function() {
                 const conn = peer.connect(hostId, { reliable: true });
@@ -3374,13 +3505,10 @@ $(document).ready(function() {
                 conn.on('data', function(raw) {
                     try {
                         const msg = JSON.parse(raw);
-                        if (msg.type === 'hello') {
-                            if (msg.eventName) $('#viewer-event-name').text(msg.eventName);
-                        } else if (msg.type === 'photo') {
-                            _viewerAddItem(msg, 'photo');
-                        } else if (msg.type === 'video') {
-                            _viewerAddItem(msg, 'video');
-                        }
+                        if      (msg.type === 'hello')        { if (msg.eventName) $('#viewer-event-name').text(msg.eventName); }
+                        else if (msg.type === 'photo')        { _viewerAddItem(msg, 'photo'); }
+                        else if (msg.type === 'video')        { _viewerAddItem(msg, 'video'); }
+                        else if (msg.type === 'drive-update') { _viewerUpdateDrive(msg.filename, msg.driveUrl); }
                     } catch (e) { /* ignore malformed */ }
                 });
                 conn.on('close', function() {
@@ -3398,44 +3526,6 @@ $(document).ready(function() {
             });
         }
         connectToHost();
-
-        let _viewerCount = 0;
-        function _viewerAddItem(msg, type) {
-            _viewerCount++;
-            $('#viewer-empty').hide();
-            const ts = new Date(msg.ts).toLocaleTimeString();
-            const label = type === 'video'
-                ? 'Video' + (msg.duration ? ' (' + msg.duration + 's)' : '')
-                : 'Photo';
-
-            let inner = '';
-            if (type === 'photo') {
-                inner = `<img src="${msg.data}" alt="Photo" style="width:100%; height:100%; object-fit:cover; border-radius:8px; display:block;">`;
-            } else {
-                inner = msg.data
-                    ? `<img src="${msg.data}" alt="Video thumbnail" style="width:100%; height:100%; object-fit:cover; border-radius:8px; display:block; opacity:0.85;">`
-                    : `<div style="width:100%; height:100%; background:#1e293b; border-radius:8px; display:flex; align-items:center; justify-content:center;"><svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" style="color:#475569;"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>`;
-                if (msg.data) {
-                    inner += `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;"><div style="width:44px; height:44px; background:rgba(0,0,0,0.55); border-radius:50%; display:flex; align-items:center; justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"/></svg></div></div>`;
-                }
-            }
-
-            const $item = $(`
-                <div class="viewer-item viewer-item-new" data-count="${_viewerCount}">
-                    <div style="position:relative; width:100%; padding-top:${type === 'video' ? '56.25%' : '75%'}; overflow:hidden; border-radius:8px;">
-                        <div style="position:absolute; inset:0;">${inner}</div>
-                    </div>
-                    <div style="padding:0.4rem 0.25rem 0; display:flex; justify-content:space-between; align-items:baseline;">
-                        <span style="font-size:0.78rem; font-weight:600; color:#f1f5f9;">${label}</span>
-                        <span style="font-size:0.72rem; color:#64748b;">${ts}</span>
-                    </div>
-                </div>
-            `);
-            // Newest at the top
-            $('#viewer-gallery').prepend($item);
-            // Remove new-item animation class after transition
-            setTimeout(() => $item.removeClass('viewer-item-new'), 600);
-        }
     })();
 
 });
