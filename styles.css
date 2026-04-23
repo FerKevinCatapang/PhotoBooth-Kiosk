@@ -1291,15 +1291,8 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
     text-shadow: 0 4px 20px rgba(0,0,0,0.4);
     letter-spacing: -0.02em;
 }
-.vg-ty-sub {
-    font-size: clamp(1rem, 3vw, 1.6rem);
-    color: rgba(255,255,255,0.8);
-    margin: 0;
-    line-height: 1.5;
-    max-width: 600px;
-}
 #btn-vg-ty-done {
-    margin-top: 0.5rem;
+    margin-top: 2.5rem;
     padding: 0.9rem 3rem;
     font-size: clamp(1rem, 2.5vw, 1.25rem);
     background: rgba(255,255,255,0.15);
@@ -1320,11 +1313,51 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
     background: rgba(255,255,255,0.18);
     border-radius: 99px;
     overflow: hidden;
-    margin-top: 0.35rem;
+    margin-top: 1.5rem;
 }
 .vg-ty-progress-bar {
     height: 100%;
     width: 100%;
     background: rgba(255,255,255,0.65);
     border-radius: 99px;
+}
+
+/* ==============================================
+   VG PROMPT COUNTDOWN SIDEBAR
+   ============================================== */
+#vg-prompt-sidebar {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    z-index: 26;
+    width: min(280px, 30vw);
+    background: rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(10px);
+    border-left: 3px solid rgba(190, 24, 93, 0.7);
+    border-radius: 14px 0 0 14px;
+    padding: 1rem 1rem 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    animation: sidebar-slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes sidebar-slide-in {
+    from { opacity: 0; transform: translateY(-50%) translateX(30px); }
+    to   { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+.vg-prompt-sidebar-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.45);
+}
+.vg-prompt-sidebar-text {
+    font-size: clamp(0.78rem, 1.8vw, 1rem);
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.45;
+    margin: 0;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.5);
 }

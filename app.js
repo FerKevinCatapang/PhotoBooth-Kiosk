@@ -99,13 +99,9 @@ const GOOGLE_DRIVE_CLIENT_ID = '1005976603326-rdevbnd8dgg3dd7844cgrkuv07hf1o05.a
 const PROMPT_TEMPLATES = {
     wedding: [
         'What is your favorite memory of us as a couple?',
-        'What was your first impression when you saw us together for the first time?',
-        'What is one thing about our relationship that you think makes us perfect for each other?',
         'What was the most beautiful or memorable moment of the ceremony today?',
         'If you could grant us one wish for our future together, what would it be?',
         'What do you think is the absolute secret to a long and happy marriage?',
-        'Give us one unique idea for a date night during our first year of marriage.',
-        'How exactly do you know the couple?',
         'What is the one thing you will never forget about this wedding?'
     ],
     birthday: [
@@ -1480,6 +1476,7 @@ $(document).ready(function() {
         $('#nav-photo-layout, #nav-template, #nav-printer').toggle(!isVg);
         $('#nav-video-overlay, #nav-stitch').toggle(isVg);
         $('#nav-vg-thankyou').toggle(isVg);
+        $('#nav-vg-prompts').toggle(isVg);
         // If a photo-only panel is active while switching to VG, go to dashboard
         if (isVg) {
             const active = $('.nav-item.active').data('target');
@@ -1490,7 +1487,7 @@ $(document).ready(function() {
         // If VG-only panels are active while switching to PhotoBooth, go to dashboard
         if (!isVg) {
             const active = $('.nav-item.active').data('target');
-            if (active === 'panel-video-overlay' || active === 'panel-stitch' || active === 'panel-vg-thankyou') {
+            if (active === 'panel-video-overlay' || active === 'panel-stitch' || active === 'panel-vg-thankyou' || active === 'panel-vg-prompts') {
                 $('[data-target="panel-dashboard"]').trigger('click');
             }
         }
@@ -2273,17 +2270,18 @@ $(document).ready(function() {
         }
 
         // Show question prompt if enabled
+        let _activePromptText = null;
         if (appConfig.vgPromptsEnabled) {
             const _prompts = [
                 ...(PROMPT_TEMPLATES[appConfig.vgPromptCategory] || []),
                 ...appConfig.vgCustomPrompts
             ];
             if (_prompts.length > 0) {
-                const _q    = _prompts[Math.floor(Math.random() * _prompts.length)];
-                const _secs = Math.max(3, Math.min(10, Math.round(_q.trim().split(/\s+/).length / 3.3)));
+                _activePromptText = _prompts[Math.floor(Math.random() * _prompts.length)];
+                const _secs = Math.max(3, Math.min(10, Math.round(_activePromptText.trim().split(/\s+/).length / 3.3)));
                 const _qEl  = document.getElementById('vg-question-overlay');
                 const _bar  = document.getElementById('vg-question-timer-bar');
-                document.getElementById('vg-question-text').textContent = _q;
+                document.getElementById('vg-question-text').textContent = _activePromptText;
                 _bar.style.transition = 'none';
                 _bar.style.width = '100%';
                 _qEl.style.display = 'flex';
@@ -2293,6 +2291,14 @@ $(document).ready(function() {
                 await new Promise(r => setTimeout(r, _secs * 1000));
                 _qEl.style.display = 'none';
             }
+        }
+
+        // Show prompt sidebar during countdown (so guest can still read it)
+        const _sidebarEl = document.getElementById('vg-prompt-sidebar');
+        const _sidebarTxt = document.getElementById('vg-prompt-sidebar-text');
+        if (_activePromptText && _sidebarEl) {
+            _sidebarTxt.textContent = _activePromptText;
+            _sidebarEl.style.display = 'flex';
         }
 
         // Pre-record countdown
@@ -2307,6 +2313,7 @@ $(document).ready(function() {
             await new Promise(r => setTimeout(r, 1000));
         }
         cdEl.style.display = 'none';
+        if (_sidebarEl) _sidebarEl.style.display = 'none';
 
         // Build the stream to record.
         // If an overlay is configured, composite camera + overlay on a canvas
