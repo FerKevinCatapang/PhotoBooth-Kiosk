@@ -52,6 +52,17 @@ let appConfig = {
     selectedCameraId: '', // deviceId chosen in Capture Settings
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
 
+    // Disclaimer — Photo Booth
+    disclaimerEnabled: false,
+    disclaimerHeader: 'Do you agree with the terms?',
+    disclaimerOrg: 'Name of Organization',
+    disclaimerText: 'I hereby grant the {Name of Organization} permission to use my likeness in a photograph, video, or other digital media (\u201cphoto\u201d) in any and all of its publications, including web-based publications, without payment or other consideration.\n\nI understand and agree that all photos will become the property of the {Name of Organization} and will not be returned.\n\nI hereby irrevocably authorize the {Name of Organization} to edit, alter, copy, exhibit, publish, or distribute these photos for any lawful purpose. In addition, I waive any right to inspect or approve the finished product wherein my likeness appears. Additionally, I waive any right to royalties or other compensation arising or related to the use of the photo.\n\nI hereby hold harmless, release, and forever discharge the {Name of Organization} from all claims, demands, and causes of action which I, my heirs, representatives, executors, administrators, or any other persons acting on my behalf or on behalf of my estate have or may have by reason of this authorization.\n\nI HAVE READ AND UNDERSTAND THE ABOVE PHOTO RELEASE.',
+    // Disclaimer — Video Guestbook
+    vgDisclaimerEnabled: false,
+    vgDisclaimerHeader: 'Do you agree with the terms?',
+    vgDisclaimerOrg: 'Name of Organization',
+    vgDisclaimerText: 'I hereby grant the {Name of Organization} permission to use my likeness in a photograph, video, or other digital media (\u201cphoto\u201d) in any and all of its publications, including web-based publications, without payment or other consideration.\n\nI understand and agree that all photos will become the property of the {Name of Organization} and will not be returned.\n\nI hereby irrevocably authorize the {Name of Organization} to edit, alter, copy, exhibit, publish, or distribute these photos for any lawful purpose. In addition, I waive any right to inspect or approve the finished product wherein my likeness appears. Additionally, I waive any right to royalties or other compensation arising or related to the use of the photo.\n\nI hereby hold harmless, release, and forever discharge the {Name of Organization} from all claims, demands, and causes of action which I, my heirs, representatives, executors, administrators, or any other persons acting on my behalf or on behalf of my estate have or may have by reason of this authorization.\n\nI HAVE READ AND UNDERSTAND THE ABOVE PHOTO RELEASE.',
+
     // Google Drive — Photo Booth (Method A - browser OAuth)
     driveFolderName: 'Photo Booth Captures',
     _driveAccessToken: null,
@@ -339,6 +350,83 @@ $(document).ready(function() {
     // Initialize social share toggle state
     $('#toggle-social-share').prop('checked', appConfig.socialShare).closest('.toggle-switch').toggleClass('is-on', appConfig.socialShare);
     $('#toggle-social-label').text(appConfig.socialShare ? 'ON' : 'OFF');
+
+    // --- Disclaimer — helpers ---
+    const DEFAULT_DISCLAIMER_TEXT = appConfig.disclaimerText;
+
+    function _renderDisclaimerText(text, org) {
+        return text.replace(/\{Name of Organization\}/g, org || 'the Organisation');
+    }
+
+    // --- Disclaimer — Photo Booth admin settings ---
+    (function initPbDisclaimer() {
+        $('#pb-disclaimer-header').val(appConfig.disclaimerHeader);
+        $('#pb-disclaimer-org').val(appConfig.disclaimerOrg);
+        $('#pb-disclaimer-text').val(appConfig.disclaimerText);
+
+        function _syncPbDisclaimer() {
+            const on = appConfig.disclaimerEnabled;
+            $('#toggle-pb-disclaimer').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
+            $('#toggle-pb-disclaimer-label').text(on ? 'ON' : 'OFF');
+            $('#pb-disclaimer-config').toggle(on);
+        }
+        _syncPbDisclaimer();
+
+        $('#toggle-pb-disclaimer').on('change', function() {
+            appConfig.disclaimerEnabled = this.checked;
+            $('#toggle-pb-disclaimer-label').text(this.checked ? 'ON' : 'OFF');
+            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
+            $('#pb-disclaimer-config').toggle(this.checked);
+        });
+        $('#pb-disclaimer-org').on('input', function() { appConfig.disclaimerOrg = this.value; });
+        $('#pb-disclaimer-header').on('input', function() { appConfig.disclaimerHeader = this.value || 'Do you agree with the terms?'; });
+        $('#pb-disclaimer-text').on('input', function() { appConfig.disclaimerText = this.value; });
+    })();
+
+    // --- Disclaimer — Video Guestbook admin settings ---
+    (function initVgDisclaimer() {
+        $('#vg-disclaimer-header').val(appConfig.vgDisclaimerHeader);
+        $('#vg-disclaimer-org').val(appConfig.vgDisclaimerOrg);
+        $('#vg-disclaimer-text').val(appConfig.vgDisclaimerText);
+
+        function _syncVgDisclaimer() {
+            const on = appConfig.vgDisclaimerEnabled;
+            $('#toggle-vg-disclaimer').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
+            $('#toggle-vg-disclaimer-label').text(on ? 'ON' : 'OFF');
+            $('#vg-disclaimer-config').toggle(on);
+        }
+        _syncVgDisclaimer();
+
+        $('#toggle-vg-disclaimer').on('change', function() {
+            appConfig.vgDisclaimerEnabled = this.checked;
+            $('#toggle-vg-disclaimer-label').text(this.checked ? 'ON' : 'OFF');
+            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
+            $('#vg-disclaimer-config').toggle(this.checked);
+        });
+        $('#vg-disclaimer-org').on('input', function() { appConfig.vgDisclaimerOrg = this.value; });
+        $('#vg-disclaimer-header').on('input', function() { appConfig.vgDisclaimerHeader = this.value || 'Do you agree with the terms?'; });
+        $('#vg-disclaimer-text').on('input', function() { appConfig.vgDisclaimerText = this.value; });
+    })();
+
+    // --- Disclaimer dialog (kiosk) ---
+    // Opens the disclaimer modal; resolves true (accepted) or false (rejected)
+    function showDisclaimerDialog(header, text, org) {
+        return new Promise(resolve => {
+            const rendered = _renderDisclaimerText(text, org);
+            $('#disclaimer-modal-title').text(header || 'Do you agree with the terms?');
+            // Convert newlines to paragraphs
+            const html = rendered.split(/\n\n+/).map(p => `<p>${$('<div>').text(p.trim()).html()}</p>`).join('');
+            $('#disclaimer-modal-body').html(html);
+            $('#disclaimer-overlay').css('display', 'flex');
+
+            function cleanup() {
+                $('#disclaimer-overlay').hide();
+                $('#btn-disclaimer-accept, #btn-disclaimer-reject').off('click.disc');
+            }
+            $('#btn-disclaimer-accept').one('click.disc', function() { cleanup(); resolve(true); });
+            $('#btn-disclaimer-reject').one('click.disc', function() { cleanup(); resolve(false); });
+        });
+    }
 
     // --- Share Button Handlers ---
     $('#btn-share-done').on('click', hideShareOverlay);
@@ -1657,13 +1745,29 @@ $(document).ready(function() {
     });
 
     // --- Kiosk Logic (PhotoBooth) ---
-    $('#btn-start-session').on('click', function() {
+    $('#btn-start-session').on('click', async function() {
+        if (appConfig.disclaimerEnabled) {
+            const accepted = await showDisclaimerDialog(
+                appConfig.disclaimerHeader,
+                appConfig.disclaimerText,
+                appConfig.disclaimerOrg
+            );
+            if (!accepted) return; // session forfeited — do nothing, no saves
+        }
         $('#guest-welcome').addClass('hidden');
         setTimeout(triggerCaptureSequence, 500);
     });
 
     // --- Kiosk Logic (Video Guestbook) ---
-    $('#btn-start-vg-session').on('click', function() {
+    $('#btn-start-vg-session').on('click', async function() {
+        if (appConfig.vgDisclaimerEnabled) {
+            const accepted = await showDisclaimerDialog(
+                appConfig.vgDisclaimerHeader,
+                appConfig.vgDisclaimerText,
+                appConfig.vgDisclaimerOrg
+            );
+            if (!accepted) return; // session forfeited — do nothing, no saves
+        }
         $('#guest-welcome').addClass('hidden');
         setTimeout(triggerVgSequence, 500);
     });
