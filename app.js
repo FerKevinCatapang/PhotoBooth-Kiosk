@@ -1413,21 +1413,44 @@ $(document).ready(function() {
         img.style.cssText = 'position:fixed;opacity:0;pointer-events:none;left:0;top:0;width:1px;height:1px;';
         document.body.appendChild(img);
 
-        // Wait for the first MJPEG frame to arrive
-        await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                img.src = '';
-                if (img.parentNode) img.parentNode.removeChild(img);
-                reject(new Error('Wireless camera stream timed out (15 s). Check the URL and that the device is on the same network.'));
-            }, 15000);
-            img.onload  = () => { clearTimeout(timeout); resolve(); };
-            img.onerror = () => {
-                clearTimeout(timeout);
-                if (img.parentNode) img.parentNode.removeChild(img);
-                reject(new Error('Cannot load stream from: ' + url + '\nEnsure the IP camera app is running and the URL is correct.'));
-            };
+        // ── Step 1: Try with crossOrigin = 'anonymous' first ─────────────────
+        // Drawing a cross-origin image onto a canvas taints it, causing
+        // captureStream() to throw a SecurityError on Android Chrome.
+        // Setting crossOrigin = 'anonymous' keeps the canvas origin-clean when
+        // the IP camera server sends Access-Control-Allow-Origin (most do, e.g.
+        // IP Webcam for Android sends * by default).
+        let corsSuccess = await new Promise(function(resolve) {
+            const timeout = setTimeout(function() { resolve(false); }, 8000);
+            img.crossOrigin = 'anonymous';
+            img.onload  = function() { clearTimeout(timeout); resolve(true); };
+            img.onerror = function() { clearTimeout(timeout); resolve(false); };
             img.src = url;
         });
+
+        // ── Step 2: If CORS attempt failed, retry without crossOrigin ─────────
+        // The camera doesn't send CORS headers; load the img for display only.
+        // captureStream() will throw — we catch that below and surface a clear
+        // message instead of a cryptic SecurityError.
+        if (!corsSuccess) {
+            img.removeAttribute('crossOrigin');
+            corsSuccess = await new Promise(function(resolve) {
+                const timeout = setTimeout(function() {
+                    img.src = '';
+                    if (img.parentNode) img.parentNode.removeChild(img);
+                    resolve(null); // null = timed out
+                }, 15000);
+                img.onload  = function() { clearTimeout(timeout); resolve(false); }; // false = loaded but no CORS
+                img.onerror = function() {
+                    clearTimeout(timeout);
+                    if (img.parentNode) img.parentNode.removeChild(img);
+                    resolve(null); // null = error
+                };
+                img.src = url;
+            });
+            if (corsSuccess === null) {
+                throw new Error('Cannot load stream from: ' + url + '\nEnsure the IP camera app is running and the device is on the same Wi-Fi network.');
+            }
+        }
 
         // Bridge: draw MJPEG img frames into a canvas via rAF
         const canvas = document.createElement('canvas');
@@ -1456,7 +1479,21 @@ $(document).ready(function() {
 
         const captureFn = canvas.captureStream || canvas.mozCaptureStream;
         if (!captureFn) throw new Error('canvas.captureStream() is not supported by this browser.');
-        const videoStream = captureFn.call(canvas, 30);
+
+        let videoStream;
+        try {
+            videoStream = captureFn.call(canvas, 30);
+        } catch (secErr) {
+            // Canvas is still tainted (camera does not send CORS headers).
+            // Guide the user to enable CORS in their IP camera app.
+            _stopWirelessHiddenVideo();
+            throw new Error(
+                'Your IP camera app does not allow cross-origin access.\n\n' +
+                'In IP Webcam (Android): Settings → Video preferences → enable "CORS".\n' +
+                'Or connect the tablet to the same Wi-Fi and use the HTTP (not HTTPS) URL.\n\n' +
+                'Technical detail: ' + secErr.message
+            );
+        }
 
         if (isVgMode) {
             const audioConstraint = appConfig.vgSelectedMicId
