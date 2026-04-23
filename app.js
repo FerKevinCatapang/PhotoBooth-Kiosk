@@ -27,6 +27,8 @@ let appConfig = {
     vgCountdown: 3,           // countdown before recording starts
     vgSelectedCameraId: '',   // VG-specific camera device ID
     vgFacingMode: 'user',     // VG-specific facing mode
+    vgSelectedMicId: '',      // VG-specific microphone device ID ('' = browser default)
+    vgSelectedSpeakerId: '',  // VG-specific audio output device ID ('' = browser default)
     vgSaveLocal: true,        // VG: save to local folder
     vgSaveDrive: false,       // VG: upload to Google Drive (uses VG-specific Drive config below)
     vgOverlay: null,          // { objectUrl, img } or null — PNG overlay burned into recordings
@@ -1402,6 +1404,98 @@ $(document).ready(function() {
 
     $('#btn-stop-vg-camera-test').on('click', function() { _stopVgCameraTest(); });
 
+    // --- VG Audio Device Selection (Microphone & Speaker) ---
+    async function populateVgAudioDeviceList() {
+        const diag = document.getElementById('vg-audio-diag');
+        const setDiag = (html) => { if (diag) diag.innerHTML = html; };
+        setDiag('<span style="color:#9ca3af;">Scanning for audio devices…</span>');
+
+        try {
+            // Request audio permission so browsers expose device labels.
+            let permStream = null;
+            try {
+                permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (e) {
+                setDiag(`<span style="color:#dc2626;">⚠ Microphone permission denied (${e.name}). Grant microphone access in browser settings, then tap ↺ Refresh.</span>`);
+                return;
+            } finally {
+                if (permStream) permStream.getTracks().forEach(t => t.stop());
+            }
+
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioInputs  = devices.filter(d => d.kind === 'audioinput');
+            const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
+
+            // --- Microphone dropdown ---
+            const micSel = document.getElementById('vg-mic-select');
+            const prevMicVal = appConfig.vgSelectedMicId;
+            micSel.innerHTML = '<option value="">— Default microphone —</option>';
+            audioInputs.forEach((dev, i) => {
+                const opt = document.createElement('option');
+                opt.value = dev.deviceId;
+                opt.textContent = dev.label || ('Microphone ' + (i + 1));
+                micSel.appendChild(opt);
+            });
+            if (prevMicVal && [...micSel.options].some(o => o.value === prevMicVal)) {
+                micSel.value = prevMicVal;
+            }
+            appConfig.vgSelectedMicId = micSel.value;
+
+            // --- Speaker dropdown ---
+            const spkSel = document.getElementById('vg-speaker-select');
+            const prevSpkVal = appConfig.vgSelectedSpeakerId;
+            spkSel.innerHTML = '<option value="">— Default speaker —</option>';
+            if (audioOutputs.length === 0) {
+                const noDevOpt = document.createElement('option');
+                noDevOpt.value = '';
+                noDevOpt.disabled = true;
+                noDevOpt.textContent = 'No output devices found';
+                spkSel.appendChild(noDevOpt);
+            } else {
+                audioOutputs.forEach((dev, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = dev.deviceId;
+                    opt.textContent = dev.label || ('Speaker ' + (i + 1));
+                    spkSel.appendChild(opt);
+                });
+            }
+            if (prevSpkVal && [...spkSel.options].some(o => o.value === prevSpkVal)) {
+                spkSel.value = prevSpkVal;
+            }
+            appConfig.vgSelectedSpeakerId = spkSel.value;
+
+            // Diagnostic summary
+            const inputLines  = audioInputs.map((d, i) => `<span style="display:block;">[${i + 1}] ${d.label || '<em style="color:#f59e0b;">no label</em>'}</span>`).join('');
+            const outputLines = audioOutputs.map((d, i) => `<span style="display:block;">[${i + 1}] ${d.label || '<em style="color:#f59e0b;">no label</em>'}</span>`).join('');
+            const noOutputHint = audioOutputs.length === 0
+                ? '<span style="color:#f59e0b; display:block; margin-top:3px;">⚠ No audio output devices found — speaker selection not available on this browser/device.</span>'
+                : '';
+            setDiag(
+                `<span style="font-weight:600;">${audioInputs.length} mic(s) · ${audioOutputs.length} output(s) detected:</span>` +
+                (inputLines  ? `<span style="display:block; margin-top:2px;">${inputLines}</span>`  : '') +
+                (outputLines ? `<span style="display:block; margin-top:2px;">${outputLines}</span>` : '') +
+                noOutputHint
+            );
+        } catch (e) {
+            setDiag(`<span style="color:#dc2626;">⚠ Error: ${e.name} — ${e.message}</span>`);
+            console.warn('populateVgAudioDeviceList:', e);
+        }
+    }
+
+    $('#vg-mic-select').on('change', function() {
+        appConfig.vgSelectedMicId = this.value;
+    });
+
+    $('#vg-speaker-select').on('change', function() {
+        appConfig.vgSelectedSpeakerId = this.value;
+    });
+
+    $('#btn-refresh-vg-audio').on('click', function() {
+        const btn = $(this);
+        btn.prop('disabled', true).text('Refreshing…');
+        populateVgAudioDeviceList().finally(() => btn.prop('disabled', false).text('↺ Refresh'));
+    });
+
     // --- VG Storage — checkbox toggles (both local + drive can be active) ---
     $('#chk-vg-save-local').on('change', function() {
         appConfig.vgSaveLocal = this.checked;
@@ -1435,8 +1529,9 @@ $(document).ready(function() {
         }
     });
 
-    // Populate VG camera list on load
+    // Populate VG camera and audio device lists on load
     populateVgCameraList();
+    populateVgAudioDeviceList();
 
     // --- Advanced nav visibility based on capture mode ---
     function updateAdvancedNavForMode(mode) {
@@ -1878,14 +1973,27 @@ $(document).ready(function() {
                     videoConstraints.facingMode = { ideal: appConfig.vgFacingMode };
                 }
             }
+            const audioConstraint = (isVgMode && appConfig.vgSelectedMicId)
+                ? { deviceId: { exact: appConfig.vgSelectedMicId } }
+                : true;
             const constraints = isVgMode
-                ? { video: videoConstraints, audio: true }
+                ? { video: videoConstraints, audio: audioConstraint }
                 : { video: videoConstraints };
 
             currentStream = await navigator.mediaDevices.getUserMedia(constraints);
 
             if (appConfig.captureMode === 'videoguestbook') {
-                $('#vg-camera-feed')[0].srcObject = currentStream;
+                const vgFeedEl = $('#vg-camera-feed')[0];
+                vgFeedEl.srcObject = currentStream;
+                // Route playback audio to the selected Bluetooth speaker (setSinkId is
+                // not universally supported — silently ignore if unavailable).
+                if (appConfig.vgSelectedSpeakerId && typeof vgFeedEl.setSinkId === 'function') {
+                    try {
+                        await vgFeedEl.setSinkId(appConfig.vgSelectedSpeakerId);
+                    } catch (e) {
+                        console.warn('[VG] setSinkId failed (speaker not available):', e.message);
+                    }
+                }
             } else {
                 $('#camera-feed')[0].srcObject = currentStream;
                 applyKioskViewfinderSize();

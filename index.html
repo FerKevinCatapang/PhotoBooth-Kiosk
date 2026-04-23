@@ -743,6 +743,40 @@
                         </div>
                     </div>
 
+                    <!-- Audio Devices (Microphone & Speaker) -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Audio Devices</h3>
+
+                        <div class="settings-card" style="display:flex; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+                            <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:1rem;">
+
+                                <!-- Microphone -->
+                                <div>
+                                    <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">🎙️ Microphone</label>
+                                    <select id="vg-mic-select" class="text-input" style="width:100%; max-width:420px; cursor:pointer;">
+                                        <option value="">— Default microphone —</option>
+                                    </select>
+                                    <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Select your Bluetooth or USB mic (e.g. DJI Mic Mini). Pair the device first, then tap <strong>↺ Refresh</strong>.</p>
+                                </div>
+
+                                <!-- Speaker / Output -->
+                                <div>
+                                    <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">🔊 Speaker / Output</label>
+                                    <select id="vg-speaker-select" class="text-input" style="width:100%; max-width:420px; cursor:pointer;">
+                                        <option value="">— Default speaker —</option>
+                                    </select>
+                                    <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Select your Bluetooth speaker (e.g. JBL Flip 5) for playback audio. Pair the device first, then tap <strong>↺ Refresh</strong>.</p>
+                                </div>
+
+                                <div id="vg-audio-diag" style="font-size:0.8rem; line-height:1.6; color:#374151;"></div>
+                            </div>
+
+                            <div style="display:flex; flex-direction:column; gap:0.5rem; flex-shrink:0; padding-top:1.4rem;">
+                                <button id="btn-refresh-vg-audio" class="btn-outline" style="white-space:nowrap;">↺ Refresh</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Max Recording Duration -->
                     <div class="settings-section">
                         <h3 class="section-title">Recording Duration</h3>
