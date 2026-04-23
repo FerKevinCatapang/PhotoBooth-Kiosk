@@ -78,7 +78,9 @@ let appConfig = {
     vgCustomPrompts: [],          // admin-added prompts appended to the active template pool
 
     // Preview after recording — Video Guestbook
-    vgPreviewEnabled: true,       // show the video playback overlay after each recording
+    vgPreviewEnabled: localStorage.getItem('vgPreviewEnabled') !== null
+        ? localStorage.getItem('vgPreviewEnabled') !== 'false'
+        : true,       // show the video playback overlay after each recording
 
     // Thank You screen — Video Guestbook
     vgThankYouEnabled: false,
@@ -1292,6 +1294,7 @@ $(document).ready(function() {
         _syncPreviewToggle();
         $('#toggle-vg-preview').on('change', function() {
             appConfig.vgPreviewEnabled = this.checked;
+            localStorage.setItem('vgPreviewEnabled', this.checked);
             $('#toggle-vg-preview-label').text(this.checked ? 'ON' : 'OFF');
             $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
         });
