@@ -20,6 +20,8 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- QR Code generator -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- PeerJS (WebRTC) — for Live Gallery Viewer feature -->
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
 </head>
 <body>
 
@@ -391,6 +393,7 @@
                 <a href="#" class="nav-item" id="nav-printer" data-target="panel-printer"><span class="icon">🖨️</span> Printer Setup</a>
                 <a href="#" class="nav-item" id="nav-video-overlay" data-target="panel-video-overlay" style="display:none;"><span class="icon">🎞️</span> Video Overlay</a>
                 <a href="#" class="nav-item" id="nav-stitch" data-target="panel-stitch" style="display:none;"><span class="icon">🎬</span> Stitch Videos</a>
+                <a href="#" class="nav-item" id="nav-live-viewer" data-target="panel-live-viewer"><span class="icon">📹</span> Live Viewer</a>
             </nav>
             
             <div class="sidebar-footer">
@@ -1613,7 +1616,77 @@
         </main>
     </div>
 
-    <div id="kiosk-mode" class="kiosk-wrapper" style="display: none;">
+    <!-- ========== LIVE VIEWER PANEL (admin) ========== -->
+    <div id="panel-live-viewer" class="admin-panel" style="display:none;">
+        <div class="content-header">
+            <h1>Live Gallery Viewer</h1>
+            <p style="color:#6b7280; font-size:0.9rem; margin:0.25rem 0 0;">Let a second device — a TV, tablet, or phone — display every capture in real-time over your local Wi-Fi network.</p>
+        </div>
+
+        <div class="settings-section">
+            <h3 class="section-title">How it works</h3>
+            <div class="info-box" style="flex-direction:column; gap:0.5rem; font-size:0.88rem; line-height:1.7;">
+                <p style="margin:0;"><strong>1.</strong> Click <strong>Start Hosting</strong> below. A unique QR code appears.</p>
+                <p style="margin:0;"><strong>2.</strong> On the viewer device, open the camera app and scan the QR code — it opens a full-screen gallery page.</p>
+                <p style="margin:0;"><strong>3.</strong> Every new photo or video captured on this device appears on the viewer instantly over your local Wi-Fi.</p>
+                <p style="margin:0; color:#d97706;"><strong>Note:</strong> An internet connection is needed for the first few seconds to establish the peer-to-peer link. After that, all data flows directly over your local network.</p>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3 class="section-title">Session</h3>
+            <div class="settings-card" style="padding:1.5rem;">
+                <div id="lv-idle-state">
+                    <button id="btn-lv-start" class="btn-primary" style="padding:0.85rem 2.5rem; font-size:1rem;">📹 Start Hosting</button>
+                </div>
+                <div id="lv-active-state" style="display:none;">
+                    <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1.25rem;">
+                        <div class="lv-status-dot" id="lv-status-dot"></div>
+                        <span id="lv-status-text" style="font-weight:600; color:#374151; font-size:0.95rem;">Waiting for viewer…</span>
+                        <button id="btn-lv-stop" class="btn-outline" style="margin-left:auto; padding:0.45rem 1.1rem; font-size:0.85rem;">Stop</button>
+                    </div>
+                    <div style="display:flex; gap:2rem; flex-wrap:wrap; align-items:flex-start;">
+                        <div>
+                            <div id="lv-qr-container" style="width:180px; height:180px; background:#fff; border-radius:10px; padding:8px; display:flex; align-items:center; justify-content:center;"></div>
+                            <p style="margin:0.6rem 0 0; font-size:0.78rem; color:#9ca3af; text-align:center;">Scan with viewer device</p>
+                        </div>
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:0.82rem; color:#6b7280; margin-bottom:0.35rem;">Viewer URL (open manually if QR won't scan):</div>
+                            <div id="lv-viewer-url" style="font-family:monospace; font-size:0.8rem; word-break:break-all; color:#374151; background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px; padding:0.5rem 0.75rem;"></div>
+                            <div style="margin-top:1rem;">
+                                <span style="font-size:0.82rem; color:#6b7280;">Viewers connected: </span>
+                                <strong id="lv-viewer-count">0</strong>
+                            </div>
+                            <div style="margin-top:0.5rem;">
+                                <span style="font-size:0.82rem; color:#6b7280;">Captures sent this session: </span>
+                                <strong id="lv-sent-count">0</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== VIEWER MODE (Device 2 full-screen gallery) ========== -->
+    <div id="viewer-mode" style="display:none; position:fixed; inset:0; background:#0f172a; z-index:99999; overflow:hidden; flex-direction:column;">
+        <div id="viewer-header" style="flex-shrink:0; padding:1rem 1.5rem; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:1rem;">
+            <div style="flex:1;">
+                <h2 style="margin:0; font-size:1.15rem; font-weight:700; color:#f9fafb;">Live Gallery</h2>
+                <p id="viewer-event-name" style="margin:0; font-size:0.8rem; color:#9ca3af;">Waiting for the first capture…</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+                <div class="lv-status-dot" id="viewer-status-dot" style="background:#ef4444;"></div>
+                <span id="viewer-status-text" style="font-size:0.82rem; color:#9ca3af;">Connecting…</span>
+            </div>
+        </div>
+        <div id="viewer-gallery" style="flex:1; overflow-y:auto; padding:1rem; display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:0.75rem; align-content:start;"></div>
+        <div id="viewer-empty" style="position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#475569; pointer-events:none;">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+            <p style="margin:0.75rem 0 0; font-size:1rem; font-weight:500;">No captures yet</p>
+            <p style="margin:0.25rem 0 0; font-size:0.85rem;">Photos and videos will appear here in real-time</p>
+        </div>
+    </div>
         
         <div id="guest-welcome" class="welcome-overlay">
             <img id="ws-image-bg" class="ws-media-bg" style="display:none;" alt="">

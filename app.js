@@ -2207,6 +2207,8 @@ $(document).ready(function() {
         capturedVideos.unshift(galleryBlobUrl);
         capturedVideoDriveLinks.unshift(null); // will be updated after Drive upload completes
         updateDashboardGallery();
+        // Broadcast thumbnail to Live Viewer peers (fire-and-forget)
+        lvBroadcastVideo(galleryBlobUrl, filename);
 
         // Save locally (folder or download)
         if (appConfig.vgSaveLocal) {
@@ -2449,6 +2451,8 @@ $(document).ready(function() {
         capturedPhotos.unshift(photoDataUrl);
         capturedPhotoDriveLinks.unshift(null); // will be updated after Drive upload completes
         updateDashboardGallery();
+        // Broadcast to Live Viewer peers (fire-and-forget)
+        lvBroadcastPhoto(photoDataUrl, filename);
 
         // --- Upload to Google Drive (fire-and-forget, non-blocking) ---
         // Store the Drive link so QR button can use it when upload completes
@@ -3210,5 +3214,228 @@ $(document).ready(function() {
         wizDone();
         $('#btn-launch-booth').trigger('click');
     });
+
+    // =========================================================
+    // LIVE GALLERY VIEWER  (WebRTC / PeerJS peer-to-peer)
+    // =========================================================
+    // Protocol messages sent over DataChannel:
+    //   { type:'photo',  data:<dataURL>,       filename:<str>, ts:<ms> }
+    //   { type:'video',  data:<thumbDataURL>,  filename:<str>, ts:<ms>, duration:<secs> }
+    //   { type:'hello',  eventName:<str> }       — sent on new connection
+    //   { type:'ping' }
+
+    let _lvPeer        = null;   // Peer instance (host mode)
+    let _lvConns       = [];     // array of active DataConnection objects
+    let _lvSentCount   = 0;
+    const LV_CHUNK_MAX = 16384; // DataChannel safe chunk size (16 KB)
+
+    // ── Host mode ──────────────────────────────────────────────
+    function _lvStart() {
+        if (typeof Peer === 'undefined') {
+            alert('PeerJS library has not loaded yet. Check your internet connection and try again.');
+            return;
+        }
+        _lvPeer = new Peer(); // uses free peerjs.com cloud signaling
+        _lvPeer.on('open', function(id) {
+            const viewerUrl = window.location.origin + window.location.pathname + '?viewer=' + id;
+            $('#lv-viewer-url').text(viewerUrl);
+            // Render QR code
+            $('#lv-qr-container').empty();
+            new QRCode(document.getElementById('lv-qr-container'), {
+                text: viewerUrl,
+                width: 164,
+                height: 164,
+                colorDark: '#1e293b',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            $('#lv-idle-state').hide();
+            $('#lv-active-state').show();
+            _lvSetStatus('Waiting for viewer…', false);
+        });
+
+        _lvPeer.on('connection', function(conn) {
+            conn.on('open', function() {
+                _lvConns.push(conn);
+                _lvSetStatus(_lvConns.length + ' viewer' + (_lvConns.length > 1 ? 's' : '') + ' connected', true);
+                // Send current event name so viewer shows it in the header
+                conn.send(JSON.stringify({ type: 'hello', eventName: appConfig.eventName || '' }));
+            });
+            conn.on('close', function() {
+                _lvConns = _lvConns.filter(c => c !== conn);
+                const n = _lvConns.length;
+                _lvSetStatus(n > 0 ? n + ' viewer' + (n > 1 ? 's' : '') + ' connected' : 'Waiting for viewer…', n > 0);
+            });
+            conn.on('error', function() {
+                _lvConns = _lvConns.filter(c => c !== conn);
+            });
+        });
+
+        _lvPeer.on('error', function(err) {
+            console.warn('[LiveViewer] PeerJS error:', err.type, err.message);
+            _lvSetStatus('Connection error: ' + err.type, false);
+        });
+    }
+
+    function _lvStop() {
+        if (_lvPeer) { _lvPeer.destroy(); _lvPeer = null; }
+        _lvConns = [];
+        _lvSentCount = 0;
+        $('#lv-viewer-count').text('0');
+        $('#lv-sent-count').text('0');
+        $('#lv-active-state').hide();
+        $('#lv-idle-state').show();
+        $('#lv-qr-container').empty();
+    }
+
+    function _lvSetStatus(msg, connected) {
+        $('#lv-status-text').text(msg);
+        $('#lv-status-dot').toggleClass('lv-dot-on', connected);
+        $('#lv-viewer-count').text(_lvConns.length);
+    }
+
+    // Broadcast a JSON message to all connected viewers
+    function _lvBroadcast(msgObj) {
+        if (!_lvConns.length) return;
+        const json = JSON.stringify(msgObj);
+        _lvConns.forEach(conn => {
+            try { if (conn.open) conn.send(json); }
+            catch (e) { console.warn('[LiveViewer] send error', e); }
+        });
+        _lvSentCount++;
+        $('#lv-sent-count').text(_lvSentCount);
+    }
+
+    // Capture a video thumbnail (first frame) as a small data URL
+    function _lvVideoThumb(blobUrl, callback) {
+        const vid = document.createElement('video');
+        const canvas = document.createElement('canvas');
+        vid.preload = 'metadata';
+        vid.muted = true;
+        vid.src = blobUrl;
+        vid.onloadeddata = function() {
+            vid.currentTime = 0.1;
+        };
+        vid.onseeked = function() {
+            canvas.width  = Math.min(vid.videoWidth,  640);
+            canvas.height = Math.min(vid.videoHeight, 640);
+            const scale = Math.min(canvas.width / vid.videoWidth, canvas.height / vid.videoHeight);
+            canvas.width  = Math.round(vid.videoWidth  * scale);
+            canvas.height = Math.round(vid.videoHeight * scale);
+            canvas.getContext('2d').drawImage(vid, 0, 0, canvas.width, canvas.height);
+            callback(canvas.toDataURL('image/jpeg', 0.7), Math.round(vid.duration || 0));
+            vid.src = '';
+        };
+        vid.onerror = function() { callback(null, 0); };
+    }
+
+    // Call this whenever a new photo is captured and should be sent to viewers
+    function lvBroadcastPhoto(dataUrl, filename) {
+        if (!_lvConns.length) return;
+        _lvBroadcast({ type: 'photo', data: dataUrl, filename: filename, ts: Date.now() });
+    }
+
+    // Call this whenever a new video is captured and should be sent to viewers
+    function lvBroadcastVideo(blobUrl, filename) {
+        if (!_lvConns.length) return;
+        _lvVideoThumb(blobUrl, function(thumbDataUrl, duration) {
+            _lvBroadcast({ type: 'video', data: thumbDataUrl, filename: filename, ts: Date.now(), duration: duration });
+        });
+    }
+
+    // Host UI handlers
+    $('#btn-lv-start').on('click', _lvStart);
+    $('#btn-lv-stop').on('click', _lvStop);
+
+    // ── Viewer mode ────────────────────────────────────────────
+    (function initViewerMode() {
+        const params = new URLSearchParams(window.location.search);
+        const hostId = params.get('viewer');
+        if (!hostId) return; // normal host mode, nothing to do
+
+        // Hide everything except the viewer overlay
+        $('body > *').not('#viewer-mode').css('visibility', 'hidden');
+        $('#viewer-mode').css('display', 'flex');
+
+        // Wait for PeerJS to load (it's deferred)
+        function connectToHost() {
+            if (typeof Peer === 'undefined') {
+                setTimeout(connectToHost, 200);
+                return;
+            }
+            const peer = new Peer();
+            peer.on('open', function() {
+                const conn = peer.connect(hostId, { reliable: true });
+                conn.on('open', function() {
+                    $('#viewer-status-dot').css('background', '#22c55e');
+                    $('#viewer-status-text').text('Live');
+                    $('#viewer-event-name').text('Connected — waiting for captures…');
+                });
+                conn.on('data', function(raw) {
+                    try {
+                        const msg = JSON.parse(raw);
+                        if (msg.type === 'hello') {
+                            if (msg.eventName) $('#viewer-event-name').text(msg.eventName);
+                        } else if (msg.type === 'photo') {
+                            _viewerAddItem(msg, 'photo');
+                        } else if (msg.type === 'video') {
+                            _viewerAddItem(msg, 'video');
+                        }
+                    } catch (e) { /* ignore malformed */ }
+                });
+                conn.on('close', function() {
+                    $('#viewer-status-dot').css('background', '#ef4444');
+                    $('#viewer-status-text').text('Disconnected');
+                });
+                conn.on('error', function() {
+                    $('#viewer-status-dot').css('background', '#ef4444');
+                    $('#viewer-status-text').text('Connection error');
+                });
+            });
+            peer.on('error', function(err) {
+                $('#viewer-status-dot').css('background', '#ef4444');
+                $('#viewer-status-text').text('Error: ' + err.type);
+            });
+        }
+        connectToHost();
+
+        let _viewerCount = 0;
+        function _viewerAddItem(msg, type) {
+            _viewerCount++;
+            $('#viewer-empty').hide();
+            const ts = new Date(msg.ts).toLocaleTimeString();
+            const label = type === 'video'
+                ? 'Video' + (msg.duration ? ' (' + msg.duration + 's)' : '')
+                : 'Photo';
+
+            let inner = '';
+            if (type === 'photo') {
+                inner = `<img src="${msg.data}" alt="Photo" style="width:100%; height:100%; object-fit:cover; border-radius:8px; display:block;">`;
+            } else {
+                inner = msg.data
+                    ? `<img src="${msg.data}" alt="Video thumbnail" style="width:100%; height:100%; object-fit:cover; border-radius:8px; display:block; opacity:0.85;">`
+                    : `<div style="width:100%; height:100%; background:#1e293b; border-radius:8px; display:flex; align-items:center; justify-content:center;"><svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" style="color:#475569;"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>`;
+                if (msg.data) {
+                    inner += `<div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none;"><div style="width:44px; height:44px; background:rgba(0,0,0,0.55); border-radius:50%; display:flex; align-items:center; justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"/></svg></div></div>`;
+                }
+            }
+
+            const $item = $(`
+                <div class="viewer-item viewer-item-new" data-count="${_viewerCount}">
+                    <div style="position:relative; width:100%; padding-top:${type === 'video' ? '56.25%' : '75%'}; overflow:hidden; border-radius:8px;">
+                        <div style="position:absolute; inset:0;">${inner}</div>
+                    </div>
+                    <div style="padding:0.4rem 0.25rem 0; display:flex; justify-content:space-between; align-items:baseline;">
+                        <span style="font-size:0.78rem; font-weight:600; color:#f1f5f9;">${label}</span>
+                        <span style="font-size:0.72rem; color:#64748b;">${ts}</span>
+                    </div>
+                </div>
+            `);
+            // Newest at the top
+            $('#viewer-gallery').prepend($item);
+            // Remove new-item animation class after transition
+            setTimeout(() => $item.removeClass('viewer-item-new'), 600);
+        }
+    })();
 
 });

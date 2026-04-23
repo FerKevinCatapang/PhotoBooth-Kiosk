@@ -1002,3 +1002,42 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
     color: #fff;
     box-shadow: 0 4px 14px rgba(190,24,93,0.4);
 }
+
+/* ==============================================
+   LIVE GALLERY VIEWER
+   ============================================== */
+/* Status dot (host panel + viewer header) */
+.lv-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ef4444;
+    flex-shrink: 0;
+    transition: background 0.3s;
+}
+.lv-status-dot.lv-dot-on {
+    background: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34,197,94,0.25);
+    animation: lv-pulse 2s infinite;
+}
+@keyframes lv-pulse {
+    0%, 100% { box-shadow: 0 0 0 3px rgba(34,197,94,0.25); }
+    50%       { box-shadow: 0 0 0 6px rgba(34,197,94,0.08); }
+}
+
+/* Viewer mode gallery items */
+.viewer-item {
+    break-inside: avoid;
+    border-radius: 10px;
+    background: #1e293b;
+    overflow: hidden;
+    transition: transform 0.2s;
+}
+.viewer-item:hover { transform: scale(1.015); }
+.viewer-item-new {
+    animation: viewer-pop 0.45s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+@keyframes viewer-pop {
+    from { opacity: 0; transform: scale(0.88) translateY(-10px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
