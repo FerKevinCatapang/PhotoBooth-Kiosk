@@ -1299,9 +1299,15 @@ $(document).ready(function() {
         // ── Wireless / IP Camera URL path ─────────────────────────────────────
         if (appConfig.wirelessCameraUrl) {
             try {
-                pv.src = appConfig.wirelessCameraUrl;
                 pv.muted = true;
-                await pv.play();
+                pv.src = appConfig.wirelessCameraUrl;
+                try {
+                    await pv.play();
+                } catch (playErr) {
+                    // AbortError is expected for streaming sources when play() races
+                    // the initial load — the video continues playing automatically.
+                    if (playErr.name !== 'AbortError') throw playErr;
+                }
                 const info = document.getElementById('camera-test-info');
                 if (info) info.textContent = `Wireless stream: ${appConfig.wirelessCameraUrl}`;
                 $('#camera-test-card').show();
@@ -1497,9 +1503,13 @@ $(document).ready(function() {
         // ── Wireless / IP Camera URL path ─────────────────────────────────────
         if (appConfig.vgWirelessCameraUrl) {
             try {
-                pv.src = appConfig.vgWirelessCameraUrl;
                 pv.muted = true;
-                await pv.play();
+                pv.src = appConfig.vgWirelessCameraUrl;
+                try {
+                    await pv.play();
+                } catch (playErr) {
+                    if (playErr.name !== 'AbortError') throw playErr;
+                }
                 const info = document.getElementById('vg-camera-test-info');
                 if (info) info.textContent = `Wireless stream: ${appConfig.vgWirelessCameraUrl}`;
                 $('#vg-camera-test-card').show();
@@ -2092,15 +2102,40 @@ $(document).ready(function() {
                 ((isVgMode && appConfig.vgFacingMode === '') || (!isVgMode && appConfig.facingMode === ''));
 
             if (usesWireless) {
-                currentStream = await _openWirelessCameraStream(wirelessUrl, isVgMode);
+                // Set src directly on the feed element — the same approach that works
+                // in the Test preview. MJPEG streams fire onerror on hidden <video>
+                // elements (wrong MIME type for captureStream), but render fine when
+                // assigned directly to the visible feed element.
                 if (isVgMode) {
                     const vgFeedEl = $('#vg-camera-feed')[0];
-                    vgFeedEl.srcObject = currentStream;
+                    vgFeedEl.srcObject = null;
+                    vgFeedEl.src = wirelessUrl;
+                    vgFeedEl.muted = true;
+                    try { await vgFeedEl.play(); } catch (e) { if (e.name !== 'AbortError') throw e; }
+
+                    // Build currentStream for recording: video from captureStream() on
+                    // the feed element, plus mic audio from getUserMedia.
+                    const captureFn = vgFeedEl.captureStream || vgFeedEl.mozCaptureStream;
+                    const videoTracks = captureFn ? captureFn.call(vgFeedEl).getVideoTracks() : [];
+                    const audioConstraint = appConfig.vgSelectedMicId
+                        ? { deviceId: { exact: appConfig.vgSelectedMicId } } : true;
+                    let audioTracks = [];
+                    try {
+                        const micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
+                        audioTracks = micStream.getAudioTracks();
+                    } catch (_) { /* proceed without mic */ }
+                    currentStream = new MediaStream([...videoTracks, ...audioTracks]);
+
                     if (appConfig.vgSelectedSpeakerId && typeof vgFeedEl.setSinkId === 'function') {
                         try { await vgFeedEl.setSinkId(appConfig.vgSelectedSpeakerId); } catch (_) {}
                     }
                 } else {
-                    $('#camera-feed')[0].srcObject = currentStream;
+                    const feedEl = $('#camera-feed')[0];
+                    feedEl.srcObject = null;
+                    feedEl.src = wirelessUrl;
+                    feedEl.muted = true;
+                    try { await feedEl.play(); } catch (e) { if (e.name !== 'AbortError') throw e; }
+                    currentStream = null; // PB capture uses drawImage(video) — no MediaStream needed
                     applyKioskViewfinderSize();
                 }
                 $('#admin-dashboard').hide();
@@ -2180,6 +2215,11 @@ $(document).ready(function() {
     $('#btn-exit-kiosk').on('click', function() {
         stopVgRecordingIfActive();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
+        // Clear any wireless src streams on the feed elements
+        ['camera-feed', 'vg-camera-feed'].forEach(function(id) {
+            const el = document.getElementById(id);
+            if (el && el.src && !el.srcObject) { el.pause(); el.src = ''; el.load(); }
+        });
         _stopWirelessHiddenVideo();
         $('#kiosk-mode').hide();
         $('#vg-booth').hide();
