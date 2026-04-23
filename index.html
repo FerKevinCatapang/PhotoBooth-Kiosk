@@ -509,7 +509,7 @@
                     </div>
 
                     <!-- Specific device dropdown -->
-                    <div class="settings-card" style="display:flex; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+                    <div id="camera-specific-card" class="settings-card" style="display:none; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
                         <div style="flex:1; min-width:0;">
                             <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Specific Camera Device</label>
                             <select id="camera-select" class="text-input" style="width:100%; max-width:420px; cursor:pointer;">
@@ -751,7 +751,7 @@
                         </div>
 
                         <!-- Specific device dropdown -->
-                        <div class="settings-card" style="display:flex; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+                        <div id="vg-camera-specific-card" class="settings-card" style="display:none; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
                             <div style="flex:1; min-width:0;">
                                 <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Specific Camera Device</label>
                                 <select id="vg-camera-select" class="text-input" style="width:100%; max-width:420px; cursor:pointer;">
@@ -806,6 +806,55 @@
                             <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.5rem;">Prompt shown to guests before recording</label>
                             <input type="text" id="setting-vg-prompt" class="text-input" placeholder="Share a message for the happy couple!" style="width:100%;">
                             <p style="margin:0.4rem 0 0; font-size:0.78rem; color:#9ca3af;">Displayed on the kiosk welcome screen when Video Guestbook mode is active.</p>
+                        </div>
+                    </div>
+
+                    <!-- Pre-Recording Prompts -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Pre-Recording Prompts</h3>
+
+                        <!-- Enable/Disable toggle -->
+                        <div class="settings-card feature-toggle-row">
+                            <div class="feature-toggle-left">
+                                <div class="feature-icon">💬</div>
+                                <div>
+                                    <div class="feature-title">Enable Prompts</div>
+                                    <div class="feature-subtitle">Show a random question to guests before each recording starts</div>
+                                </div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-vg-prompts">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label" id="toggle-vg-prompts-label">OFF</span>
+                            </label>
+                        </div>
+
+                        <!-- Config (shown when enabled) -->
+                        <div id="vg-prompts-config" style="display:none; margin-top:0.75rem;">
+
+                            <!-- Event template category -->
+                            <div class="settings-card">
+                                <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.6rem;">Event Template</label>
+                                <div class="prompt-category-tabs">
+                                    <button class="prompt-cat-btn active" data-cat="wedding">💍 Wedding</button>
+                                    <button class="prompt-cat-btn" data-cat="birthday">🎂 Birthday</button>
+                                    <button class="prompt-cat-btn" data-cat="teambuilding">🤝 Team Building</button>
+                                </div>
+                                <p style="margin:0.45rem 0 0; font-size:0.78rem; color:#9ca3af;">Choose a template to load its built-in questions. Your custom questions always appear alongside the template.</p>
+                            </div>
+
+                            <!-- Prompt pool list + custom add -->
+                            <div class="settings-card" style="padding:0; overflow:hidden;">
+                                <div style="padding:0.7rem 1rem 0.55rem; border-bottom:1px solid #f3f4f6; display:flex; align-items:center; justify-content:space-between;">
+                                    <span style="font-weight:600; font-size:0.88rem; color:#374151;">Active Prompt Pool <span id="vg-prompts-count" style="font-weight:400; color:#9ca3af;"></span></span>
+                                </div>
+                                <ul id="vg-prompts-list" style="list-style:none; padding:0; margin:0; max-height:300px; overflow-y:auto;"></ul>
+                                <div style="padding:0.7rem 1rem; border-top:1px solid #f3f4f6; display:flex; gap:0.5rem; align-items:center;">
+                                    <input type="text" id="vg-custom-prompt-input" class="text-input" placeholder="Type your own question and press Enter…" style="flex:1; min-width:0;">
+                                    <button id="btn-add-vg-prompt" class="btn-outline" style="white-space:nowrap; flex-shrink:0;">+ Add</button>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
 
@@ -1766,6 +1815,15 @@
 
                 <!-- Pre-record countdown -->
                 <div id="vg-countdown-overlay" style="display:none;"></div>
+
+                <!-- Pre-recording question prompt -->
+                <div id="vg-question-overlay" style="display:none; flex-direction:column; align-items:center; justify-content:center; position:absolute; inset:0; z-index:30;">
+                    <div class="vg-question-badge">💬 Your Prompt</div>
+                    <p id="vg-question-text" class="vg-question-text"></p>
+                    <div class="vg-question-timer-wrap">
+                        <div id="vg-question-timer-bar" class="vg-question-timer-bar"></div>
+                    </div>
+                </div>
 
                 <!-- Recording HUD -->
                 <div id="vg-hud" style="display:none;">

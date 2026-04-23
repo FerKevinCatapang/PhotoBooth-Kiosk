@@ -75,6 +75,11 @@ let appConfig = {
     _vgDriveAccessToken: null,
     _vgDriveFolderId: null,       // cached ID of the root VG folder
     _vgDriveEventFolderId: null,  // cached ID of the event sub-folder (reset on eventName change)
+
+    // Prompts — Video Guestbook
+    vgPromptsEnabled: false,
+    vgPromptCategory: 'wedding', // 'wedding' | 'birthday' | 'teambuilding'
+    vgCustomPrompts: [],          // admin-added prompts appended to the active template pool
 };
 
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
@@ -84,6 +89,43 @@ let appConfig = {
 // 4. Paste the Client ID below — users can also override it in the Drive panel UI
 const GOOGLE_DRIVE_CLIENT_ID = '1005976603326-rdevbnd8dgg3dd7844cgrkuv07hf1o05.apps.googleusercontent.com';
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Built-in prompt question sets for VG mode (admin can add custom ones per session)
+const PROMPT_TEMPLATES = {
+    wedding: [
+        'What is your favorite memory of us as a couple?',
+        'What was your first impression when you saw us together for the first time?',
+        'What is one thing about our relationship that you think makes us perfect for each other?',
+        'What was the most beautiful or memorable moment of the ceremony today?',
+        'If you could grant us one wish for our future together, what would it be?',
+        'What do you think is the absolute secret to a long and happy marriage?',
+        'Give us one unique idea for a date night during our first year of marriage.',
+        'How exactly do you know the couple?',
+        'What is the one thing you will never forget about this wedding?'
+    ],
+    birthday: [
+        "What's your best memory with the birthday person?",
+        'What do you wish for them on this special day?',
+        'What word best describes the birthday celebrant, and why?',
+        'Tell us about the first time you met the birthday person.',
+        'What is the funniest moment you have shared with the birthday celebrant?',
+        'What is one thing you have always wanted to tell them but never had the chance?',
+        'How has the birthday celebrant made a positive impact on your life?',
+        'If you could give them any gift in the world, what would it be and why?',
+        "Share a piece of advice for the birthday celebrant's next chapter in life."
+    ],
+    teambuilding: [
+        'Share one thing you have learned from a colleague this past year.',
+        "What's one quality in a teammate that you truly admire?",
+        'Describe your dream team project in one sentence.',
+        'What does teamwork mean to you?',
+        'Share a moment when your team pulled through a tough challenge.',
+        'What is one thing you wish your team knew about you?',
+        'If your team were a superhero squad, what would your power be?',
+        "What's one team memory that stands out above the rest?",
+        "What's one thing you'd like to improve about how we work together?"
+    ]
+};
 
 // Returns the active Client ID: UI input field takes priority, falls back to the hardcoded constant
 function _getDriveClientId() {
@@ -223,7 +265,7 @@ $(document).ready(function() {
         $('#live-ws-title').text(txt);
     });
 
-    $('#edit-subtitle').on('input', function() {
+    $('#edit-subtitle').on('input change', function() {
         let txt = $(this).val();
         appConfig.welcomeSubtitle = txt;
         $('#prev-subtitle').text(txt);
@@ -406,6 +448,76 @@ $(document).ready(function() {
         $('#vg-disclaimer-org').on('input', function() { appConfig.vgDisclaimerOrg = this.value; });
         $('#vg-disclaimer-header').on('input', function() { appConfig.vgDisclaimerHeader = this.value || 'Do you agree with the terms?'; });
         $('#vg-disclaimer-text').on('input', function() { appConfig.vgDisclaimerText = this.value; });
+    })();
+
+    // --- Prompts — Video Guestbook admin settings ---
+    (function initVgPrompts() {
+        function _renderPromptList() {
+            const builtIn = PROMPT_TEMPLATES[appConfig.vgPromptCategory] || [];
+            const custom  = appConfig.vgCustomPrompts;
+            $('#vg-prompts-count').text('(' + (builtIn.length + custom.length) + ')');
+
+            const $list = $('#vg-prompts-list').empty();
+            builtIn.forEach(function(q) {
+                $list.append(
+                    '<li class="vg-prompt-item">' +
+                    '<span class="vg-prompt-badge">Template</span>' +
+                    '<span class="vg-prompt-text">' + $('<span>').text(q).html() + '</span>' +
+                    '</li>'
+                );
+            });
+            custom.forEach(function(q, i) {
+                $list.append(
+                    '<li class="vg-prompt-item">' +
+                    '<span class="vg-prompt-badge vg-prompt-badge-custom">Custom</span>' +
+                    '<span class="vg-prompt-text">' + $('<span>').text(q).html() + '</span>' +
+                    '<button class="vg-prompt-del" data-idx="' + i + '" title="Remove">\u2715</button>' +
+                    '</li>'
+                );
+            });
+            $('#vg-prompts-list').find('.vg-prompt-del').on('click', function() {
+                appConfig.vgCustomPrompts.splice(parseInt($(this).data('idx'), 10), 1);
+                _renderPromptList();
+            });
+        }
+
+        function _syncToggle() {
+            const on = appConfig.vgPromptsEnabled;
+            $('#toggle-vg-prompts').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
+            $('#toggle-vg-prompts-label').text(on ? 'ON' : 'OFF');
+            $('#vg-prompts-config').toggle(on);
+        }
+
+        _syncToggle();
+        _renderPromptList();
+
+        $('#toggle-vg-prompts').on('change', function() {
+            appConfig.vgPromptsEnabled = this.checked;
+            $('#toggle-vg-prompts-label').text(this.checked ? 'ON' : 'OFF');
+            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
+            $('#vg-prompts-config').toggle(this.checked);
+        });
+
+        $(document).on('click', '.prompt-cat-btn', function() {
+            const cat = $(this).data('cat');
+            appConfig.vgPromptCategory = cat;
+            $('.prompt-cat-btn').removeClass('active');
+            $(this).addClass('active');
+            _renderPromptList();
+        });
+
+        function _addCustomPrompt() {
+            const val = $('#vg-custom-prompt-input').val().trim();
+            if (!val) return;
+            appConfig.vgCustomPrompts.push(val);
+            $('#vg-custom-prompt-input').val('');
+            _renderPromptList();
+        }
+
+        $('#btn-add-vg-prompt').on('click', _addCustomPrompt);
+        $('#vg-custom-prompt-input').on('keydown', function(e) {
+            if (e.key === 'Enter') _addCustomPrompt();
+        });
     })();
 
     // --- Disclaimer dialog (kiosk) ---
@@ -1178,6 +1290,7 @@ $(document).ready(function() {
 
     $('input[name="vg-facing-mode"]').on('change', function() {
         appConfig.vgFacingMode = this.value;
+        $('#vg-camera-specific-card').toggle(this.value === '');
     });
 
     $('#btn-refresh-vg-cameras').on('click', function() {
@@ -1656,6 +1769,7 @@ $(document).ready(function() {
 
     $('input[name="facing-mode"]').on('change', function() {
         appConfig.facingMode = this.value;
+        $('#camera-specific-card').toggle(this.value === '');
     });
 
     $('#btn-refresh-cameras').on('click', function() {
@@ -1827,9 +1941,9 @@ $(document).ready(function() {
 
         // Update the subtitle to reflect current mode
         if (isVg) {
-            $('#live-ws-subtitle').text(appConfig.vgPromptText);
+            $('#live-ws-subtitle').text(appConfig.vgPromptText || $('#setting-vg-prompt').val());
         } else {
-            $('#live-ws-subtitle').text(appConfig.welcomeSubtitle);
+            $('#live-ws-subtitle').text(appConfig.welcomeSubtitle || $('#edit-subtitle').val());
         }
 
         $('#guest-welcome').removeClass('hidden');
@@ -2059,6 +2173,29 @@ $(document).ready(function() {
         } else {
             overlayLive.style.display = 'none';
             overlayLive.src = '';
+        }
+
+        // Show question prompt if enabled
+        if (appConfig.vgPromptsEnabled) {
+            const _prompts = [
+                ...(PROMPT_TEMPLATES[appConfig.vgPromptCategory] || []),
+                ...appConfig.vgCustomPrompts
+            ];
+            if (_prompts.length > 0) {
+                const _q    = _prompts[Math.floor(Math.random() * _prompts.length)];
+                const _secs = Math.max(3, Math.min(10, Math.round(_q.trim().split(/\s+/).length / 3.3)));
+                const _qEl  = document.getElementById('vg-question-overlay');
+                const _bar  = document.getElementById('vg-question-timer-bar');
+                document.getElementById('vg-question-text').textContent = _q;
+                _bar.style.transition = 'none';
+                _bar.style.width = '100%';
+                _qEl.style.display = 'flex';
+                await new Promise(r => setTimeout(r, 60)); // allow paint before transition starts
+                _bar.style.transition = 'width ' + _secs + 's linear';
+                _bar.style.width = '0%';
+                await new Promise(r => setTimeout(r, _secs * 1000));
+                _qEl.style.display = 'none';
+            }
         }
 
         // Pre-record countdown
