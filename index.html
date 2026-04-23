@@ -394,6 +394,7 @@
                 <a href="#" class="nav-item" id="nav-video-overlay" data-target="panel-video-overlay" style="display:none;"><span class="icon">🎞️</span> Video Overlay</a>
                 <a href="#" class="nav-item" id="nav-stitch" data-target="panel-stitch" style="display:none;"><span class="icon">🎬</span> Stitch Videos</a>
                 <a href="#" class="nav-item" id="nav-live-viewer" data-target="panel-live-viewer"><span class="icon">📹</span> Live Viewer</a>
+                <a href="#" class="nav-item" id="nav-vg-thankyou" data-target="panel-vg-thankyou" style="display:none;"><span class="icon">🎉</span> Thank You Screen</a>
             </nav>
             
             <div class="sidebar-footer">
@@ -1724,6 +1725,87 @@
                 </div>
             </div>
 
+            <!-- PANEL: VG THANK YOU SCREEN -->
+            <div id="panel-vg-thankyou" class="admin-panel" style="display:none;">
+                <div class="content-header">
+                    <h1>Thank You Screen</h1>
+                    <p style="color:#6b7280; font-size:0.9rem; margin:0.25rem 0 0;">Shown to guests after they close the video preview. Upload a custom image and set how long it displays before returning to the Welcome Screen.</p>
+                </div>
+
+                <!-- Enable toggle -->
+                <div class="settings-section">
+                    <div class="settings-card feature-toggle-row">
+                        <div class="feature-toggle-left">
+                            <div class="feature-icon">🎉</div>
+                            <div>
+                                <div class="feature-title">Enable Thank You Screen</div>
+                                <div class="feature-subtitle">Display a branded thank-you card after each Video Guestbook recording</div>
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-vg-thankyou">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label" id="toggle-vg-thankyou-label">OFF</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Config (shown when enabled) -->
+                <div id="vg-thankyou-config" style="display:none;">
+
+                    <!-- Background image upload -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Background Image</h3>
+                        <div id="ty-media-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer;">
+                            <input type="file" id="ty-media-input" accept="image/*" style="display:none;">
+                            <div class="upload-empty-state" id="ty-media-empty">
+                                <span style="font-size:2rem;">🖼️</span>
+                                <p style="font-weight:600; margin:0; color:#374151;">Click or drag an image</p>
+                                <p style="margin:0; color:#9ca3af; font-size:0.8rem;">JPG, PNG &middot; Recommended: 1080 &times; 1920 px (portrait) or 1920 &times; 1080 px (landscape)</p>
+                                <button class="btn-outline btn-upload" id="btn-pick-ty-media">Choose File</button>
+                            </div>
+                            <div id="ty-media-filled" style="display:none; padding:0.75rem;">
+                                <div id="ty-media-thumb-wrap" style="width:100%; border-radius:6px; overflow:hidden; aspect-ratio:16/9; background:#000;"></div>
+                                <button id="ty-media-remove" class="btn-outline" style="width:100%; margin-top:0.5rem; font-size:0.82rem;">&#10005; Remove Image</button>
+                            </div>
+                        </div>
+                        <p style="margin:0.5rem 0 0; font-size:0.78rem; color:#9ca3af;">If no image is uploaded, a default gradient background is shown instead.</p>
+                    </div>
+
+                    <!-- Auto-advance duration -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Display Duration</h3>
+                        <div class="settings-card">
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Auto-advance to Welcome Screen after</label>
+                                    <div class="slider-value"><span id="val-ty-duration">5</span> sec</div>
+                                </div>
+                                <input type="range" id="setting-ty-duration" min="2" max="15" step="1" value="5" class="custom-range">
+                            </div>
+                            <p style="margin:0.6rem 0 0; font-size:0.78rem; color:#9ca3af;">Guests can also tap the <strong>Done</strong> button to advance immediately.</p>
+                        </div>
+                    </div>
+
+                    <!-- Live preview -->
+                    <div class="settings-section">
+                        <h3 class="section-title">Preview</h3>
+                        <div class="settings-card" style="padding:0; overflow:hidden; border-radius:12px;">
+                            <div id="ty-preview-frame" class="ty-preview-frame">
+                                <img id="ty-preview-bg" src="" alt="" style="display:none;">
+                                <div class="ty-preview-content">
+                                    <p class="ty-preview-emoji">🎉</p>
+                                    <h2 class="ty-preview-title">Thank You!</h2>
+                                    <p class="ty-preview-sub">Your message has been recorded.</p>
+                                    <button class="ty-done-btn ty-done-btn-preview" disabled>Done</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
         </main>
     </div>
 
@@ -1871,6 +1953,21 @@
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:6px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="5" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="16" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="5" y="16" width="3" height="3" fill="currentColor" stroke="none"/></svg>
                 Get QR Code
             </button>
+        </div>
+
+        <!-- ========== VG THANK YOU OVERLAY ========== -->
+        <div id="vg-thankyou-overlay" style="display:none; position:absolute; inset:0; z-index:60; flex-direction:column; align-items:center; justify-content:center;">
+            <img id="vg-ty-bg-img" src="" alt="" style="display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;">
+            <div class="vg-ty-gradient" id="vg-ty-gradient"></div>
+            <div class="vg-ty-content">
+                <div class="vg-ty-emoji">🎉</div>
+                <h1 class="vg-ty-title">Thank You!</h1>
+                <p class="vg-ty-sub">Your message has been recorded.<br>We appreciate you!</p>
+                <button id="btn-vg-ty-done" class="ty-done-btn">Done</button>
+                <div class="vg-ty-progress-wrap">
+                    <div id="vg-ty-progress-bar" class="vg-ty-progress-bar"></div>
+                </div>
+            </div>
         </div>
 
         <!-- ========== SOCIAL SHARE OVERLAY ========== -->

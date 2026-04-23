@@ -80,6 +80,11 @@ let appConfig = {
     vgPromptsEnabled: false,
     vgPromptCategory: 'wedding', // 'wedding' | 'birthday' | 'teambuilding'
     vgCustomPrompts: [],          // admin-added prompts appended to the active template pool
+
+    // Thank You screen — Video Guestbook
+    vgThankYouEnabled: false,
+    vgThankYouImage: null,        // { objectUrl: string } or null — custom background image
+    vgThankYouDuration: 5,        // seconds before auto-advancing to welcome screen
 };
 
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
@@ -520,7 +525,98 @@ $(document).ready(function() {
         });
     })();
 
-    // --- Disclaimer dialog (kiosk) ---
+    // --- Thank You Screen — Video Guestbook admin settings ---
+    (function initVgThankYou() {
+        function _syncToggle() {
+            const on = appConfig.vgThankYouEnabled;
+            $('#toggle-vg-thankyou').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
+            $('#toggle-vg-thankyou-label').text(on ? 'ON' : 'OFF');
+            $('#vg-thankyou-config').toggle(on);
+            // Show/hide nav item (only relevant in VG mode)
+            const isVg = appConfig.captureMode === 'videoguestbook';
+            $('#nav-vg-thankyou').toggle(isVg);
+        }
+
+        function _applyTyImage(file) {
+            if (appConfig.vgThankYouImage) {
+                URL.revokeObjectURL(appConfig.vgThankYouImage.objectUrl);
+            }
+            const objectUrl = URL.createObjectURL(file);
+            appConfig.vgThankYouImage = { objectUrl };
+
+            // Thumb in upload zone
+            $('#ty-media-thumb-wrap').html('<img src="' + objectUrl + '" style="width:100%; height:100%; object-fit:cover;">');
+            $('#ty-media-empty').hide();
+            $('#ty-media-filled').show();
+
+            // Preview frame
+            $('#ty-preview-bg').attr('src', objectUrl).show();
+            $('#ty-preview-frame').addClass('has-bg');
+        }
+
+        function _clearTyImage() {
+            if (appConfig.vgThankYouImage) {
+                URL.revokeObjectURL(appConfig.vgThankYouImage.objectUrl);
+                appConfig.vgThankYouImage = null;
+            }
+            $('#ty-media-thumb-wrap').empty();
+            $('#ty-media-filled').hide();
+            $('#ty-media-empty').show();
+            $('#ty-media-input').val('');
+            $('#ty-preview-bg').attr('src', '').hide();
+            $('#ty-preview-frame').removeClass('has-bg');
+        }
+
+        // Duration slider
+        $('#setting-ty-duration').val(appConfig.vgThankYouDuration).on('input', function() {
+            appConfig.vgThankYouDuration = parseInt(this.value, 10);
+            $('#val-ty-duration').text(this.value);
+        });
+        $('#val-ty-duration').text(appConfig.vgThankYouDuration);
+
+        // Toggle
+        _syncToggle();
+        $('#toggle-vg-thankyou').on('change', function() {
+            appConfig.vgThankYouEnabled = this.checked;
+            $('#toggle-vg-thankyou-label').text(this.checked ? 'ON' : 'OFF');
+            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
+            $('#vg-thankyou-config').toggle(this.checked);
+        });
+
+        // File picker
+        $('#ty-media-drop').on('click', function(e) {
+            if ($(e.target).closest('#ty-media-remove, #ty-media-filled').length) return;
+            document.getElementById('ty-media-input').click();
+        });
+        $('#btn-pick-ty-media').on('click', function(e) {
+            e.stopPropagation();
+            document.getElementById('ty-media-input').click();
+        });
+        $('#ty-media-input').on('change', function() {
+            const file = this.files[0];
+            if (file) _applyTyImage(file);
+        });
+        $('#ty-media-drop').on('dragover dragenter', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            $(this).addClass('drag-over');
+        }).on('dragleave dragend drop', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            $(this).removeClass('drag-over');
+            if (e.type === 'drop') {
+                const file = e.originalEvent.dataTransfer.files[0];
+                if (file && file.type.startsWith('image/')) _applyTyImage(file);
+            }
+        });
+        $('#ty-media-remove').on('click', function(e) {
+            e.stopPropagation();
+            _clearTyImage();
+        });
+
+        // Keep nav item visibility in sync when capture mode changes
+        $(document).on('capturemode:change', function() {
+            $('#nav-vg-thankyou').toggle(appConfig.captureMode === 'videoguestbook' && appConfig.vgThankYouEnabled);
+        });
+    })();
     // Opens the disclaimer modal; resolves true (accepted) or false (rejected)
     function showDisclaimerDialog(header, text, org) {
         return new Promise(resolve => {
@@ -1383,6 +1479,7 @@ $(document).ready(function() {
         const isVg = mode === 'videoguestbook';
         $('#nav-photo-layout, #nav-template, #nav-printer').toggle(!isVg);
         $('#nav-video-overlay, #nav-stitch').toggle(isVg);
+        $('#nav-vg-thankyou').toggle(isVg);
         // If a photo-only panel is active while switching to VG, go to dashboard
         if (isVg) {
             const active = $('.nav-item.active').data('target');
@@ -1393,7 +1490,7 @@ $(document).ready(function() {
         // If VG-only panels are active while switching to PhotoBooth, go to dashboard
         if (!isVg) {
             const active = $('.nav-item.active').data('target');
-            if (active === 'panel-video-overlay' || active === 'panel-stitch') {
+            if (active === 'panel-video-overlay' || active === 'panel-stitch' || active === 'panel-vg-thankyou') {
                 $('[data-target="panel-dashboard"]').trigger('click');
             }
         }
@@ -2399,7 +2496,58 @@ $(document).ready(function() {
         // Show preview with autoplay × 3, then close button
         await showVgPreview(galleryBlobUrl);
         $('#vg-booth').hide();
+        if (appConfig.vgThankYouEnabled) {
+            await showVgThankYou();
+        }
         resetToWelcomeScreen();
+    }
+    function showVgThankYou() {
+        return new Promise(resolve => {
+            const overlay  = document.getElementById('vg-thankyou-overlay');
+            const bgImg    = document.getElementById('vg-ty-bg-img');
+            const gradient = document.getElementById('vg-ty-gradient');
+            const doneBtn  = document.getElementById('btn-vg-ty-done');
+            const bar      = document.getElementById('vg-ty-progress-bar');
+            const secs     = Math.max(2, appConfig.vgThankYouDuration || 5);
+
+            // Apply background image if configured
+            if (appConfig.vgThankYouImage) {
+                bgImg.src = appConfig.vgThankYouImage.objectUrl;
+                bgImg.style.display = '';
+                gradient.style.display = '';
+            } else {
+                bgImg.style.display = 'none';
+                bgImg.src = '';
+                gradient.style.display = 'none';
+            }
+
+            // Reset and show progress bar
+            bar.style.transition = 'none';
+            bar.style.width = '100%';
+            overlay.style.display = 'flex';
+
+            let timerId = null;
+
+            function advance() {
+                clearTimeout(timerId);
+                bar.style.transition = 'none';
+                bar.style.width = '0%';
+                overlay.style.display = 'none';
+                doneBtn.removeEventListener('click', advance);
+                resolve();
+            }
+
+            doneBtn.addEventListener('click', advance);
+
+            // Kick off shrinking bar after one paint
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    bar.style.transition = 'width ' + secs + 's linear';
+                    bar.style.width = '0%';
+                    timerId = setTimeout(advance, secs * 1000);
+                });
+            });
+        });
     }
     function showVgPreview(blobUrl) {
         return new Promise(resolve => {
