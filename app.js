@@ -1409,16 +1409,34 @@ $(document).ready(function() {
     async function _openWirelessCameraStream(url, isVgMode) {
         _stopWirelessHiddenVideo(); // clean up any previous state
 
+        // ── Mixed-content guard ───────────────────────────────────────────────
+        // On Android Chrome, an HTTPS page cannot read pixels from an HTTP <img>
+        // element (canvas taint). Warn early so the user understands why.
+        try {
+            const camProto = new URL(url).protocol;
+            if (window.location.protocol === 'https:' && camProto === 'http:') {
+                throw new Error(
+                    'The app is running over HTTPS but your camera URL is HTTP.\n\n' +
+                    'Android Chrome blocks reading from HTTP sources on HTTPS pages.\n\n' +
+                    'Solutions:\n' +
+                    '• Use the installed APK (no HTTPS restriction).\n' +
+                    '• Enable HTTPS in your IP camera app settings.\n' +
+                    '• Access the app from http:// (e.g. a local network address) instead of GitHub Pages.'
+                );
+            }
+        } catch (e) {
+            if (e.message.includes('HTTPS') || e.message.includes('APK')) throw e;
+            // new URL() threw (invalid URL) — let it proceed and fail naturally
+        }
+
         const img = document.createElement('img');
         img.style.cssText = 'position:fixed;opacity:0;pointer-events:none;left:0;top:0;width:1px;height:1px;';
         document.body.appendChild(img);
 
         // ── Step 1: Try with crossOrigin = 'anonymous' first ─────────────────
-        // Drawing a cross-origin image onto a canvas taints it, causing
-        // captureStream() to throw a SecurityError on Android Chrome.
-        // Setting crossOrigin = 'anonymous' keeps the canvas origin-clean when
-        // the IP camera server sends Access-Control-Allow-Origin (most do, e.g.
-        // IP Webcam for Android sends * by default).
+        // Setting crossOrigin keeps the canvas origin-clean when the IP camera
+        // server sends Access-Control-Allow-Origin (IP Webcam for Android sends
+        // * by default). Must be set BEFORE assigning img.src.
         let corsSuccess = await new Promise(function(resolve) {
             const timeout = setTimeout(function() { resolve(false); }, 8000);
             img.crossOrigin = 'anonymous';
@@ -1427,38 +1445,74 @@ $(document).ready(function() {
             img.src = url;
         });
 
-        // ── Step 2: If CORS attempt failed, retry without crossOrigin ─────────
-        // The camera doesn't send CORS headers; load the img for display only.
-        // captureStream() will throw — we catch that below and surface a clear
-        // message instead of a cryptic SecurityError.
+        // ── Step 2: If CORS failed, retry without crossOrigin ─────────────────
         if (!corsSuccess) {
             img.removeAttribute('crossOrigin');
-            corsSuccess = await new Promise(function(resolve) {
+            const fallbackResult = await new Promise(function(resolve) {
                 const timeout = setTimeout(function() {
                     img.src = '';
                     if (img.parentNode) img.parentNode.removeChild(img);
-                    resolve(null); // null = timed out
+                    resolve('timeout');
                 }, 15000);
-                img.onload  = function() { clearTimeout(timeout); resolve(false); }; // false = loaded but no CORS
+                img.onload  = function() { clearTimeout(timeout); resolve('no-cors'); };
                 img.onerror = function() {
                     clearTimeout(timeout);
                     if (img.parentNode) img.parentNode.removeChild(img);
-                    resolve(null); // null = error
+                    resolve('error');
                 };
-                img.src = url;
+                img.src = url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now();
             });
-            if (corsSuccess === null) {
-                throw new Error('Cannot load stream from: ' + url + '\nEnsure the IP camera app is running and the device is on the same Wi-Fi network.');
+
+            if (fallbackResult === 'timeout' || fallbackResult === 'error') {
+                throw new Error(
+                    'Cannot reach wireless camera at: ' + url + '\n\n' +
+                    'Check that:\n' +
+                    '• Your camera app (e.g. IP Webcam) is running\n' +
+                    '• The tablet and the camera are on the same Wi-Fi network\n' +
+                    '• The URL and port number are correct'
+                );
             }
+
+            // Image loaded WITHOUT CORS headers — canvas will be tainted.
+            // captureStream() would throw SecurityError. Surface a clear message.
+            if (img.parentNode) img.parentNode.removeChild(img);
+            throw new Error(
+                'Your IP camera does not send CORS headers, so the browser blocks canvas capture.\n\n' +
+                'Fix in IP Webcam (Android):\n' +
+                '  Settings → Video preferences → tick "CORS support"\n\n' +
+                'Or access this app from http:// instead of https:// to avoid the restriction.'
+            );
         }
 
-        // Bridge: draw MJPEG img frames into a canvas via rAF
+        // ── Canvas bridge (only reached when CORS succeeded) ──────────────────
         const canvas = document.createElement('canvas');
         canvas.width  = img.naturalWidth  || 1280;
         canvas.height = img.naturalHeight || 720;
         canvas.style.cssText = 'position:fixed;opacity:0;pointer-events:none;left:0;top:0;';
         document.body.appendChild(canvas);
         const ctx = canvas.getContext('2d');
+
+        // Call captureStream() BEFORE drawFrame() to guarantee the canvas is
+        // origin-clean at the moment the stream is created.
+        const captureFn = canvas.captureStream || canvas.mozCaptureStream;
+        if (!captureFn) {
+            if (img.parentNode) img.parentNode.removeChild(img);
+            if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+            throw new Error('canvas.captureStream() is not supported by this browser.');
+        }
+
+        let videoStream;
+        try {
+            videoStream = captureFn.call(canvas, 30);
+        } catch (secErr) {
+            if (img.parentNode) img.parentNode.removeChild(img);
+            if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+            throw new Error(
+                'Canvas capture failed even after CORS handshake.\n\n' +
+                'Try enabling "CORS support" in your IP camera app and reconnecting.\n\n' +
+                '(detail: ' + secErr.message + ')'
+            );
+        }
 
         let _rafId = null;
         function drawFrame() {
@@ -1476,24 +1530,6 @@ $(document).ready(function() {
             canvas,
             stopRaf: () => { if (_rafId) cancelAnimationFrame(_rafId); }
         };
-
-        const captureFn = canvas.captureStream || canvas.mozCaptureStream;
-        if (!captureFn) throw new Error('canvas.captureStream() is not supported by this browser.');
-
-        let videoStream;
-        try {
-            videoStream = captureFn.call(canvas, 30);
-        } catch (secErr) {
-            // Canvas is still tainted (camera does not send CORS headers).
-            // Guide the user to enable CORS in their IP camera app.
-            _stopWirelessHiddenVideo();
-            throw new Error(
-                'Your IP camera app does not allow cross-origin access.\n\n' +
-                'In IP Webcam (Android): Settings → Video preferences → enable "CORS".\n' +
-                'Or connect the tablet to the same Wi-Fi and use the HTTP (not HTTPS) URL.\n\n' +
-                'Technical detail: ' + secErr.message
-            );
-        }
 
         if (isVgMode) {
             const audioConstraint = appConfig.vgSelectedMicId
