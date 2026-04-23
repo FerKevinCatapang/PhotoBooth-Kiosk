@@ -56,7 +56,7 @@ let appConfig = {
     disclaimerEnabled: false,
     disclaimerHeader: 'Media Release Agreement',
     disclaimerOrg: 'Name of Organization',
-    disclaimerText: 'By proceeding, I grant {Name of Organization} the right to use my photos and videos from this event for promotional and publication purposes without compensation. I understand these files become the property of the organization, and I waive the right to review the final media or claim royalties. I also release {Name of Organization} from any legal claims or liability related to the use of my likeness.\n\nI HAVE READ AND UNDERSTAND THE ABOVE PHOTO RELEASE.',
+    disclaimerText: 'By proceeding, I grant {Name of Organization} the right to use my photos or videos from this event for promotional and publication purposes without compensation. I understand these files become the property of the organization, and I waive the right to review the final media or claim royalties. I also release {Name of Organization} from any legal claims or liability related to the use of my likeness.',
     // Google Drive — Photo Booth (Method A - browser OAuth)
     driveFolderName: 'Photo Booth Captures',
     _driveAccessToken: null,
@@ -174,8 +174,23 @@ const LAYOUT_DEFS = {
 };
 
 $(document).ready(function() {
-    
-    // --- Initialize Dashboard Gallery ---
+
+    // --- Admin theme toggle (dark / light) ---
+    (function initTheme() {
+        const DARK_KEY = 'pb-admin-dark';
+        function _applyTheme(dark) {
+            document.body.classList.toggle('admin-dark', dark);
+            $('#theme-icon').text(dark ? '\u2600\ufe0f' : '\ud83c\udf19');
+            $('#theme-label').text(dark ? 'Light Mode' : 'Dark Mode');
+        }
+        _applyTheme(localStorage.getItem(DARK_KEY) === '1');
+        $('#btn-theme-toggle').on('click', function() {
+            const isDark = document.body.classList.toggle('admin-dark');
+            localStorage.setItem(DARK_KEY, isDark ? '1' : '0');
+            $('#theme-icon').text(isDark ? '\u2600\ufe0f' : '\ud83c\udf19');
+            $('#theme-label').text(isDark ? 'Light Mode' : 'Dark Mode');
+        });
+    })();
     updateDashboardGallery();
 
     // --- Tabs ---
@@ -405,6 +420,7 @@ $(document).ready(function() {
             const on = appConfig.disclaimerEnabled;
             $('#toggle-disclaimer').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
             $('#toggle-disclaimer-label').text(on ? 'ON' : 'OFF');
+            $('#disclaimer-config').toggle(on);
         }
         _sync();
 
@@ -412,9 +428,10 @@ $(document).ready(function() {
             appConfig.disclaimerEnabled = this.checked;
             $('#toggle-disclaimer-label').text(this.checked ? 'ON' : 'OFF');
             $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
+            $('#disclaimer-config').toggle(this.checked);
         });
         $('#disclaimer-org').on('input', function() { appConfig.disclaimerOrg = this.value; });
-        $('#disclaimer-header').on('input', function() { appConfig.disclaimerHeader = this.value || 'Do you agree with the terms?'; });
+        $('#disclaimer-header').on('input', function() { appConfig.disclaimerHeader = this.value || 'Media Release Agreement'; });
         $('#disclaimer-text').on('input', function() { appConfig.disclaimerText = this.value; });
     })();
 
@@ -2483,7 +2500,7 @@ $(document).ready(function() {
             const mLeft = Math.floor(left / 60);
             const sLeft = left % 60;
             const leftTxt = mLeft > 0 ? mLeft + ':' + String(sLeft).padStart(2, '0') + ' left' : left + 's left';
-            $('#vg-time-left').text(leftTxt).css('color', left <= 10 ? '#fca5a5' : 'rgba(255,255,255,0.7)');
+            $('#vg-time-left').text(leftTxt).css('color', left <= 10 ? '#fca5a5' : '#fff');
         }, 1000);
 
         // Auto-stop at max duration
