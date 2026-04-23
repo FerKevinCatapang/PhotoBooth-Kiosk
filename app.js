@@ -2,8 +2,10 @@ let currentStream = null;
 let directoryHandle = null;
 let vgDirectoryHandle = null;
 
-let capturedPhotos = []; // In-memory database of captured session photos
-let capturedVideos = []; // In-memory database of captured video guestbook blob URLs
+let capturedPhotos = [];           // In-memory database of captured session photos
+let capturedPhotoDriveLinks = [];  // parallel: Drive share URL for each photo, or null
+let capturedVideos = [];           // In-memory database of captured video guestbook blob URLs
+let capturedVideoDriveLinks = [];  // parallel: Drive share URL for each video, or null
 
 let appConfig = {
     layout: '4x6-1',
@@ -2099,6 +2101,7 @@ $(document).ready(function() {
         // Keep a blob URL in memory for gallery playback (intentionally not revoked)
         const galleryBlobUrl = URL.createObjectURL(blob);
         capturedVideos.unshift(galleryBlobUrl);
+        capturedVideoDriveLinks.unshift(null); // will be updated after Drive upload completes
         updateDashboardGallery();
 
         // Save locally (folder or download)
@@ -2132,6 +2135,9 @@ $(document).ready(function() {
                     await _driveSetPublic(appConfig._vgDriveAccessToken, result.id);
                     _vgDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
                     _currentVgDriveLink = _vgDriveLink;
+                    // Store link in gallery parallel array and show QR button in thumbnail
+                    capturedVideoDriveLinks[0] = _vgDriveLink;
+                    _appendGalleryQrBtn(0, 'video', _vgDriveLink);
                     // Show QR button if preview is still open
                     if ($('#vg-preview-overlay').is(':visible')) {
                         $('#btn-vg-qr').fadeIn(200);
@@ -2337,6 +2343,7 @@ $(document).ready(function() {
         // SAVE IMAGE TO ADMIN DASHBOARD GALLERY
         const photoDataUrl = canvas.toDataURL('image/png', 0.8);
         capturedPhotos.unshift(photoDataUrl);
+        capturedPhotoDriveLinks.unshift(null); // will be updated after Drive upload completes
         updateDashboardGallery();
 
         // --- Upload to Google Drive (fire-and-forget, non-blocking) ---
@@ -2351,6 +2358,9 @@ $(document).ready(function() {
                         // Make the file publicly readable so guests can download via QR
                         await _driveSetPublic(appConfig._driveAccessToken, result.id);
                         _pbDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
+                        // Store link in gallery parallel array and show QR button in thumbnail
+                        capturedPhotoDriveLinks[0] = _pbDriveLink;
+                        _appendGalleryQrBtn(0, 'photo', _pbDriveLink);
                         // Show QR button in share overlay (if it's still open)
                         if ($('#share-overlay').is(':visible') && _pbDriveLink) {
                             _currentPbDriveLink = _pbDriveLink;
@@ -2659,7 +2669,11 @@ $(document).ready(function() {
         } else {
             capturedPhotos.slice(0, 8).forEach((src, index) => {
                 const num = capturedPhotos.length - index;
-                photoGrid.append(`<div class="gallery-item" data-index="${index}" title="Photo #${num}"><img src="${src}" alt="Photo #${num}"><div class="overlay">Photo #${num}</div></div>`);
+                const driveLink = capturedPhotoDriveLinks[index] || null;
+                const qrBtn = driveLink
+                    ? `<button class="gallery-qr-btn" data-url="${driveLink}" title="Get QR code to download"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/><rect x="14" y="18" width="3" height="0"/></svg>QR</button>`
+                    : '';
+                photoGrid.append(`<div class="gallery-item" data-index="${index}" title="Photo #${num}"><img src="${src}" alt="Photo #${num}"><div class="overlay">Photo #${num}</div>${qrBtn}</div>`);
             });
         }
 
@@ -2671,6 +2685,10 @@ $(document).ready(function() {
         } else {
             capturedVideos.slice(0, 8).forEach((src, index) => {
                 const num = capturedVideos.length - index;
+                const driveLink = capturedVideoDriveLinks[index] || null;
+                const qrBtn = driveLink
+                    ? `<button class="gallery-qr-btn" data-url="${driveLink}" title="Get QR code to download"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/><rect x="14" y="18" width="3" height="0"/></svg>QR</button>`
+                    : '';
                 videoGrid.append(`
                     <div class="gallery-item gallery-item-video" data-vindex="${index}" title="Video #${num}">
                         <video src="${src}" preload="metadata" muted playsinline></video>
@@ -2678,6 +2696,7 @@ $(document).ready(function() {
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                         </div>
                         <div class="overlay">Video #${num}</div>
+                        ${qrBtn}
                     </div>`);
             });
         }
@@ -2690,6 +2709,18 @@ $(document).ready(function() {
             $(this).closest('.gallery-section').find('.gallery-tab-content').hide();
             $('#' + target).show();
         });
+    }
+
+    // Append (or show) a QR button on an existing gallery thumbnail without full re-render
+    function _appendGalleryQrBtn(arrIndex, type, driveLink) {
+        if (!driveLink) return;
+        const selector = type === 'video'
+            ? `.gallery-item[data-vindex="${arrIndex}"]`
+            : `.gallery-item[data-index="${arrIndex}"]`;
+        const $item = $(selector);
+        if ($item.length && !$item.find('.gallery-qr-btn').length) {
+            $item.append(`<button class="gallery-qr-btn" data-url="${driveLink}" title="Get QR code to download"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/></svg>QR</button>`);
+        }
     }
 
     // --- Gallery lightbox ---
@@ -2728,6 +2759,12 @@ $(document).ready(function() {
         _renderLightbox();
         $('#photo-lightbox').fadeIn(200);
     }
+    // QR button on gallery thumbnails — stop propagation so lightbox doesn't open
+    $(document).on('click', '.gallery-qr-btn', function(e) {
+        e.stopPropagation();
+        const url = $(this).data('url');
+        if (url) showQrOverlay(url, 'Scan to download your copy');
+    });
     $(document).on('click', '.gallery-item:not(.gallery-item-video)', function() {
         openLightbox(parseInt($(this).data('index')));
     });

@@ -70,6 +70,29 @@ button { transition: opacity 0.1s, transform 0.1s; }
 .gallery-modal-item-video:hover .gallery-play-icon { background: rgba(190,24,93,0.82); }
 /* Video gallery grid uses portrait 9:16 columns */
 .gallery-grid-video { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+/* QR button on gallery thumbnails — shown when Drive upload is available */
+.gallery-qr-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 7px;
+    background: rgba(29, 78, 216, 0.88);
+    color: #fff;
+    border: none;
+    border-radius: 5px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+    backdrop-filter: blur(2px);
+    transition: background 0.15s, transform 0.1s;
+    line-height: 1;
+}
+.gallery-qr-btn:hover { background: rgba(29, 78, 216, 1); transform: scale(1.07); }
+.gallery-qr-btn svg { flex-shrink: 0; }
 /* Gallery modal video items */
 .gallery-modal-item-video { aspect-ratio: 9/16; }
 .gallery-modal-item-video video { width: 100%; height: 100%; object-fit: cover; transition: transform 0.2s; pointer-events: none; }
