@@ -81,6 +81,9 @@ let appConfig = {
     vgThankYouEnabled: false,
     vgThankYouImage: null,        // { objectUrl: string } or null — custom background image
     vgThankYouDuration: 5,        // seconds before auto-advancing to welcome screen
+
+    // Capture Review — Video Guestbook
+    vgCaptureReviewEnabled: true, // play back the recording for guest review after capture
 };
 
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
@@ -573,6 +576,22 @@ $(document).ready(function() {
             $('#nav-vg-thankyou').toggle(appConfig.captureMode === 'videoguestbook' && appConfig.vgThankYouEnabled);
         });
     })();
+
+    // --- Capture Review toggle — Video Guestbook ---
+    (function initVgCaptureReview() {
+        function _syncToggle() {
+            const on = appConfig.vgCaptureReviewEnabled;
+            $('#toggle-vg-capture-review').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
+            $('#toggle-vg-capture-review-label').text(on ? 'ON' : 'OFF');
+        }
+        _syncToggle();
+        $('#toggle-vg-capture-review').on('change', function() {
+            appConfig.vgCaptureReviewEnabled = this.checked;
+            $('#toggle-vg-capture-review-label').text(this.checked ? 'ON' : 'OFF');
+            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
+        });
+    })();
+
     // Opens the disclaimer modal; resolves true (accepted) or false (rejected)
     function showDisclaimerDialog(header, text, org) {
         return new Promise(resolve => {
@@ -2669,7 +2688,9 @@ $(document).ready(function() {
         $('#vg-processing-overlay').fadeOut(200);
 
         // Show preview with autoplay × 3, then close button
-        await showVgPreview(galleryBlobUrl);
+        if (appConfig.vgCaptureReviewEnabled) {
+            await showVgPreview(galleryBlobUrl);
+        }
         if (appConfig.vgThankYouEnabled) {
             await showVgThankYou();
         }
