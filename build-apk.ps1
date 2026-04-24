@@ -143,8 +143,10 @@ $manifest = Get-Content $manifestPath -Raw
 $permissionsNeeded = @(
     '<uses-permission android:name="android.permission.CAMERA" />',
     '<uses-permission android:name="android.permission.RECORD_AUDIO" />',
-    '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />',
+    '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />',
     '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />',
+    '<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />',
+    '<uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />',
     '<uses-feature android:name="android.hardware.usb.host" />'
 )
 

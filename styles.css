@@ -224,6 +224,18 @@ button { transition: opacity 0.1s, transform 0.1s; }
 .hint-size-badge { background: #0ea5e9; color: #fff; font-size: 0.75rem; font-weight: 700; padding: 2px 10px; border-radius: 10px; font-family: monospace; letter-spacing: 0.03em; }
 .hint-sub { font-size: 0.82rem; color: #0369a1; }
 
+/* File inputs must stay in the render tree for Android WebView to open the file chooser.
+   Off-screen positioning achieves invisibility without display:none / hidden. */
+input[type="file"] {
+    position: fixed;
+    top: -9999px;
+    left: -9999px;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
 /* Upload card */
 .template-upload-card { padding: 0 !important; overflow: hidden; cursor: pointer; }
 .template-upload-card.drag-over { border-color: #006ebd !important; background: #eff6ff; }
