@@ -868,7 +868,7 @@ $(document).ready(function() {
     }
 
     $('#bg-empty-state').on('click', function(e) {
-        if (!$(e.target).closest('#btn-pick-bg').length) $('#upload-template-bg').click();
+        if (!$(e.target).closest('#btn-pick-bg').length) document.getElementById('upload-template-bg').click();
     });
     $('#upload-template-bg').on('change', async function() {
         if (this.files[0]) await applyBgImage(this.files[0]);
