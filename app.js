@@ -1,38 +1,26 @@
 let currentStream = null;
 let directoryHandle = null;
-let vgDirectoryHandle = null;
-let kioskWakeLock = null;
 
-let capturedPhotos = [];           // In-memory database of captured session photos
-let capturedPhotoDriveLinks = [];  // parallel: Drive share URL for each photo, or null
-let capturedVideos = [];           // In-memory database of captured video guestbook blob URLs
-let capturedVideoDriveLinks = [];  // parallel: Drive share URL for each video, or null
+let capturedPhotos = []; // In-memory database of captured session photos
+let capturedVideos = []; // In-memory database of captured video guestbook blob URLs
 
 let appConfig = {
     layout: '4x6-1',
-    saveLocal: true,          // PB: save to local folder
-    saveDrive: false,         // PB: upload to Google Drive
+    storage: 'local',
     countdownFirst: 5,
     countdownOthers: 5,
     reviewTime: 4,
     welcomeBg: '#E0F2FE',
-    welcomeTitle: '',
-    welcomeSubtitle: '',
+    welcomeTitle: 'Welcome to the Party!',
+    welcomeSubtitle: 'Tap the camera to begin',
     welcomeMedia: null,   // { type: 'image'|'video', objectUrl: string } or null
     photoMode: false,
     // Capture mode: 'photobooth' | 'videoguestbook'
     captureMode: 'photobooth',
     // Video Guestbook settings
     vgMaxDuration: 60,        // max recording seconds
-    vgPromptText: '',
+    vgPromptText: 'Share a message for the happy couple!',
     vgCountdown: 3,           // countdown before recording starts
-    vgSelectedCameraId: '',   // VG-specific camera device ID
-    vgFacingMode: 'user',     // VG-specific facing mode
-    vgSelectedMicId: '',      // VG-specific microphone device ID ('' = browser default)
-    vgSelectedSpeakerId: '',  // VG-specific audio output device ID ('' = browser default)
-    vgSaveLocal: true,        // VG: save to local folder
-    vgSaveDrive: false,       // VG: upload to Google Drive (uses VG-specific Drive config below)
-    vgOverlay: null,          // { objectUrl, img } or null — PNG overlay burned into recordings
     // Printer settings
     printCopies: 1,
     printQuality: 'high',
@@ -54,42 +42,12 @@ let appConfig = {
     printServer: '',     // e.g. "http://192.168.1.50:3000"
     selectedCameraId: '', // deviceId chosen in Capture Settings
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
-    wirelessCameraUrl: '',    // PB: MJPEG/IP camera stream URL (overrides device when set)
-    vgWirelessCameraUrl: '',  // VG: MJPEG/IP camera stream URL (overrides device when set)
-
-    // Disclaimer (shared for Photo Booth and Video Guestbook)
-    disclaimerEnabled: false,
-    disclaimerHeader: 'Media Release Agreement',
-    disclaimerOrg: 'Name of Organization',
-    disclaimerText: 'By proceeding, I grant {Name of Organization} the right to use my photos or videos from this event for promotional and publication purposes without compensation. I understand these files become the property of the organization, and I waive the right to review the final media or claim royalties. I also release {Name of Organization} from any legal claims or liability related to the use of my likeness.',
-    // Google Drive — Photo Booth (Method A - browser OAuth)
+    // Google Drive (Method A - browser OAuth)
+    driveUpload: false,
     driveFolderName: 'Photo Booth Captures',
     _driveAccessToken: null,
-    _driveFolderId: null,       // cached ID of the root PB folder
-    _driveEventFolderId: null,  // cached ID of the event sub-folder (reset on eventName change)
-
-    // Google Drive — Video Guestbook (independent credentials)
-    vgDriveFolderName: 'Video Guestbook Captures',
-    vgDriveClientId: '',
-    _vgDriveAccessToken: null,
-    _vgDriveFolderId: null,       // cached ID of the root VG folder
-    _vgDriveEventFolderId: null,  // cached ID of the event sub-folder (reset on eventName change)
-
-    // Prompts — Video Guestbook
-    vgPromptsEnabled: false,
-    vgPromptCategory: 'wedding', // 'wedding' | 'birthday' | 'teambuilding'
-    vgCustomPrompts: [],          // admin-added prompts appended to the active template pool
-
-    // Preview after recording — Video Guestbook
-    vgPreviewEnabled: true,       // show the video playback overlay after each recording
-
-    // Thank You screen — Video Guestbook
-    vgThankYouEnabled: false,
-    vgThankYouImage: null,        // { objectUrl: string } or null — custom background image
-    vgThankYouDuration: 5,        // seconds before auto-advancing to welcome screen
+    _driveFolderId: null
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
 
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
 // 1. Go to console.cloud.google.com → APIs & Services → Credentials
@@ -98,39 +56,6 @@ let appConfig = {
 // 4. Paste the Client ID below — users can also override it in the Drive panel UI
 const GOOGLE_DRIVE_CLIENT_ID = '1005976603326-rdevbnd8dgg3dd7844cgrkuv07hf1o05.apps.googleusercontent.com';
 // ─────────────────────────────────────────────────────────────────────────────
-
-// Built-in prompt question sets for VG mode (admin can add custom ones per session)
-const PROMPT_TEMPLATES = {
-    wedding: [
-        'What is your favorite memory of us as a couple?',
-        'What was the most beautiful or memorable moment of the ceremony today?',
-        'If you could grant us one wish for our future together, what would it be?',
-        'What do you think is the absolute secret to a long and happy marriage?',
-        'What is the one thing you will never forget about this wedding?'
-    ],
-    birthday: [
-        "What's your best memory with the birthday person?",
-        'What do you wish for them on this special day?',
-        'What word best describes the birthday celebrant, and why?',
-        'Tell us about the first time you met the birthday person.',
-        'What is the funniest moment you have shared with the birthday celebrant?',
-        'What is one thing you have always wanted to tell them but never had the chance?',
-        'How has the birthday celebrant made a positive impact on your life?',
-        'If you could give them any gift in the world, what would it be and why?',
-        "Share a piece of advice for the birthday celebrant's next chapter in life."
-    ],
-    teambuilding: [
-        'Share one thing you have learned from a colleague this past year.',
-        "What's one quality in a teammate that you truly admire?",
-        'Describe your dream team project in one sentence.',
-        'What does teamwork mean to you?',
-        'Share a moment when your team pulled through a tough challenge.',
-        'What is one thing you wish your team knew about you?',
-        'If your team were a superhero squad, what would your power be?',
-        "What's one team memory that stands out above the rest?",
-        "What's one thing you'd like to improve about how we work together?"
-    ]
-};
 
 // Returns the active Client ID: UI input field takes priority, falls back to the hardcoded constant
 function _getDriveClientId() {
@@ -184,118 +109,8 @@ const LAYOUT_DEFS = {
 };
 
 $(document).ready(function() {
-    // ── Restore persisted settings into UI controls ───────────────────────────
-    function syncUiFromConfig() {
-        // Layout
-        $(`input[name="layout"][value="${appConfig.layout}"]`).prop('checked', true);
-
-        // Timing sliders
-        $('#setting-cd-1').val(appConfig.countdownFirst); $('#val-cd-1').text(appConfig.countdownFirst);
-        $('#setting-cd-others').val(appConfig.countdownOthers); $('#val-cd-others').text(appConfig.countdownOthers);
-        $('#setting-review').val(appConfig.reviewTime); $('#val-review').text(appConfig.reviewTime);
-
-        // PB Storage
-        $('#chk-save-local').prop('checked', appConfig.saveLocal);
-        if (!appConfig.saveLocal) $('#local-folder-config').hide();
-        $('#chk-save-drive').prop('checked', appConfig.saveDrive);
-        if (!appConfig.saveDrive) $('#drive-config').hide(); else $('#drive-config').show();
-
-        // Welcome Screen
-        $('#edit-bg-color').val(appConfig.welcomeBg);
-        $('#color-hex').text(appConfig.welcomeBg);
-        $('#edit-title').val(appConfig.welcomeTitle);
-        $('#prev-title, #live-ws-title').text(appConfig.welcomeTitle);
-        $('#edit-subtitle').val(appConfig.welcomeSubtitle);
-        $('#prev-subtitle, #live-ws-subtitle').text(appConfig.welcomeSubtitle);
-        $('#designer-preview, #guest-welcome').css('background-color', appConfig.welcomeBg);
-
-        // Event name
-        $('#event-name-input').val(appConfig.eventName);
-
-        // PB Camera
-        $(`input[name="facing-mode"][value="${appConfig.facingMode}"]`).prop('checked', true);
-        if (appConfig.facingMode === '') $('#camera-specific-card').show(); else $('#camera-specific-card').hide();
-        if (appConfig.wirelessCameraUrl) $('#pb-wireless-camera-url').val(appConfig.wirelessCameraUrl);
-
-        // Photo Mode + Social Share
-        const pmOn = appConfig.photoMode;
-        $('#toggle-photo-mode').prop('checked', pmOn).closest('.toggle-switch').toggleClass('is-on', pmOn);
-        $('#toggle-photo-label').text(pmOn ? 'ON' : 'OFF');
-        $('#toggle-social-share').prop('checked', appConfig.socialShare).closest('.toggle-switch').toggleClass('is-on', appConfig.socialShare);
-        $('#toggle-social-label').text(appConfig.socialShare ? 'ON' : 'OFF');
-
-        // Printer
-        $('#print-copies-display').text(appConfig.printCopies);
-        $(`#sel-paper-size option[value="${appConfig.paperSizeOverride}"]`).prop('selected', true);
-        $(`#sel-color-mode option[value="${appConfig.colorMode}"]`).prop('selected', true);
-        $(`#sel-print-quality option[value="${appConfig.printQuality}"]`).prop('selected', true);
-        $('#toggle-borderless').prop('checked', appConfig.borderless).closest('.toggle-switch').toggleClass('is-on', appConfig.borderless);
-        $('#toggle-borderless-label').text(appConfig.borderless ? 'ON' : 'OFF');
-        $(`input[name="print-mode"][value="${appConfig.printMode}"]`).prop('checked', true);
-        $('#print-server-url').val(appConfig.printServer);
-        $('#print-server-config').toggle(appConfig.printMode === 'server');
-
-        // PB Drive
-        $('#drive-folder-name').val(appConfig.driveFolderName);
-
-        // Capture mode tab
-        const tabId = appConfig.captureMode === 'videoguestbook' ? 'cap-tab-videoguestbook' : 'cap-tab-photobooth';
-        document.querySelectorAll('.capture-tab-btn').forEach(function(b) { b.classList.remove('active'); });
-        const activeBtn = document.querySelector(`.capture-tab-btn[data-cap-tab="${tabId}"]`);
-        if (activeBtn) activeBtn.classList.add('active');
-        document.querySelectorAll('.cap-tab-content').forEach(function(c) { c.style.display = 'none'; });
-        const activeTab = document.getElementById(tabId);
-        if (activeTab) activeTab.style.display = '';
-
-        // VG Camera
-        $(`input[name="vg-facing-mode"][value="${appConfig.vgFacingMode}"]`).prop('checked', true);
-        if (appConfig.vgFacingMode === '') $('#vg-camera-specific-card').show(); else $('#vg-camera-specific-card').hide();
-        if (appConfig.vgWirelessCameraUrl) $('#vg-wireless-camera-url').val(appConfig.vgWirelessCameraUrl);
-
-        // VG Timing sliders
-        $('#setting-vg-duration').val(appConfig.vgMaxDuration); $('#val-vg-duration').text(appConfig.vgMaxDuration);
-        $('#setting-vg-countdown').val(appConfig.vgCountdown); $('#val-vg-countdown').text(appConfig.vgCountdown);
-        $('#setting-vg-prompt').val(appConfig.vgPromptText);
-
-        // VG Storage
-        $('#chk-vg-save-local').prop('checked', appConfig.vgSaveLocal);
-        if (!appConfig.vgSaveLocal) $('#vg-local-folder-config').hide();
-        $('#chk-vg-save-drive').prop('checked', appConfig.vgSaveDrive);
-        if (!appConfig.vgSaveDrive) $('#vg-drive-config').hide(); else $('#vg-drive-config').show();
-
-        // VG Drive
-        $('#vg-drive-folder-name').val(appConfig.vgDriveFolderName);
-        if (appConfig.vgDriveClientId) $('#vg-drive-client-id').val(appConfig.vgDriveClientId);
-
-        // VG Prompts
-        const vpOn = appConfig.vgPromptsEnabled;
-        $('#toggle-vg-prompts').prop('checked', vpOn).closest('.toggle-switch').toggleClass('is-on', vpOn);
-        $('#toggle-vg-prompts-label').text(vpOn ? 'ON' : 'OFF');
-        $(`.prompt-cat-btn[data-cat="${appConfig.vgPromptCategory}"]`).addClass('active').siblings().removeClass('active');
-
-        // VG Preview
-        const prevOn = appConfig.vgPreviewEnabled;
-        $('#toggle-vg-preview').prop('checked', prevOn).closest('.toggle-switch').toggleClass('is-on', prevOn);
-        $('#toggle-vg-preview-label').text(prevOn ? 'ON' : 'OFF');
-
-        // VG Thank You
-        const tyOn = appConfig.vgThankYouEnabled;
-        $('#toggle-vg-thankyou').prop('checked', tyOn).closest('.toggle-switch').toggleClass('is-on', tyOn);
-        $('#toggle-ty-label').text(tyOn ? 'ON' : 'OFF');
-        $('#setting-ty-duration').val(appConfig.vgThankYouDuration);
-        $('#val-ty-duration').text(appConfig.vgThankYouDuration);
-
-        // Disclaimer
-        const disOn = appConfig.disclaimerEnabled;
-        $('#toggle-disclaimer').prop('checked', disOn).closest('.toggle-switch').toggleClass('is-on', disOn);
-        $('#toggle-disclaimer-label').text(disOn ? 'ON' : 'OFF');
-        $('#disclaimer-header').val(appConfig.disclaimerHeader);
-        $('#disclaimer-org').val(appConfig.disclaimerOrg);
-        $('#disclaimer-text').val(appConfig.disclaimerText);
-    }
-    syncUiFromConfig();
-    // ─────────────────────────────────────────────────────────────────────────
-
+    
+    // --- Initialize Dashboard Gallery ---
     updateDashboardGallery();
 
     // --- Tabs ---
@@ -326,24 +141,14 @@ $(document).ready(function() {
         appConfig.reviewTime = parseInt(val);
     });
 
-    // --- Storage (Photo Booth) — checkbox toggles (both local + drive can be active) ---
-    $('#chk-save-local').on('change', function() {
-        appConfig.saveLocal = this.checked;
-        if (this.checked) {
+    // --- Storage ---
+    $('input[name="storage"]').on('change', function() {
+        appConfig.storage = $(this).val();
+        if(appConfig.storage === 'local') {
             $('#local-folder-config').slideDown();
         } else {
             $('#local-folder-config').slideUp();
         }
-    });
-
-    $('#chk-save-drive').on('change', function() {
-        appConfig.saveDrive = this.checked;
-        if (this.checked) {
-            $('#pb-drive-config').slideDown();
-        } else {
-            $('#pb-drive-config').slideUp();
-        }
-        _updateEventNameWarnings();
     });
 
     $('#btn-select-dir').on('click', async function() {
@@ -355,10 +160,8 @@ $(document).ready(function() {
             directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
             const label = `Saving to: /${directoryHandle.name}`;
             $('#dir-status').text(label);
+            $('#wiz-dir-status').text(label);
         } catch (err) {
-            if (err && err.name !== 'AbortError') {
-                $('#dir-status').text('Folder selection failed. Photos will be saved via standard downloads.');
-            }
             console.log("Directory picker cancelled or failed.", err);
         }
     });
@@ -382,7 +185,7 @@ $(document).ready(function() {
         $('#live-ws-title').text(txt);
     });
 
-    $('#edit-subtitle').on('input change', function() {
+    $('#edit-subtitle').on('input', function() {
         let txt = $(this).val();
         appConfig.welcomeSubtitle = txt;
         $('#prev-subtitle').text(txt);
@@ -455,10 +258,16 @@ $(document).ready(function() {
 
     // Click on upload zone opens file picker
     $('#ws-media-drop').on('click', function(e) {
-        if (!$(e.target).closest('#ws-media-remove').length) {
+        if (!$(e.target).closest('#ws-media-remove, #btn-pick-ws-media').length) {
             document.getElementById('ws-media-input').click();
         }
     });
+    // Dedicated Choose File button — native .click() so the browser trusts it as a real user gesture
+    $('#btn-pick-ws-media').on('click', function(e) {
+        e.stopPropagation();
+        document.getElementById('ws-media-input').click();
+    });
+
     // File selected via input
     $('#ws-media-input').on('change', function() {
         const file = this.files[0];
@@ -503,216 +312,6 @@ $(document).ready(function() {
     // Initialize social share toggle state
     $('#toggle-social-share').prop('checked', appConfig.socialShare).closest('.toggle-switch').toggleClass('is-on', appConfig.socialShare);
     $('#toggle-social-label').text(appConfig.socialShare ? 'ON' : 'OFF');
-
-    // --- Disclaimer — helpers ---
-    const DEFAULT_DISCLAIMER_TEXT = appConfig.disclaimerText;
-
-    function _renderDisclaimerText(text, org) {
-        return text.replace(/\{Name of Organization\}/g, org || 'the Organisation');
-    }
-
-    // --- Disclaimer — shared admin settings ---
-    (function initDisclaimer() {
-        $('#disclaimer-header').val(appConfig.disclaimerHeader);
-        $('#disclaimer-org').val(appConfig.disclaimerOrg);
-        $('#disclaimer-text').val(appConfig.disclaimerText);
-
-        function _sync() {
-            const on = appConfig.disclaimerEnabled;
-            $('#toggle-disclaimer').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
-            $('#toggle-disclaimer-label').text(on ? 'ON' : 'OFF');
-            $('#disclaimer-config').toggle(on);
-        }
-        _sync();
-
-        $('#toggle-disclaimer').on('change', function() {
-            appConfig.disclaimerEnabled = this.checked;
-            $('#toggle-disclaimer-label').text(this.checked ? 'ON' : 'OFF');
-            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-            $('#disclaimer-config').toggle(this.checked);
-        });
-        $('#disclaimer-org').on('input', function() { appConfig.disclaimerOrg = this.value; });
-        $('#disclaimer-header').on('input', function() { appConfig.disclaimerHeader = this.value || 'Media Release Agreement'; });
-        $('#disclaimer-text').on('input', function() { appConfig.disclaimerText = this.value; });
-    })();
-
-    // --- Prompts — Video Guestbook admin settings ---
-    (function initVgPrompts() {
-        function _renderPromptList() {
-            const builtIn = PROMPT_TEMPLATES[appConfig.vgPromptCategory] || [];
-            const custom  = appConfig.vgCustomPrompts;
-            $('#vg-prompts-count').text('(' + (builtIn.length + custom.length) + ')');
-
-            const $list = $('#vg-prompts-list').empty();
-            builtIn.forEach(function(q) {
-                $list.append(
-                    '<li class="vg-prompt-item">' +
-                    '<span class="vg-prompt-badge">Template</span>' +
-                    '<span class="vg-prompt-text">' + $('<span>').text(q).html() + '</span>' +
-                    '</li>'
-                );
-            });
-            custom.forEach(function(q, i) {
-                $list.append(
-                    '<li class="vg-prompt-item">' +
-                    '<span class="vg-prompt-badge vg-prompt-badge-custom">Custom</span>' +
-                    '<span class="vg-prompt-text">' + $('<span>').text(q).html() + '</span>' +
-                    '<button class="vg-prompt-del" data-idx="' + i + '" title="Remove">\u2715</button>' +
-                    '</li>'
-                );
-            });
-            $('#vg-prompts-list').find('.vg-prompt-del').on('click', function() {
-                appConfig.vgCustomPrompts.splice(parseInt($(this).data('idx'), 10), 1);
-                _renderPromptList();
-            });
-        }
-
-        function _syncToggle() {
-            const on = appConfig.vgPromptsEnabled;
-            $('#toggle-vg-prompts').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
-            $('#toggle-vg-prompts-label').text(on ? 'ON' : 'OFF');
-            $('#vg-prompts-config').toggle(on);
-        }
-
-        _syncToggle();
-        _renderPromptList();
-
-        $('#toggle-vg-prompts').on('change', function() {
-            appConfig.vgPromptsEnabled = this.checked;
-            $('#toggle-vg-prompts-label').text(this.checked ? 'ON' : 'OFF');
-            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-            $('#vg-prompts-config').toggle(this.checked);
-        });
-
-        $(document).on('click', '.prompt-cat-btn', function() {
-            const cat = $(this).data('cat');
-            appConfig.vgPromptCategory = cat;
-            $('.prompt-cat-btn').removeClass('active');
-            $(this).addClass('active');
-            _renderPromptList();
-        });
-
-        function _addCustomPrompt() {
-            const val = $('#vg-custom-prompt-input').val().trim();
-            if (!val) return;
-            appConfig.vgCustomPrompts.push(val);
-            $('#vg-custom-prompt-input').val('');
-            _renderPromptList();
-        }
-
-        $('#btn-add-vg-prompt').on('click', _addCustomPrompt);
-        $('#vg-custom-prompt-input').on('keydown', function(e) {
-            if (e.key === 'Enter') _addCustomPrompt();
-        });
-    })();
-
-    // --- Thank You Screen — Video Guestbook admin settings ---
-    let _applyTyImage, _clearTyImage;
-    (function initVgThankYou() {
-        function _syncToggle() {
-            const on = appConfig.vgThankYouEnabled;
-            $('#toggle-vg-thankyou').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
-            $('#toggle-vg-thankyou-label').text(on ? 'ON' : 'OFF');
-            $('#vg-thankyou-config').toggle(on);
-            // Show/hide nav item (only relevant in VG mode)
-            const isVg = appConfig.captureMode === 'videoguestbook';
-            $('#nav-vg-thankyou').toggle(isVg);
-        }
-
-        _applyTyImage = function(file) {
-            if (appConfig.vgThankYouImage) {
-                URL.revokeObjectURL(appConfig.vgThankYouImage.objectUrl);
-            }
-            const objectUrl = URL.createObjectURL(file);
-            appConfig.vgThankYouImage = { objectUrl };
-
-            // Thumb in upload zone
-            $('#ty-media-thumb-wrap').html('<img src="' + objectUrl + '" style="width:100%; height:100%; object-fit:cover;">');
-            $('#ty-media-empty').hide();
-            $('#ty-media-filled').show();
-
-            // Preview frame
-            $('#ty-preview-bg').attr('src', objectUrl).show();
-            $('#ty-preview-frame').addClass('has-bg');
-        };
-
-        _clearTyImage = function() {
-            if (appConfig.vgThankYouImage) {
-                URL.revokeObjectURL(appConfig.vgThankYouImage.objectUrl);
-                appConfig.vgThankYouImage = null;
-            }
-            $('#ty-media-thumb-wrap').empty();
-            $('#ty-media-filled').hide();
-            $('#ty-media-empty').show();
-            $('#ty-media-input').val('');
-            $('#ty-preview-bg').attr('src', '').hide();
-            $('#ty-preview-frame').removeClass('has-bg');
-        };
-
-        // Duration slider
-        $('#setting-ty-duration').val(appConfig.vgThankYouDuration).on('input', function() {
-            appConfig.vgThankYouDuration = parseInt(this.value, 10);
-            $('#val-ty-duration').text(this.value);
-        });
-        $('#val-ty-duration').text(appConfig.vgThankYouDuration);
-
-        // Toggle
-        _syncToggle();
-        $('#toggle-vg-thankyou').on('change', function() {
-            appConfig.vgThankYouEnabled = this.checked;
-            $('#toggle-vg-thankyou-label').text(this.checked ? 'ON' : 'OFF');
-            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-            $('#vg-thankyou-config').toggle(this.checked);
-        });
-
-        // File picker
-        $('#ty-media-drop').on('click', function(e) {
-            if ($(e.target).closest('#ty-media-remove, #ty-media-filled').length) return;
-            document.getElementById('ty-media-input').click();
-        });
-        $('#ty-media-input').on('change', function() {
-            const file = this.files[0];
-            if (file) _applyTyImage(file);
-        });
-        $('#ty-media-drop').on('dragover dragenter', function(e) {
-            e.preventDefault(); e.stopPropagation();
-            $(this).addClass('drag-over');
-        }).on('dragleave dragend drop', function(e) {
-            e.preventDefault(); e.stopPropagation();
-            $(this).removeClass('drag-over');
-            if (e.type === 'drop') {
-                const file = e.originalEvent.dataTransfer.files[0];
-                if (file && file.type.startsWith('image/')) _applyTyImage(file);
-            }
-        });
-        $('#ty-media-remove').on('click', function(e) {
-            e.stopPropagation();
-            _clearTyImage();
-        });
-
-        // Keep nav item visibility in sync when capture mode changes
-        $(document).on('capturemode:change', function() {
-            $('#nav-vg-thankyou').toggle(appConfig.captureMode === 'videoguestbook' && appConfig.vgThankYouEnabled);
-        });
-    })();
-    // Opens the disclaimer modal; resolves true (accepted) or false (rejected)
-    function showDisclaimerDialog(header, text, org) {
-        return new Promise(resolve => {
-            const rendered = _renderDisclaimerText(text, org);
-            $('#disclaimer-modal-title').text(header || 'Do you agree with the terms?');
-            // Convert newlines to paragraphs
-            const html = rendered.split(/\n\n+/).map(p => `<p>${$('<div>').text(p.trim()).html()}</p>`).join('');
-            $('#disclaimer-modal-body').html(html);
-            $('#disclaimer-overlay').css('display', 'flex');
-
-            function cleanup() {
-                $('#disclaimer-overlay').hide();
-                $('#btn-disclaimer-accept, #btn-disclaimer-reject').off('click.disc');
-            }
-            $('#btn-disclaimer-accept').one('click.disc', function() { cleanup(); resolve(true); });
-            $('#btn-disclaimer-reject').one('click.disc', function() { cleanup(); resolve(false); });
-        });
-    }
 
     // --- Share Button Handlers ---
     $('#btn-share-done').on('click', hideShareOverlay);
@@ -869,8 +468,9 @@ $(document).ready(function() {
         } catch(e) { console.error('Failed to load background image', e); }
     }
 
+    $('#btn-pick-bg').on('click', () => $('#upload-template-bg').click());
     $('#bg-empty-state').on('click', function(e) {
-        document.getElementById('upload-template-bg').click();
+        if (!$(e.target).is('button')) $('#upload-template-bg').click();
     });
     $('#upload-template-bg').on('change', async function() {
         if (this.files[0]) await applyBgImage(this.files[0]);
@@ -938,7 +538,7 @@ $(document).ready(function() {
         return _driveRequestToken();
     }
 
-    // Find or create the root PB folder; returns folderId
+    // Find or create the target folder; returns folderId
     async function _driveEnsureFolder(token) {
         if (appConfig._driveFolderId) return appConfig._driveFolderId;
         const folderName = appConfig.driveFolderName || 'Photo Booth Captures';
@@ -952,7 +552,7 @@ $(document).ready(function() {
             appConfig._driveFolderId = searchData.files[0].id;
             return appConfig._driveFolderId;
         }
-        // Create the root folder
+        // Create the folder
         const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
             method: 'POST',
             headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -963,37 +563,11 @@ $(document).ready(function() {
         return folder.id;
     }
 
-    // Find or create the event sub-folder inside the root PB folder; returns its folderId
-    async function _driveEnsureEventFolder(token) {
-        if (appConfig._driveEventFolderId) return appConfig._driveEventFolderId;
-        const parentId = await _driveEnsureFolder(token);
-        const subName = appConfig.eventName ? appConfig.eventName.trim() : 'Default Event';
-        const query = encodeURIComponent(
-            `mimeType='application/vnd.google-apps.folder' and name='${subName.replace(/'/g,"\\'")}' and '${parentId}' in parents and trashed=false`
-        );
-        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
-            headers: { Authorization: 'Bearer ' + token }
-        });
-        const searchData = await searchResp.json();
-        if (searchData.files && searchData.files.length > 0) {
-            appConfig._driveEventFolderId = searchData.files[0].id;
-            return appConfig._driveEventFolderId;
-        }
-        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: subName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
-        });
-        const sub = await createResp.json();
-        appConfig._driveEventFolderId = sub.id;
-        return sub.id;
-    }
-
-    // Upload a Blob to Drive inside the event sub-folder
+    // Upload a Blob to Drive inside the configured folder
     async function uploadToDrive(blob, filename) {
         try {
             const token = await _driveEnsureToken();
-            const folderId = await _driveEnsureEventFolder(token);
+            const folderId = await _driveEnsureFolder(token);
             const meta = JSON.stringify({ name: filename, parents: [folderId] });
             const form = new FormData();
             form.append('metadata', new Blob([meta], { type: 'application/json' }));
@@ -1029,44 +603,12 @@ $(document).ready(function() {
         }
     }
 
-    // Upload a video blob using the VG-specific Drive credentials into the event sub-folder
-    async function uploadVgToDrive(blob, filename) {
-        try {
-            const token = await _vgDriveEnsureToken();
-            const folderId = await _vgDriveEnsureEventFolder(token);
-            const mimeType = blob.type || 'video/webm';
-            const meta = JSON.stringify({ name: filename, parents: [folderId] });
-            const form = new FormData();
-            form.append('metadata', new Blob([meta], { type: 'application/json' }));
-            form.append('file', blob, filename);
-            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
-                method: 'POST',
-                headers: { Authorization: 'Bearer ' + token },
-                body: form
-            });
-            if (!resp.ok) {
-                if (resp.status === 401) {
-                    appConfig._vgDriveAccessToken = null;
-                    const token2 = await _vgDriveEnsureToken();
-                    const form2 = new FormData();
-                    form2.append('metadata', new Blob([meta], { type: 'application/json' }));
-                    form2.append('file', blob, filename);
-                    const resp2 = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {
-                        method: 'POST',
-                        headers: { Authorization: 'Bearer ' + token2 },
-                        body: form2
-                    });
-                    if (!resp2.ok) throw new Error('Drive VG upload failed after retry');
-                    return resp2.json();
-                }
-                throw new Error('Drive VG upload failed');
-            }
-            return resp.json();
-        } catch (e) {
-            console.warn('[Drive] VG upload error:', e.message);
-            throw e;
-        }
-    }
+    // UI: toggle
+    $('#toggle-drive-upload').on('change', function() {
+        appConfig.driveUpload = this.checked;
+        $('#toggle-drive-label').text(this.checked ? 'ON' : 'OFF');
+        $(this.closest('label')).toggleClass('is-on', this.checked);
+    });
 
     // UI: Folder name input
     $('#drive-folder-name').on('input', function() {
@@ -1108,320 +650,13 @@ $(document).ready(function() {
         _driveSetStatus('Signed out', false);
     });
 
-    // ─── VIDEO GUESTBOOK — INDEPENDENT GOOGLE DRIVE AUTH ──────────────────────
-
-    function _getVgDriveClientId() {
-        const el = document.getElementById('vg-drive-client-id');
-        const inputVal = el ? el.value.trim() : '';
-        // Fall back to VG config, then PB config, then the hardcoded constant
-        return inputVal || appConfig.vgDriveClientId || _getDriveClientId();
-    }
-
-    function _vgDriveSetStatus(msg, isErr = false) {
-        const el = document.getElementById('vg-drive-auth-status');
-        if (el) { el.textContent = msg; el.style.color = isErr ? '#dc2626' : '#6b7280'; }
-    }
-
-    async function _vgDriveRequestToken() {
-        return new Promise((resolve, reject) => {
-            const clientId = _getVgDriveClientId();
-            const client = google.accounts.oauth2.initTokenClient({
-                client_id: clientId,
-                scope: 'https://www.googleapis.com/auth/drive.file',
-                callback: (response) => {
-                    if (response.error) { reject(new Error(response.error)); return; }
-                    appConfig._vgDriveAccessToken = response.access_token;
-                    resolve(response.access_token);
-                }
-            });
-            client.requestAccessToken();
-        });
-    }
-
-    async function _vgDriveEnsureToken() {
-        if (appConfig._vgDriveAccessToken) return appConfig._vgDriveAccessToken;
-        return _vgDriveRequestToken();
-    }
-
-    async function _vgDriveEnsureFolder(token) {
-        if (appConfig._vgDriveFolderId) return appConfig._vgDriveFolderId;
-        const folderName = appConfig.vgDriveFolderName || 'Video Guestbook Captures';
-        const query = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${folderName.replace(/'/g,"\\'")}' and trashed=false`);
-        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
-            headers: { Authorization: 'Bearer ' + token }
-        });
-        const searchData = await searchResp.json();
-        if (searchData.files && searchData.files.length > 0) {
-            appConfig._vgDriveFolderId = searchData.files[0].id;
-            return appConfig._vgDriveFolderId;
-        }
-        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder' })
-        });
-        const folder = await createResp.json();
-        appConfig._vgDriveFolderId = folder.id;
-        return folder.id;
-    }
-
-    // Find or create the event sub-folder inside the root VG folder; returns its folderId
-    async function _vgDriveEnsureEventFolder(token) {
-        if (appConfig._vgDriveEventFolderId) return appConfig._vgDriveEventFolderId;
-        const parentId = await _vgDriveEnsureFolder(token);
-        const subName = appConfig.eventName ? appConfig.eventName.trim() : 'Default Event';
-        const query = encodeURIComponent(
-            `mimeType='application/vnd.google-apps.folder' and name='${subName.replace(/'/g,"\\'")}' and '${parentId}' in parents and trashed=false`
-        );
-        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
-            headers: { Authorization: 'Bearer ' + token }
-        });
-        const searchData = await searchResp.json();
-        if (searchData.files && searchData.files.length > 0) {
-            appConfig._vgDriveEventFolderId = searchData.files[0].id;
-            return appConfig._vgDriveEventFolderId;
-        }
-        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: subName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
-        });
-        const sub = await createResp.json();
-        appConfig._vgDriveEventFolderId = sub.id;
-        return sub.id;
-    }
-
-    // UI: VG Drive folder name input
-    $('#vg-drive-folder-name').on('input', function() {
-        appConfig.vgDriveFolderName = this.value.trim() || 'Video Guestbook Captures';
-        appConfig._vgDriveFolderId = null; // reset folder cache
-    });
-
-    // UI: VG Drive client ID input
-    $('#vg-drive-client-id').on('input', function() {
-        appConfig.vgDriveClientId = this.value.trim();
-        appConfig._vgDriveAccessToken = null;
-        appConfig._vgDriveFolderId = null;
-    });
-
-    // UI: VG Drive sign-in
-    $('#btn-vg-drive-signin').on('click', async function() {
-        const btn = $(this);
-        const clientId = _getVgDriveClientId();
-        if (!clientId || clientId.startsWith('YOUR_CLIENT')) {
-            _vgDriveSetStatus('Enter your Client ID above first.', true);
-            return;
-        }
-        btn.prop('disabled', true).text('Signing in…');
-        _vgDriveSetStatus('');
-        try {
-            await _vgDriveRequestToken();
-            _vgDriveSetStatus('✓ Connected — videos will upload automatically', false);
-            btn.hide();
-            $('#btn-vg-drive-signout').show();
-        } catch (e) {
-            _vgDriveSetStatus('Sign-in failed: ' + e.message, true);
-        } finally {
-            btn.prop('disabled', false).text('Sign in with Google');
-        }
-    });
-
-    // UI: VG Drive sign-out
-    $('#btn-vg-drive-signout').on('click', function() {
-        if (appConfig._vgDriveAccessToken) {
-            google.accounts.oauth2.revoke(appConfig._vgDriveAccessToken, () => {});
-        }
-        appConfig._vgDriveAccessToken = null;
-        appConfig._vgDriveFolderId = null;
-        $(this).hide();
-        $('#btn-vg-drive-signin').show();
-        _vgDriveSetStatus('Signed out', false);
-    });
-
-    // ──────────────────────────────────────────────────────────────────────────
-
-    // --- Wireless / IP Camera stream (MJPEG URL) ---
-    let _wirelessState = null; // { img, canvas, stopRaf }
-
-    /**
-     * Opens a wireless MJPEG camera stream using an <img> element bridged
-     * through a canvas. <img> supports MJPEG (multipart/x-mixed-replace) on
-     * both Chrome desktop and Android Chrome, unlike <video>.
-     * canvas.captureStream(30) produces a real MediaStream so the rest of the
-     * app (VG recorder, PB capture canvas) works without changes.
-     */
-    async function _openWirelessCameraStream(url, isVgMode) {
-        _stopWirelessHiddenVideo(); // clean up any previous state
-
-        // ── Mixed-content guard ───────────────────────────────────────────────
-        // On Android Chrome, an HTTPS page cannot read pixels from an HTTP <img>
-        // element (canvas taint). Warn early so the user understands why.
-        try {
-            const camProto = new URL(url).protocol;
-            if (window.location.protocol === 'https:' && camProto === 'http:') {
-                throw new Error(
-                    'The app is running over HTTPS but your camera URL is HTTP.\n\n' +
-                    'Android Chrome blocks reading from HTTP sources on HTTPS pages.\n\n' +
-                    'Solutions:\n' +
-                    '• Use the installed APK (no HTTPS restriction).\n' +
-                    '• Enable HTTPS in your IP camera app settings.\n' +
-                    '• Access the app from http:// (e.g. a local network address) instead of GitHub Pages.'
-                );
-            }
-        } catch (e) {
-            if (e.message.includes('HTTPS') || e.message.includes('APK')) throw e;
-            // new URL() threw (invalid URL) — let it proceed and fail naturally
-        }
-
-        const img = document.createElement('img');
-        img.style.cssText = 'position:fixed;opacity:0;pointer-events:none;left:0;top:0;width:1px;height:1px;';
-        document.body.appendChild(img);
-
-        // ── Step 1: Try with crossOrigin = 'anonymous' first ─────────────────
-        // Setting crossOrigin keeps the canvas origin-clean when the IP camera
-        // server sends Access-Control-Allow-Origin (IP Webcam for Android sends
-        // * by default). Must be set BEFORE assigning img.src.
-        let corsSuccess = await new Promise(function(resolve) {
-            const timeout = setTimeout(function() { resolve(false); }, 8000);
-            img.crossOrigin = 'anonymous';
-            img.onload  = function() { clearTimeout(timeout); resolve(true); };
-            img.onerror = function() { clearTimeout(timeout); resolve(false); };
-            img.src = url;
-        });
-
-        // ── Step 2: If CORS failed, retry without crossOrigin ─────────────────
-        if (!corsSuccess) {
-            img.removeAttribute('crossOrigin');
-            const fallbackResult = await new Promise(function(resolve) {
-                const timeout = setTimeout(function() {
-                    img.src = '';
-                    if (img.parentNode) img.parentNode.removeChild(img);
-                    resolve('timeout');
-                }, 15000);
-                img.onload  = function() { clearTimeout(timeout); resolve('no-cors'); };
-                img.onerror = function() {
-                    clearTimeout(timeout);
-                    if (img.parentNode) img.parentNode.removeChild(img);
-                    resolve('error');
-                };
-                img.src = url + (url.includes('?') ? '&' : '?') + '_cb=' + Date.now();
-            });
-
-            if (fallbackResult === 'timeout' || fallbackResult === 'error') {
-                throw new Error(
-                    'Cannot reach wireless camera at: ' + url + '\n\n' +
-                    'Check that:\n' +
-                    '• Your camera app (e.g. IP Webcam) is running\n' +
-                    '• The tablet and the camera are on the same Wi-Fi network\n' +
-                    '• The URL and port number are correct'
-                );
-            }
-
-            // Image loaded WITHOUT CORS headers — canvas will be tainted.
-            // captureStream() would throw SecurityError. Surface a clear message.
-            if (img.parentNode) img.parentNode.removeChild(img);
-            throw new Error(
-                'Your IP camera does not send CORS headers, so the browser blocks canvas capture.\n\n' +
-                'Fix in IP Webcam (Android):\n' +
-                '  Settings → Video preferences → tick "CORS support"\n\n' +
-                'Or access this app from http:// instead of https:// to avoid the restriction.'
-            );
-        }
-
-        // ── Canvas bridge (only reached when CORS succeeded) ──────────────────
-        const canvas = document.createElement('canvas');
-        canvas.width  = img.naturalWidth  || 1280;
-        canvas.height = img.naturalHeight || 720;
-        canvas.style.cssText = 'position:fixed;opacity:0;pointer-events:none;left:0;top:0;';
-        document.body.appendChild(canvas);
-        const ctx = canvas.getContext('2d');
-
-        // Call captureStream() BEFORE drawFrame() to guarantee the canvas is
-        // origin-clean at the moment the stream is created.
-        const captureFn = canvas.captureStream || canvas.mozCaptureStream;
-        if (!captureFn) {
-            if (img.parentNode) img.parentNode.removeChild(img);
-            if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
-            throw new Error('canvas.captureStream() is not supported by this browser.');
-        }
-
-        let videoStream;
-        try {
-            videoStream = captureFn.call(canvas, 30);
-        } catch (secErr) {
-            if (img.parentNode) img.parentNode.removeChild(img);
-            if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
-            throw new Error(
-                'Canvas capture failed even after CORS handshake.\n\n' +
-                'Try enabling "CORS support" in your IP camera app and reconnecting.\n\n' +
-                '(detail: ' + secErr.message + ')'
-            );
-        }
-
-        let _rafId = null;
-        function drawFrame() {
-            if (img.naturalWidth > 0) {
-                if (canvas.width  !== img.naturalWidth)  canvas.width  = img.naturalWidth;
-                if (canvas.height !== img.naturalHeight) canvas.height = img.naturalHeight;
-                ctx.drawImage(img, 0, 0);
-            }
-            _rafId = requestAnimationFrame(drawFrame);
-        }
-        drawFrame();
-
-        _wirelessState = {
-            img,
-            canvas,
-            stopRaf: () => { if (_rafId) cancelAnimationFrame(_rafId); }
-        };
-
-        if (isVgMode) {
-            const audioConstraint = appConfig.vgSelectedMicId
-                ? { deviceId: { exact: appConfig.vgSelectedMicId } } : true;
-            try {
-                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
-                return new MediaStream([...videoStream.getVideoTracks(), ...audioStream.getAudioTracks()]);
-            } catch (_) {
-                return videoStream; // no mic — proceed without audio
-            }
-        }
-        return videoStream;
-    }
-
-    function _stopWirelessHiddenVideo() {
-        if (_wirelessState) {
-            _wirelessState.stopRaf();
-            _wirelessState.img.src = '';
-            if (_wirelessState.img.parentNode) _wirelessState.img.parentNode.removeChild(_wirelessState.img);
-            if (_wirelessState.canvas.parentNode) _wirelessState.canvas.parentNode.removeChild(_wirelessState.canvas);
-            _wirelessState = null;
-        }
-    }
-
     // --- Camera selection ---
     async function populateCameraList() {
-        const diag = document.getElementById('camera-diag');
-        const setDiag = (html) => { if (diag) diag.innerHTML = html; };
-        setDiag('<span style="color:#9ca3af;">Scanning for cameras…</span>');
-
         try {
-            // getUserMedia must be called first so the browser reveals device labels.
-            // Try both front and environment to unlock labels for all physical cameras
-            // (some Android tablets require a separate permission call per camera group).
-            const permResults = await Promise.allSettled([
-                navigator.mediaDevices.getUserMedia({ video: true }),
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-            ]);
-            permResults.forEach(r => {
-                if (r.status === 'fulfilled') r.value.getTracks().forEach(t => t.stop());
-            });
-            const allDenied = permResults.every(r => r.status === 'rejected');
-            if (allDenied) {
-                const err = permResults[0].reason;
-                setDiag(`<span style="color:#dc2626;">⚠ Camera permission denied (${err.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
-                document.getElementById('camera-select').innerHTML = '<option value="">— permission denied —</option>';
-                return;
-            }
+            // A brief getUserMedia is needed first so labels are not empty (browser security)
+            await navigator.mediaDevices.getUserMedia({ video: true })
+                .then(s => s.getTracks().forEach(t => t.stop()))
+                .catch(() => {});
 
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoInputs = devices.filter(d => d.kind === 'videoinput');
@@ -1431,122 +666,31 @@ $(document).ready(function() {
             sel.innerHTML = '';
             if (videoInputs.length === 0) {
                 sel.innerHTML = '<option value="">No cameras found</option>';
-                setDiag('<span style="color:#dc2626;">⚠ No cameras detected. Plug in the camera, make sure it is in UVC mode, then tap Refresh.</span>');
                 return;
             }
-
             videoInputs.forEach((cam, i) => {
                 const opt = document.createElement('option');
                 opt.value = cam.deviceId;
                 opt.textContent = cam.label || ('Camera ' + (i + 1));
-                // Auto-prefer USB/external cameras and known action cameras (DJI, GoPro, etc.)
-                const lbl = (cam.label || '').toLowerCase();
+                // Auto-prefer USB/external cameras
                 if (!appConfig.selectedCameraId &&
-                    (lbl.includes('usb') || lbl.includes('external') ||
-                     lbl.includes('dji') || lbl.includes('action') || lbl.includes('gopro'))) {
+                    (cam.label.toLowerCase().includes('usb') || cam.label.toLowerCase().includes('external'))) {
                     opt.selected = true;
                 }
                 sel.appendChild(opt);
             });
-
             // Restore previously chosen camera if still available
             if (prevValue && [...sel.options].some(o => o.value === prevValue)) {
                 sel.value = prevValue;
             }
             appConfig.selectedCameraId = sel.value;
-
-            // Build diagnostic list so user can see what the browser actually found
-            const lines = videoInputs.map((cam, i) => {
-                const lbl = cam.label || '<em style="color:#f59e0b;">no label — tap Refresh after granting camera permission</em>';
-                const shortId = cam.deviceId ? ' <span style="color:#9ca3af;font-family:monospace;font-size:0.72rem;">' + cam.deviceId.slice(0, 10) + '…</span>' : '';
-                return `<span style="display:block;">[${i + 1}] ${lbl}${shortId}</span>`;
-            }).join('');
-            const hint = videoInputs.some(c => !c.label)
-                ? '<span style="color:#f59e0b; display:block; margin-top:3px;">⚠ Some cameras have no label — grant camera permission and tap Refresh.</span>'
-                : '';
-            setDiag(`<span style="font-weight:600;">${videoInputs.length} camera(s) detected:</span><span style="display:block; margin-top:2px;">${lines}</span>${hint}`);
-
         } catch (e) {
-            setDiag(`<span style="color:#dc2626;">⚠ Error: ${e.name} — ${e.message}</span>`);
             console.warn('populateCameraList:', e);
         }
     }
 
     $('#camera-select').on('change', function() {
         appConfig.selectedCameraId = this.value;
-    });
-
-    // --- Test Camera (live preview in settings) ---
-    let _testStream = null;
-
-    function _stopCameraTest() {
-        if (_testStream) { _testStream.getTracks().forEach(t => t.stop()); _testStream = null; }
-        _stopWirelessHiddenVideo();
-        const pv = document.getElementById('camera-test-preview');
-        if (pv) { pv.srcObject = null; pv.src = ''; pv.load(); }
-        $('#camera-test-card').hide();
-        $('#btn-test-camera').text('▶ Test');
-    }
-
-    $('#btn-test-camera').on('click', async function() {
-        const btn = $(this);
-        if (_testStream || $('#camera-test-card').is(':visible')) { _stopCameraTest(); return; }
-
-        btn.prop('disabled', true).text('Opening…');
-        const diag = document.getElementById('camera-diag');
-        const pv = document.getElementById('camera-test-preview');
-
-        // ── Wireless / IP Camera URL path ─────────────────────────────────────
-        if (appConfig.wirelessCameraUrl) {
-            try {
-                const stream = await _openWirelessCameraStream(appConfig.wirelessCameraUrl, false);
-                _testStream = stream; // stored so _stopCameraTest() stops tracks & cleanup
-                pv.srcObject = stream;
-                const info = document.getElementById('camera-test-info');
-                if (info) info.textContent = `Wireless stream: ${appConfig.wirelessCameraUrl}`;
-                $('#camera-test-card').show();
-                btn.prop('disabled', false).text('⏹ Stop Test');
-            } catch (e) {
-                _stopWirelessHiddenVideo();
-                btn.prop('disabled', false).text('▶ Test');
-                if (diag) diag.innerHTML = `<span style="color:#dc2626;">⚠ Could not open wireless stream: ${e.message}</span>`;
-            }
-            return;
-        }
-
-        // ── Normal getUserMedia path ──────────────────────────────────────────
-        try {
-            const deviceId = appConfig.selectedCameraId;
-            const constraints = deviceId
-                ? { video: { deviceId: { exact: deviceId } } }
-                : { video: appConfig.facingMode ? { facingMode: appConfig.facingMode } : true };
-
-            _testStream = await navigator.mediaDevices.getUserMedia(constraints);
-            pv.srcObject = _testStream;
-
-            // Show resolution info once track is active
-            const track = _testStream.getVideoTracks()[0];
-            const settings = track.getSettings();
-            const info = document.getElementById('camera-test-info');
-            if (info) info.textContent = `${track.label}  ·  ${settings.width || '?'} × ${settings.height || '?'}`;
-
-            $('#camera-test-card').show();
-            btn.prop('disabled', false).text('⏹ Stop Test');
-        } catch (e) {
-            btn.prop('disabled', false).text('▶ Test');
-            const msg = `<span style="color:#dc2626;">⚠ Could not open camera: <strong>${e.name}</strong> — ${e.message}</span>`;
-            if (diag) diag.innerHTML = msg;
-        }
-    });
-
-    $('#btn-stop-camera-test').on('click', function() { _stopCameraTest(); });
-
-    // Wireless URL input handlers
-    $('#pb-wireless-camera-url').on('input', function() {
-        appConfig.wirelessCameraUrl = this.value.trim();
-    });
-    $('#vg-wireless-camera-url').on('input', function() {
-        appConfig.vgWirelessCameraUrl = this.value.trim();
     });
 
     // --- Capture Settings Tabs ---
@@ -1560,7 +704,6 @@ $(document).ready(function() {
             if (tabEl) tabEl.style.display = '';
             // Set capture mode based on active tab
             appConfig.captureMode = (target === 'cap-tab-videoguestbook') ? 'videoguestbook' : 'photobooth';
-            updateAdvancedNavForMode(appConfig.captureMode);
         });
     });
 
@@ -1577,690 +720,52 @@ $(document).ready(function() {
         appConfig.vgPromptText = this.value;
     });
 
-    // --- VG Preview toggle ---
-    (function initVgPreview() {
-        function _syncPreviewToggle() {
-            const on = appConfig.vgPreviewEnabled;
-            $('#toggle-vg-preview').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
-            $('#toggle-vg-preview-label').text(on ? 'ON' : 'OFF');
-        }
-        _syncPreviewToggle();
-        $('#toggle-vg-preview').on('change', function() {
-            appConfig.vgPreviewEnabled = this.checked;
-            $('#toggle-vg-preview-label').text(this.checked ? 'ON' : 'OFF');
-            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-        });
-    })();
-
-    // --- VG Camera Selection ---
-    async function populateVgCameraList() {
-        const diag = document.getElementById('vg-camera-diag');
-        const setDiag = (html) => { if (diag) diag.innerHTML = html; };
-        setDiag('<span style="color:#9ca3af;">Scanning for cameras…</span>');
-
+    // --- Video Guestbook Frame/Background ---
+    async function applyVgFrameImage(file) {
         try {
-            const permResults = await Promise.allSettled([
-                navigator.mediaDevices.getUserMedia({ video: true }),
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-            ]);
-            permResults.forEach(r => {
-                if (r.status === 'fulfilled') r.value.getTracks().forEach(t => t.stop());
-            });
-            const allDenied = permResults.every(r => r.status === 'rejected');
-            if (allDenied) {
-                const err = permResults[0].reason;
-                setDiag(`<span style="color:#dc2626;">⚠ Camera permission denied (${err.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
-                document.getElementById('vg-camera-select').innerHTML = '<option value="">— permission denied —</option>';
-                return;
-            }
-
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoInputs = devices.filter(d => d.kind === 'videoinput');
-            const sel = document.getElementById('vg-camera-select');
-            const prevValue = appConfig.vgSelectedCameraId || sel.value;
-
-            sel.innerHTML = '';
-            if (videoInputs.length === 0) {
-                sel.innerHTML = '<option value="">No cameras found</option>';
-                setDiag('<span style="color:#dc2626;">⚠ No cameras detected. Plug in the camera, make sure it is in UVC mode, then tap Refresh.</span>');
-                return;
-            }
-
-            videoInputs.forEach((cam, i) => {
-                const opt = document.createElement('option');
-                opt.value = cam.deviceId;
-                opt.textContent = cam.label || ('Camera ' + (i + 1));
-                const lbl = (cam.label || '').toLowerCase();
-                if (!appConfig.vgSelectedCameraId &&
-                    (lbl.includes('usb') || lbl.includes('external') ||
-                     lbl.includes('dji') || lbl.includes('action') || lbl.includes('gopro'))) {
-                    opt.selected = true;
-                }
-                sel.appendChild(opt);
-            });
-
-            if (prevValue && [...sel.options].some(o => o.value === prevValue)) {
-                sel.value = prevValue;
-            }
-            appConfig.vgSelectedCameraId = sel.value;
-
-            const lines = videoInputs.map((cam, i) => {
-                const lbl = cam.label || '<em style="color:#f59e0b;">no label — tap Refresh after granting camera permission</em>';
-                const shortId = cam.deviceId ? ' <span style="color:#9ca3af;font-family:monospace;font-size:0.72rem;">' + cam.deviceId.slice(0, 10) + '…</span>' : '';
-                return `<span style="display:block;">[${i + 1}] ${lbl}${shortId}</span>`;
-            }).join('');
-            const hint = videoInputs.some(c => !c.label)
-                ? '<span style="color:#f59e0b; display:block; margin-top:3px;">⚠ Some cameras have no label — grant camera permission and tap Refresh.</span>'
-                : '';
-            setDiag(`<span style="font-weight:600;">${videoInputs.length} camera(s) detected:</span><span style="display:block; margin-top:2px;">${lines}</span>${hint}`);
-        } catch (e) {
-            setDiag(`<span style="color:#dc2626;">⚠ Error: ${e.name} — ${e.message}</span>`);
-            console.warn('populateVgCameraList:', e);
-        }
+            const img = await loadImageFromFile(file);
+            appConfig.vgFrameBg = img;
+            $('#vg-frame-thumb').attr('src', img.src);
+            $('#vg-frame-filename').text(file.name);
+            $('#vg-frame-dims').text(img.naturalWidth + ' × ' + img.naturalHeight + ' px');
+            $('#vg-frame-empty-state').hide();
+            $('#vg-frame-preview-state').show();
+            // Show the overlay on the live viewfinder
+            $('#vg-frame-overlay').attr('src', img.src).show();
+        } catch(e) { console.error('Failed to load VG frame image', e); }
     }
 
-    $('#vg-camera-select').on('change', function() {
-        appConfig.vgSelectedCameraId = this.value;
+    $('#btn-pick-vg-frame').on('click', () => $('#upload-vg-frame').click());
+    $('#vg-frame-empty-state').on('click', function(e) {
+        if (!$(e.target).is('button')) $('#upload-vg-frame').click();
     });
-
-    $('input[name="vg-facing-mode"]').on('change', function() {
-        appConfig.vgFacingMode = this.value;
-        $('#vg-camera-specific-card').toggle(this.value === '');
-    });
-
-    $('#btn-refresh-vg-cameras').on('click', function() {
-        const btn = $(this);
-        btn.prop('disabled', true).text('Refreshing…');
-        populateVgCameraList().finally(() => btn.prop('disabled', false).text('↺ Refresh'));
-    });
-
-    // --- VG Test Camera ---
-    let _vgTestStream = null;
-
-    function _stopVgCameraTest() {
-        if (_vgTestStream) { _vgTestStream.getTracks().forEach(t => t.stop()); _vgTestStream = null; }
-        _stopWirelessHiddenVideo();
-        const pv = document.getElementById('vg-camera-test-preview');
-        if (pv) { pv.srcObject = null; pv.src = ''; pv.load(); }
-        $('#vg-camera-test-card').hide();
-        $('#btn-test-vg-camera').text('▶ Test');
-    }
-
-    $('#btn-test-vg-camera').on('click', async function() {
-        const btn = $(this);
-        if (_vgTestStream || $('#vg-camera-test-card').is(':visible')) { _stopVgCameraTest(); return; }
-
-        btn.prop('disabled', true).text('Opening…');
-        const diag = document.getElementById('vg-camera-diag');
-        const pv = document.getElementById('vg-camera-test-preview');
-
-        // ── Wireless / IP Camera URL path ─────────────────────────────────────
-        if (appConfig.vgWirelessCameraUrl) {
-            try {
-                const stream = await _openWirelessCameraStream(appConfig.vgWirelessCameraUrl, false);
-                _vgTestStream = stream;
-                pv.srcObject = stream;
-                const info = document.getElementById('vg-camera-test-info');
-                if (info) info.textContent = `Wireless stream: ${appConfig.vgWirelessCameraUrl}`;
-                $('#vg-camera-test-card').show();
-                btn.prop('disabled', false).text('⏹ Stop Test');
-            } catch (e) {
-                _stopWirelessHiddenVideo();
-                btn.prop('disabled', false).text('▶ Test');
-                if (diag) diag.innerHTML = `<span style="color:#dc2626;">⚠ Could not open wireless stream: ${e.message}</span>`;
-            }
-            return;
-        }
-
-        // ── Normal getUserMedia path ──────────────────────────────────────────
-        try {
-            const deviceId = appConfig.vgSelectedCameraId;
-            const constraints = deviceId && appConfig.vgFacingMode === ''
-                ? { video: { deviceId: { exact: deviceId } } }
-                : { video: appConfig.vgFacingMode ? { facingMode: appConfig.vgFacingMode } : true };
-
-            _vgTestStream = await navigator.mediaDevices.getUserMedia(constraints);
-            pv.srcObject = _vgTestStream;
-
-            const track = _vgTestStream.getVideoTracks()[0];
-            const settings = track.getSettings();
-            const info = document.getElementById('vg-camera-test-info');
-            if (info) info.textContent = `${track.label}  ·  ${settings.width || '?'} × ${settings.height || '?'}`;
-
-            $('#vg-camera-test-card').show();
-            btn.prop('disabled', false).text('⏹ Stop Test');
-        } catch (e) {
-            btn.prop('disabled', false).text('▶ Test');
-            const msg = `<span style="color:#dc2626;">⚠ Could not open camera: <strong>${e.name}</strong> — ${e.message}</span>`;
-            if (diag) diag.innerHTML = msg;
-        }
-    });
-
-    $('#btn-stop-vg-camera-test').on('click', function() { _stopVgCameraTest(); });
-
-    // --- VG Audio Device Selection (Microphone & Speaker) ---
-    async function populateVgAudioDeviceList() {
-        const diag = document.getElementById('vg-audio-diag');
-        const setDiag = (html) => { if (diag) diag.innerHTML = html; };
-        setDiag('<span style="color:#9ca3af;">Scanning for audio devices…</span>');
-
-        try {
-            // Request audio permission so browsers expose device labels.
-            let permStream = null;
-            try {
-                permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            } catch (e) {
-                setDiag(`<span style="color:#dc2626;">⚠ Microphone permission denied (${e.name}). Grant microphone access in browser settings, then tap ↺ Refresh.</span>`);
-                return;
-            } finally {
-                if (permStream) permStream.getTracks().forEach(t => t.stop());
-            }
-
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const audioInputs  = devices.filter(d => d.kind === 'audioinput');
-            const audioOutputs = devices.filter(d => d.kind === 'audiooutput');
-
-            // --- Microphone dropdown ---
-            const micSel = document.getElementById('vg-mic-select');
-            const prevMicVal = appConfig.vgSelectedMicId;
-            micSel.innerHTML = '<option value="">— Default microphone —</option>';
-            audioInputs.forEach((dev, i) => {
-                const opt = document.createElement('option');
-                opt.value = dev.deviceId;
-                opt.textContent = dev.label || ('Microphone ' + (i + 1));
-                micSel.appendChild(opt);
-            });
-            if (prevMicVal && [...micSel.options].some(o => o.value === prevMicVal)) {
-                micSel.value = prevMicVal;
-            }
-            appConfig.vgSelectedMicId = micSel.value;
-
-            // --- Speaker dropdown ---
-            const spkSel = document.getElementById('vg-speaker-select');
-            const prevSpkVal = appConfig.vgSelectedSpeakerId;
-            spkSel.innerHTML = '<option value="">— Default speaker —</option>';
-            if (audioOutputs.length === 0) {
-                const noDevOpt = document.createElement('option');
-                noDevOpt.value = '';
-                noDevOpt.disabled = true;
-                noDevOpt.textContent = 'No output devices found';
-                spkSel.appendChild(noDevOpt);
-            } else {
-                audioOutputs.forEach((dev, i) => {
-                    const opt = document.createElement('option');
-                    opt.value = dev.deviceId;
-                    opt.textContent = dev.label || ('Speaker ' + (i + 1));
-                    spkSel.appendChild(opt);
-                });
-            }
-            if (prevSpkVal && [...spkSel.options].some(o => o.value === prevSpkVal)) {
-                spkSel.value = prevSpkVal;
-            }
-            appConfig.vgSelectedSpeakerId = spkSel.value;
-
-            // Diagnostic summary
-            const inputLines  = audioInputs.map((d, i) => `<span style="display:block;">[${i + 1}] ${d.label || '<em style="color:#f59e0b;">no label</em>'}</span>`).join('');
-            const outputLines = audioOutputs.map((d, i) => `<span style="display:block;">[${i + 1}] ${d.label || '<em style="color:#f59e0b;">no label</em>'}</span>`).join('');
-            const noOutputHint = audioOutputs.length === 0
-                ? '<span style="color:#f59e0b; display:block; margin-top:3px;">⚠ No audio output devices found — speaker selection not available on this browser/device.</span>'
-                : '';
-            setDiag(
-                `<span style="font-weight:600;">${audioInputs.length} mic(s) · ${audioOutputs.length} output(s) detected:</span>` +
-                (inputLines  ? `<span style="display:block; margin-top:2px;">${inputLines}</span>`  : '') +
-                (outputLines ? `<span style="display:block; margin-top:2px;">${outputLines}</span>` : '') +
-                noOutputHint
-            );
-        } catch (e) {
-            setDiag(`<span style="color:#dc2626;">⚠ Error: ${e.name} — ${e.message}</span>`);
-            console.warn('populateVgAudioDeviceList:', e);
-        }
-    }
-
-    $('#vg-mic-select').on('change', function() {
-        appConfig.vgSelectedMicId = this.value;
-    });
-
-    $('#vg-speaker-select').on('change', function() {
-        appConfig.vgSelectedSpeakerId = this.value;
-    });
-
-    $('#btn-refresh-vg-audio').on('click', function() {
-        const btn = $(this);
-        btn.prop('disabled', true).text('Refreshing…');
-        populateVgAudioDeviceList().finally(() => btn.prop('disabled', false).text('↺ Refresh'));
-    });
-
-    // --- VG Storage — checkbox toggles (both local + drive can be active) ---
-    $('#chk-vg-save-local').on('change', function() {
-        appConfig.vgSaveLocal = this.checked;
-        if (this.checked) {
-            $('#vg-local-folder-config').slideDown();
-        } else {
-            $('#vg-local-folder-config').slideUp();
-        }
-    });
-
-    $('#chk-vg-save-drive').on('change', function() {
-        appConfig.vgSaveDrive = this.checked;
-        if (this.checked) {
-            $('#vg-drive-config').slideDown();
-        } else {
-            $('#vg-drive-config').slideUp();
-        }
-        _updateEventNameWarnings();
-    });
-
-    $('#btn-vg-select-dir').on('click', async function() {
-        try {
-            if (!window.showDirectoryPicker) {
-                alert("Your browser does not support seamless folder saving. Videos will be saved via standard downloads.");
-                return;
-            }
-            vgDirectoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-            $('#vg-dir-status').text(`Saving to: /${vgDirectoryHandle.name}`);
-        } catch (err) {
-            if (err && err.name !== 'AbortError') {
-                $('#vg-dir-status').text('Folder selection failed. Videos will be saved via standard downloads.');
-            }
-            console.log("Directory picker cancelled or failed.", err);
-        }
-    });
-
-    // Populate VG camera and audio device lists on load
-    populateVgCameraList();
-    populateVgAudioDeviceList();
-
-    // --- Advanced nav visibility based on capture mode ---
-    function updateAdvancedNavForMode(mode) {
-        const isVg = mode === 'videoguestbook';
-        $('#nav-photo-layout, #nav-template, #nav-printer').toggle(!isVg);
-        $('#nav-video-overlay, #nav-stitch').toggle(isVg);
-        $('#nav-vg-thankyou').toggle(isVg);
-        $('#nav-vg-prompts').toggle(isVg);
-        // If a photo-only panel is active while switching to VG, go to dashboard
-        if (isVg) {
-            const active = $('.nav-item.active').data('target');
-            if (active === 'panel-photo-layout' || active === 'panel-template' || active === 'panel-printer') {
-                $('[data-target="panel-dashboard"]').trigger('click');
-            }
-        }
-        // If VG-only panels are active while switching to PhotoBooth, go to dashboard
-        if (!isVg) {
-            const active = $('.nav-item.active').data('target');
-            if (active === 'panel-video-overlay' || active === 'panel-stitch' || active === 'panel-vg-thankyou' || active === 'panel-vg-prompts') {
-                $('[data-target="panel-dashboard"]').trigger('click');
-            }
-        }
-    }
-
-    // --- Video Overlay upload ---
-    $('#vg-overlay-drop').on('click', function(e) {
-        if ($(e.target).closest('#vg-overlay-remove').length) return;
-        $('#vg-overlay-input')[0].click();
-    });
-
-    $('#vg-overlay-input').on('change', function() {
-        const file = this.files[0];
+    $('#upload-vg-frame').on('change', async function() {
+        if (this.files[0]) await applyVgFrameImage(this.files[0]);
         this.value = '';
-        if (!file) return;
-        if (file.type !== 'image/png') {
-            _showOverlayError('Please select a PNG file.');
-            return;
-        }
-        const url = URL.createObjectURL(file);
-        const testImg = new Image();
-        testImg.onload = function() {
-            if (testImg.naturalWidth !== 1920 || testImg.naturalHeight !== 1080) {
-                URL.revokeObjectURL(url);
-                _showOverlayError(`Image must be exactly 1920 × 1080 px (yours is ${testImg.naturalWidth} × ${testImg.naturalHeight} px).`);
-                return;
-            }
-            _applyVgOverlay(url, file.name, testImg, file);
-        };
-        testImg.onerror = function() {
-            URL.revokeObjectURL(url);
-            _showOverlayError('Could not read the image. Please try another file.');
-        };
-        testImg.src = url;
+    });
+    $('#btn-clear-vg-frame').on('click', function() {
+        appConfig.vgFrameBg = null;
+        $('#vg-frame-preview-state').hide();
+        $('#vg-frame-empty-state').show();
+        $('#vg-frame-overlay').hide().attr('src', '');
     });
 
-    // Drag-and-drop on overlay drop zone
-    $('#vg-overlay-drop').on('dragover', function(e) { e.preventDefault(); $(this).addClass('drag-over'); });
-    $('#vg-overlay-drop').on('dragleave drop', function(e) { e.preventDefault(); $(this).removeClass('drag-over'); });
-    $('#vg-overlay-drop').on('drop', function(e) {
-        const file = e.originalEvent.dataTransfer.files[0];
-        if (!file) return;
-        $('#vg-overlay-input')[0].files;  // clear
-        // Reuse input change logic via synthetic assignment
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        const inp = document.getElementById('vg-overlay-input');
-        inp.files = dt.files;
-        $(inp).trigger('change');
-    });
-
-    $('#vg-overlay-remove').on('click', function(e) {
-        e.stopPropagation();
-        if (appConfig.vgOverlay) {
-            URL.revokeObjectURL(appConfig.vgOverlay.objectUrl);
-            appConfig.vgOverlay = null;
-        }
-        $('#vg-overlay-filled').hide();
-        $('#vg-overlay-empty').show();
-        $('#vg-overlay-thumb').attr('src', '');
-        $('#vg-overlay-live').hide().attr('src', '');
-        _clearOverlayError();
-    });
-
-    function _applyVgOverlay(url, filename, img, fileBlob) {
-        if (appConfig.vgOverlay) URL.revokeObjectURL(appConfig.vgOverlay.objectUrl);
-        appConfig.vgOverlay = { objectUrl: url, img };
-        $('#vg-overlay-thumb').attr('src', url);
-        $('#vg-overlay-filename').text(filename);
-        $('#vg-overlay-empty').hide();
-        $('#vg-overlay-filled').show();
-        _clearOverlayError();
-    }
-
-    function _showOverlayError(msg) {
-        $('#vg-overlay-error').text(msg).show();
-    }
-    function _clearOverlayError() {
-        $('#vg-overlay-error').hide().text('');
-    }
-
-    // =========================================================
-    // STITCH PANEL
-    // =========================================================
-
-    // Refresh the stitch grid whenever the panel is opened
-    $(document).on('click', '[data-target="panel-stitch"]', function() {
-        _refreshStitchPanel();
-    });
-
-    function _refreshStitchPanel() {
-        const grid    = document.getElementById('stitch-grid');
-        const empty   = document.getElementById('stitch-empty');
-        const ctrls   = document.getElementById('stitch-controls');
-        const result  = document.getElementById('stitch-result');
-        const progWrap= document.getElementById('stitch-progress-wrap');
-
-        result.style.display   = 'none';
-        progWrap.style.display = 'none';
-        $('#btn-stitch-run').prop('disabled', true);
-        $('#stitch-selected-count').text('');
-
-        if (capturedVideos.length === 0) {
-            empty.style.display = 'block';
-            grid.style.display  = 'none';
-            ctrls.style.display = 'none';
-            return;
-        }
-
-        empty.style.display = 'none';
-        grid.style.display  = 'grid';
-        ctrls.style.display = 'block';
-
-        grid.innerHTML = '';
-        capturedVideos.forEach((src, idx) => {
-            const num = capturedVideos.length - idx;
-            const item = document.createElement('div');
-            item.className = 'stitch-item';
-            item.dataset.idx = idx;
-            item.innerHTML = `
-                <label class="stitch-item-label">
-                    <input type="checkbox" class="stitch-check" data-idx="${idx}">
-                    <div class="stitch-thumb-wrap">
-                        <video src="${src}" preload="metadata" muted playsinline class="stitch-thumb"></video>
-                        <div class="gallery-play-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                        </div>
-                        <div class="stitch-check-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
-                    </div>
-                    <span class="stitch-item-label-text">Clip #${num}</span>
-                </label>`;
-            grid.appendChild(item);
+    // Drag-and-drop on VG frame upload zone
+    const vgFrameZone = document.getElementById('vg-frame-upload-zone');
+    if (vgFrameZone) {
+        vgFrameZone.addEventListener('dragover', e => { e.preventDefault(); vgFrameZone.classList.add('drag-over'); });
+        vgFrameZone.addEventListener('dragleave', () => vgFrameZone.classList.remove('drag-over'));
+        vgFrameZone.addEventListener('drop', async e => {
+            e.preventDefault();
+            vgFrameZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (!file || !file.type.match(/image\/(jpe?g|png)/)) return;
+            await applyVgFrameImage(file);
         });
-
-        _updateStitchButtonState();
-    }
-
-    function _updateStitchButtonState() {
-        const count = $('.stitch-check:checked').length;
-        $('#btn-stitch-run').prop('disabled', count < 2);
-        $('#stitch-selected-count').text(count > 0 ? `${count} clip${count !== 1 ? 's' : ''} selected` : '');
-    }
-
-    $(document).on('change', '.stitch-check', function() {
-        const idx = $(this).data('idx');
-        $(this).closest('.stitch-item').toggleClass('stitch-item-selected', this.checked);
-        _updateStitchButtonState();
-    });
-
-    $('#btn-stitch-select-all').on('click', function() {
-        $('.stitch-check').prop('checked', true);
-        $('.stitch-item').addClass('stitch-item-selected');
-        _updateStitchButtonState();
-    });
-
-    $('#btn-stitch-clear').on('click', function() {
-        $('.stitch-check').prop('checked', false);
-        $('.stitch-item').removeClass('stitch-item-selected');
-        _updateStitchButtonState();
-    });
-
-    let _stitchResultBlob = null;
-
-    $('#btn-stitch-run').on('click', async function() {
-        const indices = [];
-        $('.stitch-check:checked').each(function() { indices.push(parseInt($(this).data('idx'))); });
-        if (indices.length < 2) return;
-
-        const urls = indices.map(i => capturedVideos[i]);
-        const progWrap = document.getElementById('stitch-progress-wrap');
-        const statusEl = document.getElementById('stitch-status-text');
-        const barEl    = document.getElementById('stitch-progress-bar');
-        const resultEl = document.getElementById('stitch-result');
-        const resultFn = document.getElementById('stitch-result-filename');
-
-        progWrap.style.display = 'block';
-        resultEl.style.display = 'none';
-        $('#btn-stitch-run').prop('disabled', true);
-        _stitchResultBlob = null;
-
-        try {
-            const { blob, ext: stitchExt } = await _stitchVideos(urls, function(pct, label) {
-                barEl.style.width = pct + '%';
-                statusEl.textContent = label;
-            });
-
-            _stitchResultBlob = blob;
-
-            // Build filename
-            const now = new Date();
-            const ts = now.getFullYear()
-                + String(now.getMonth() + 1).padStart(2, '0')
-                + String(now.getDate()).padStart(2, '0')
-                + '_'
-                + String(now.getHours()).padStart(2, '0')
-                + String(now.getMinutes()).padStart(2, '0')
-                + String(now.getSeconds()).padStart(2, '0');
-            const prefix = appConfig.eventName
-                ? appConfig.eventName.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '')
-                : 'guestbook';
-            const filename = `${prefix}_${ts}_Final.${stitchExt}`;
-
-            // Save to VG folder or trigger download
-            try {
-                if (vgDirectoryHandle) {
-                    const fh = await vgDirectoryHandle.getFileHandle(filename, { create: true });
-                    const wr = await fh.createWritable();
-                    await wr.write(blob);
-                    await wr.close();
-                    resultFn.textContent = `Saved to folder as: ${filename}`;
-                } else {
-                    resultFn.textContent = `File ready: ${filename} — click Download below`;
-                }
-            } catch (saveErr) {
-                console.error('[Stitch] Save error:', saveErr);
-                resultFn.textContent = `Could not save to folder. Click Download below.`;
-            }
-
-            progWrap.style.display = 'none';
-            barEl.style.width = '0%';
-            resultEl.style.display = 'block';
-            $('#btn-stitch-run').prop('disabled', false);
-
-            // Wire download button
-            $('#btn-stitch-download').off('click.stitch').on('click.stitch', function() {
-                if (!_stitchResultBlob) return;
-                const dlUrl = URL.createObjectURL(_stitchResultBlob);
-                const a = document.createElement('a');
-                a.href = dlUrl;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
-            });
-
-        } catch (err) {
-            console.error('[Stitch] Error:', err);
-            statusEl.textContent = `Error: ${err.message}`;
-            barEl.style.width = '0%';
-            $('#btn-stitch-run').prop('disabled', false);
-        }
-    });
-
-    /**
-     * Stitch an array of video blob URLs sequentially by replaying each on a
-     * canvas and recording the canvas stream + audio via AudioContext.
-     * Returns a Blob (video/mp4 or video/webm).
-     */
-    async function _stitchVideos(urls, onProgress) {
-        const W = 1920, H = 1080;
-        const canvas = document.createElement('canvas');
-        canvas.width  = W;
-        canvas.height = H;
-        const ctx = canvas.getContext('2d');
-
-        // Pick best supported MIME for the final file (prefer mp4)
-        const mimeType = MediaRecorder.isTypeSupported('video/mp4')
-            ? 'video/mp4'
-            : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-            ? 'video/webm;codecs=vp8,opus'
-            : 'video/webm';
-        const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
-
-        // AudioContext routes each clip's audio into the recorder
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') await audioCtx.resume();
-        const audioDest = audioCtx.createMediaStreamDestination();
-
-        const chunks = [];
-        const canvasStream = canvas.captureStream(30);
-        // Combine canvas video + AudioContext audio destination into one stream
-        const combinedStream = new MediaStream([
-            ...canvasStream.getVideoTracks(),
-            ...audioDest.stream.getAudioTracks()
-        ]);
-        const recorder = new MediaRecorder(combinedStream, {
-            mimeType,
-            videoBitsPerSecond: 4000000
-        });
-        recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
-
-        const recorderDone = new Promise(resolve => {
-            recorder.onstop = () => resolve(new Blob(chunks, { type: mimeType }));
-        });
-        recorder.start(200);
-
-        for (let i = 0; i < urls.length; i++) {
-            onProgress(
-                Math.round((i / urls.length) * 90),
-                `Rendering clip ${i + 1} of ${urls.length}…`
-            );
-            await _playVideoOntoCanvas(ctx, urls[i], W, H, audioCtx, audioDest);
-        }
-
-        onProgress(95, 'Finalising…');
-        recorder.stop();
-        const resultBlob = await recorderDone;
-        audioCtx.close();
-        onProgress(100, 'Done!');
-        return { blob: resultBlob, ext };
-    }
-
-    /**
-     * Play a video (by blob URL) frame-by-frame onto a canvas context,
-     * routing its audio through the provided AudioContext destination.
-     * Resolves when the video ends.
-     */
-    function _playVideoOntoCanvas(ctx, url, W, H, audioCtx, audioDest) {
-        return new Promise((resolve, reject) => {
-            const vid = document.createElement('video');
-            vid.src = url;
-            vid.muted = false; // audio must be unmuted so AudioContext can capture it
-            vid.volume = 1;
-            vid.playsInline = true;
-
-            let rafId = null;
-            let sourceNode = null;
-
-            function drawFrame() {
-                if (vid.paused || vid.ended) return;
-                ctx.drawImage(vid, 0, 0, W, H);
-                rafId = requestAnimationFrame(drawFrame);
-            }
-
-            vid.onloadedmetadata = function() {
-                // Route this clip's audio into the shared AudioContext destination
-                if (audioCtx && audioDest) {
-                    try {
-                        sourceNode = audioCtx.createMediaElementSource(vid);
-                        sourceNode.connect(audioDest);
-                    } catch (e) {
-                        console.warn('[Stitch] Audio routing error:', e);
-                    }
-                }
-                vid.play().then(() => {
-                    drawFrame();
-                }).catch(reject);
-            };
-
-            vid.onended = function() {
-                if (rafId) cancelAnimationFrame(rafId);
-                ctx.drawImage(vid, 0, 0, W, H); // draw final frame
-                if (sourceNode) { try { sourceNode.disconnect(); } catch (_) {} }
-                vid.src = '';
-                resolve();
-            };
-
-            vid.onerror = function() {
-                if (rafId) cancelAnimationFrame(rafId);
-                reject(new Error(`Failed to load video: ${url}`));
-            };
-        });
-    }
-
-
-
-    /**
-     * Draw a video/image element scaled to fill (cover) a canvas rectangle,
-     * centring and cropping just like CSS object-fit:cover.
-     */
-    function _drawCoverOnCanvas(ctx, src, dx, dy, dw, dh) {
-        const sw = src.videoWidth  || src.naturalWidth  || dw;
-        const sh = src.videoHeight || src.naturalHeight || dh;
-        const scale = Math.max(dw / sw, dh / sh);
-        const nw = sw * scale;
-        const nh = sh * scale;
-        ctx.drawImage(src, dx + (dw - nw) / 2, dy + (dh - nh) / 2, nw, nh);
     }
 
     $('input[name="facing-mode"]').on('change', function() {
         appConfig.facingMode = this.value;
-        $('#camera-specific-card').toggle(this.value === '');
     });
 
     $('#btn-refresh-cameras').on('click', function() {
@@ -2272,116 +777,31 @@ $(document).ready(function() {
     // Populate on load (non-blocking)
     populateCameraList();
 
-    // --- Screen Wake Lock (keeps display on while Kiosk Mode is active) ---
-    async function acquireKioskWakeLock() {
-        if (!('wakeLock' in navigator)) return;
-        try {
-            kioskWakeLock = await navigator.wakeLock.request('screen');
-            kioskWakeLock.addEventListener('release', function() { kioskWakeLock = null; }, { once: true });
-        } catch (e) {
-            console.warn('[WakeLock] Could not acquire:', e.message);
-        }
-    }
-
-    function releaseKioskWakeLock() {
-        if (kioskWakeLock) {
-            kioskWakeLock.release().catch(function(e) {
-                console.warn('[WakeLock] Could not release:', e.message);
-            });
-            kioskWakeLock = null;
-        }
-    }
-
-    // Re-acquire the lock when the page becomes visible again (browser releases it on hide)
-    document.addEventListener('visibilitychange', async function() {
-        if (document.visibilityState === 'visible' && $('#kiosk-mode').is(':visible') && !kioskWakeLock) {
-            await acquireKioskWakeLock();
-        }
-    });
-
     // --- Launch Kiosk ---
-    // Mobile duplicate button delegates to the main launch button
-    $('#btn-launch-booth-mobile').on('click', function() { $('#btn-launch-booth').trigger('click'); });
-
     $('#btn-launch-booth').on('click', async function() {
         appConfig.layout = $('input[name="layout"]:checked').val();
         const launchBtn = $(this);
         launchBtn.prop('disabled', true).text('Initializing Hardware...');
-        _stopCameraTest();    // always release the test preview stream before launching
-        _stopVgCameraTest(); // also release VG test preview stream
 
         try {
-            const isVgMode = appConfig.captureMode === 'videoguestbook';
-
-            // ── Wireless / IP Camera URL path ─────────────────────────────────
-            const wirelessUrl = isVgMode ? appConfig.vgWirelessCameraUrl : appConfig.wirelessCameraUrl;
-            const usesWireless = wirelessUrl &&
-                ((isVgMode && appConfig.vgFacingMode === '') || (!isVgMode && appConfig.facingMode === ''));
-
-            if (usesWireless) {
-                // canvas.captureStream() from the <img>+canvas bridge works on both
-                // Chrome desktop and Android Chrome; <video src=MJPEG> does not.
-                currentStream = await _openWirelessCameraStream(wirelessUrl, isVgMode);
-                if (isVgMode) {
-                    const vgFeedEl = $('#vg-camera-feed')[0];
-                    vgFeedEl.srcObject = currentStream;
-                    if (appConfig.vgSelectedSpeakerId && typeof vgFeedEl.setSinkId === 'function') {
-                        try { await vgFeedEl.setSinkId(appConfig.vgSelectedSpeakerId); } catch (_) {}
-                    }
-                } else {
-                    $('#camera-feed')[0].srcObject = currentStream;
-                    applyKioskViewfinderSize();
-                }
-                $('#admin-dashboard').hide();
-                $('#kiosk-mode').fadeIn(400);
-                resetToWelcomeScreen();
-                await acquireKioskWakeLock();
-                return;
-            }
-
-        // ── Normal getUserMedia path ─────────────────────────────────────
-            // Build video constraints: specific device takes priority, then facingMode.
-            // Video Guestbook uses a lower resolution (1080p max) to prevent encoder
-            // lag and stuttering; PhotoBooth uses the highest available for still quality.
-            const videoConstraints = isVgMode
-                ? { width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 30, max: 30 } }
-                : { width: { ideal: 4096 }, height: { ideal: 3072 } };
+            // Build video constraints: specific device takes priority, then facingMode
+            const videoConstraints = {
+                width:  { ideal: 4096 },
+                height: { ideal: 3072 }
+            };
             if (appConfig.selectedCameraId && appConfig.facingMode === '') {
                 videoConstraints.deviceId = { exact: appConfig.selectedCameraId };
             } else if (appConfig.facingMode) {
                 videoConstraints.facingMode = { ideal: appConfig.facingMode };
             }
-            // For VG mode, override with VG-specific camera settings
-            if (isVgMode) {
-                delete videoConstraints.deviceId;
-                delete videoConstraints.facingMode;
-                if (appConfig.vgSelectedCameraId && appConfig.vgFacingMode === '') {
-                    videoConstraints.deviceId = { exact: appConfig.vgSelectedCameraId };
-                } else if (appConfig.vgFacingMode) {
-                    videoConstraints.facingMode = { ideal: appConfig.vgFacingMode };
-                }
-            }
-            const audioConstraint = (isVgMode && appConfig.vgSelectedMicId)
-                ? { deviceId: { exact: appConfig.vgSelectedMicId } }
-                : true;
-            const constraints = isVgMode
-                ? { video: videoConstraints, audio: audioConstraint }
+            const constraints = appConfig.captureMode === 'videoguestbook'
+                ? { video: videoConstraints, audio: true }
                 : { video: videoConstraints };
 
             currentStream = await navigator.mediaDevices.getUserMedia(constraints);
 
             if (appConfig.captureMode === 'videoguestbook') {
-                const vgFeedEl = $('#vg-camera-feed')[0];
-                vgFeedEl.srcObject = currentStream;
-                // Route playback audio to the selected Bluetooth speaker (setSinkId is
-                // not universally supported — silently ignore if unavailable).
-                if (appConfig.vgSelectedSpeakerId && typeof vgFeedEl.setSinkId === 'function') {
-                    try {
-                        await vgFeedEl.setSinkId(appConfig.vgSelectedSpeakerId);
-                    } catch (e) {
-                        console.warn('[VG] setSinkId failed (speaker not available):', e.message);
-                    }
-                }
+                $('#vg-camera-feed')[0].srcObject = currentStream;
             } else {
                 $('#camera-feed')[0].srcObject = currentStream;
                 applyKioskViewfinderSize();
@@ -2390,18 +810,10 @@ $(document).ready(function() {
             $('#admin-dashboard').hide();
             $('#kiosk-mode').fadeIn(400);
             resetToWelcomeScreen();
-            await acquireKioskWakeLock();
+            
         } catch (err) {
             console.error("Camera error:", err);
-            let hint = '';
-            if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                hint = '\n\nThe selected camera was not found. Unplug and replug the USB cable, confirm UVC mode is active on the camera, then tap Refresh in Camera Settings.';
-            } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                hint = '\n\nCamera permission was denied. Go to Android Settings → Apps → Chrome → Permissions → Camera → Allow, then try again.';
-            } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-                hint = '\n\nThe camera is in use by another app, or the USB connection dropped. Unplug and replug, close other camera apps, then try again.';
-            }
-            alert(`Camera error: ${err.name}\n${err.message}${hint}`);
+            alert("Camera access denied. Cannot start kiosk mode.");
         } finally {
             launchBtn.prop('disabled', false).text('🚀 Launch Kiosk Mode');
         }
@@ -2409,14 +821,7 @@ $(document).ready(function() {
 
     $('#btn-exit-kiosk').on('click', function() {
         stopVgRecordingIfActive();
-        releaseKioskWakeLock();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
-        // Clear any wireless src streams on the feed elements
-        ['camera-feed', 'vg-camera-feed'].forEach(function(id) {
-            const el = document.getElementById(id);
-            if (el && el.src && !el.srcObject) { el.pause(); el.src = ''; el.load(); }
-        });
-        _stopWirelessHiddenVideo();
         $('#kiosk-mode').hide();
         $('#vg-booth').hide();
         $('#live-booth').hide();
@@ -2424,29 +829,13 @@ $(document).ready(function() {
     });
 
     // --- Kiosk Logic (PhotoBooth) ---
-    $('#btn-start-session').on('click', async function() {
-        if (appConfig.disclaimerEnabled) {
-            const accepted = await showDisclaimerDialog(
-                appConfig.disclaimerHeader,
-                appConfig.disclaimerText,
-                appConfig.disclaimerOrg
-            );
-            if (!accepted) return; // session forfeited — do nothing, no saves
-        }
+    $('#btn-start-session').on('click', function() {
         $('#guest-welcome').addClass('hidden');
         setTimeout(triggerCaptureSequence, 500);
     });
 
     // --- Kiosk Logic (Video Guestbook) ---
-    $('#btn-start-vg-session').on('click', async function() {
-        if (appConfig.disclaimerEnabled) {
-            const accepted = await showDisclaimerDialog(
-                appConfig.disclaimerHeader,
-                appConfig.disclaimerText,
-                appConfig.disclaimerOrg
-            );
-            if (!accepted) return; // session forfeited — do nothing, no saves
-        }
+    $('#btn-start-vg-session').on('click', function() {
         $('#guest-welcome').addClass('hidden');
         setTimeout(triggerVgSequence, 500);
     });
@@ -2493,7 +882,6 @@ $(document).ready(function() {
     function resetToWelcomeScreen() {
         // Hide capture screens
         $('#photo-canvas').hide();
-        // Show the camera feed element
         $('#camera-feed').show();
         $('#processing-overlay').hide();
         $('#live-booth').hide();
@@ -2504,17 +892,6 @@ $(document).ready(function() {
         $('#btn-start-session').toggle(!isVg);
         $('#btn-start-vg-session').toggle(isVg);
 
-        // Update the subtitle to reflect current mode
-        if (isVg) {
-            $('#live-ws-subtitle').text(appConfig.vgPromptText || $('#setting-vg-prompt').val());
-        } else {
-            $('#live-ws-subtitle').text(appConfig.welcomeSubtitle || $('#edit-subtitle').val());
-        }
-
-        // Show recent captures button if there are any captures
-        const totalCaptures = capturedPhotos.length + capturedVideos.length;
-        $('#btn-recent-captures').toggle(totalCaptures > 0);
-
         $('#guest-welcome').removeClass('hidden');
         // Resume welcome video if it was paused
         const kv = $('#ws-video-bg')[0];
@@ -2523,162 +900,11 @@ $(document).ready(function() {
         }
     }
 
-    // ==================== RECENT CAPTURES KIOSK MODAL ====================
-    (function initRecentCapturesModal() {
-        let _rcmItems = []; // [{type:'photo'|'video', src:string}]
-        let _rcmIdx   = 0;
-
-        function _buildItems() {
-            _rcmItems = [];
-            capturedPhotos.forEach(function(src) { _rcmItems.push({ type: 'photo', src: src }); });
-            capturedVideos.forEach(function(src) { _rcmItems.push({ type: 'video', src: src }); });
-        }
-
-        function _openModal() {
-            _buildItems();
-            const $modal = $('#recent-captures-modal');
-            const $grid  = $('#rcm-grid').empty();
-            const $empty = $('#rcm-empty');
-            if (_rcmItems.length === 0) {
-                $empty.css('display', 'flex');
-                $grid.hide();
-            } else {
-                $empty.hide();
-                $grid.show();
-                _rcmItems.forEach(function(item, idx) {
-                    if (item.type === 'photo') {
-                        const $card = $('<div class="rcm-card" data-idx="' + idx + '"><img src="' + item.src + '" alt=""><div class="rcm-badge">📸</div></div>');
-                        $grid.append($card);
-                    } else {
-                        const $card = $('<div class="rcm-card rcm-card-video" data-idx="' + idx + '"><video src="' + item.src + '" muted playsinline preload="metadata"></video><div class="rcm-badge">🎬</div><div class="rcm-play-icon">▶</div></div>');
-                        $grid.append($card);
-                        // Seek to a frame for thumbnail
-                        const vid = $card.find('video')[0];
-                        vid.addEventListener('loadedmetadata', function() { vid.currentTime = Math.min(0.5, vid.duration * 0.1); }, { once: true });
-                    }
-                });
-            }
-            $modal.css('display', 'flex');
-        }
-
-        function _openLightbox(idx) {
-            _rcmIdx = idx;
-            _renderLightbox();
-            $('#rcm-lightbox').css('display', 'flex');
-        }
-
-        function _renderLightbox() {
-            const item = _rcmItems[_rcmIdx];
-            if (!item) return;
-            const $img   = $('#rcm-lb-img');
-            const $video = $('#rcm-lb-video');
-            if (item.type === 'photo') {
-                $video.hide().attr('src', '')[0].pause();
-                $img.attr('src', item.src).show();
-            } else {
-                $img.hide().attr('src', '');
-                $video.attr('src', item.src).show()[0].play();
-            }
-            $('#rcm-lb-counter').text((_rcmIdx + 1) + ' / ' + _rcmItems.length);
-            $('#btn-rcm-lb-prev').toggle(_rcmIdx > 0);
-            $('#btn-rcm-lb-next').toggle(_rcmIdx < _rcmItems.length - 1);
-        }
-
-        function _closeLightbox() {
-            $('#rcm-lb-video')[0].pause();
-            $('#rcm-lightbox').hide();
-        }
-
-        // Event bindings
-        $('#btn-recent-captures').on('click', function(e) {
-            e.stopPropagation();
-            _openModal();
-        });
-
-        $('#btn-close-rcm').on('click', function() {
-            _closeLightbox();
-            $('#recent-captures-modal').hide();
-        });
-
-        $(document).on('click', '.rcm-card', function() {
-            _openLightbox(parseInt($(this).data('idx'), 10));
-        });
-
-        $('#btn-rcm-lb-close').on('click', _closeLightbox);
-
-        $('#btn-rcm-lb-prev').on('click', function() {
-            if (_rcmIdx > 0) { _rcmIdx--; _renderLightbox(); }
-        });
-
-        $('#btn-rcm-lb-next').on('click', function() {
-            if (_rcmIdx < _rcmItems.length - 1) { _rcmIdx++; _renderLightbox(); }
-        });
-    })();
-
-    // ==================== DRIVE: SET FILE PUBLIC ====================
-    // Makes a Drive file readable by anyone with the link (so QR scan works)
-    async function _driveSetPublic(token, fileId) {
-        try {
-            await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/permissions`, {
-                method: 'POST',
-                headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ role: 'reader', type: 'anyone' })
-            });
-        } catch (e) {
-            console.warn('[Drive] Could not set public permission:', e.message);
-        }
-    }
-    // ===============================================================
-
-    // ==================== QR CODE OVERLAY ==========================
-    let _currentPbDriveLink = null;  // stores Drive link for current PB capture
-    let _currentVgDriveLink = null;  // stores Drive link for current VG capture
-    let _qrInstance = null;
-
-    function showQrOverlay(url, caption) {
-        const container = document.getElementById('qr-code-container');
-        container.innerHTML = '';
-        if (_qrInstance) { try { _qrInstance.clear(); } catch(e) {} }
-        $('#qr-modal-title').text(caption || 'Scan to get your copy');
-        $('#qr-modal-url').text(url);
-        _qrInstance = new QRCode(container, {
-            text: url,
-            width: 240,
-            height: 240,
-            colorDark: '#111827',
-            colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M
-        });
-        $('#qr-overlay').css('display', 'flex');
-    }
-
-    $('#btn-qr-close').on('click', function() {
-        $('#qr-overlay').hide();
-    });
-
-    // PB share overlay — QR button
-    $('#btn-share-qr').on('click', function() {
-        if (_currentPbDriveLink) {
-            showQrOverlay(_currentPbDriveLink, 'Scan to download your photo');
-        }
-    });
-
-    // VG preview overlay — QR button
-    $('#btn-vg-qr').on('click', function() {
-        if (_currentVgDriveLink) {
-            showQrOverlay(_currentVgDriveLink, 'Scan to download your video');
-        }
-    });
-    // ===============================================================
-
     // ==================== SOCIAL SHARING ====================
     let _shareObjectUrl = null;
     let _shareCountdownTimer = null;
 
     function showShareOverlay(canvas, dataUrl) {
-        // Reset QR state for this new capture
-        _currentPbDriveLink = null;
-        $('#btn-share-qr').hide();
         $('#share-preview-img').attr('src', dataUrl);
         // Build a blob URL for the Web Share API (file-level sharing)
         canvas.toBlob(blob => {
@@ -2717,8 +943,8 @@ $(document).ready(function() {
         const previewCanvas = $('#photo-canvas')[0];
         const previewCtx = previewCanvas.getContext('2d');
 
-        const fW = video.videoWidth  || video.naturalWidth  || video.width;
-        const fH = video.videoHeight || video.naturalHeight || video.height;
+        const fW = video.videoWidth;
+        const fH = video.videoHeight;
 
         const { cWidth, cHeight, photoSlots } = computeLayout(fW, fH);
 
@@ -2798,75 +1024,19 @@ $(document).ready(function() {
     let _vgElapsed = 0;
 
     let _vgFrameAnimId = null; // rAF id for canvas compositing loop
-    let _vgSaving = false;     // guard: prevents saveVgVideo from running twice per session
 
     function stopVgRecordingIfActive() {
-        // Null out immediately so a second call (e.g. max-timer + user tap race)
-        // cannot call .stop() on the same recorder again.
-        const recorder = _vgMediaRecorder;
-        _vgMediaRecorder = null;
-        if (recorder && recorder.state !== 'inactive') {
-            try {
-                recorder.stop();
-            } catch (e) {
-                // If stop() throws (e.g. InvalidStateError), restore the reference
-                // so cleanup can still be attempted later.
-                _vgMediaRecorder = recorder;
-                console.warn('[VG] recorder.stop() threw:', e.message);
-            }
+        if (_vgMediaRecorder && _vgMediaRecorder.state !== 'inactive') {
+            _vgMediaRecorder.stop();
         }
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
-        const ol = document.getElementById('vg-overlay-live');
-        if (ol) { ol.style.display = 'none'; }
     }
 
     async function triggerVgSequence() {
         $('#vg-booth').show();
         const videoEl = $('#vg-camera-feed')[0];
-
-        // Show live overlay image on viewfinder during recording
-        const overlayLive = document.getElementById('vg-overlay-live');
-        if (appConfig.vgOverlay) {
-            overlayLive.src = appConfig.vgOverlay.objectUrl;
-            overlayLive.style.display = '';
-        } else {
-            overlayLive.style.display = 'none';
-            overlayLive.src = '';
-        }
-
-        // Show question prompt if enabled
-        let _activePromptText = null;
-        if (appConfig.vgPromptsEnabled) {
-            const _prompts = [
-                ...(PROMPT_TEMPLATES[appConfig.vgPromptCategory] || []),
-                ...appConfig.vgCustomPrompts
-            ];
-            if (_prompts.length > 0) {
-                _activePromptText = _prompts[Math.floor(Math.random() * _prompts.length)];
-                const _secs = Math.max(3, Math.min(10, Math.round(_activePromptText.trim().split(/\s+/).length / 3.3)));
-                const _qEl  = document.getElementById('vg-question-overlay');
-                const _bar  = document.getElementById('vg-question-timer-bar');
-                document.getElementById('vg-question-text').textContent = _activePromptText;
-                _bar.style.transition = 'none';
-                _bar.style.width = '100%';
-                _qEl.style.display = 'flex';
-                await new Promise(r => setTimeout(r, 60)); // allow paint before transition starts
-                _bar.style.transition = 'width ' + _secs + 's linear';
-                _bar.style.width = '0%';
-                await new Promise(r => setTimeout(r, _secs * 1000));
-                _qEl.style.display = 'none';
-            }
-        }
-
-        // Show prompt sidebar during countdown (so guest can still read it)
-        const _sidebarEl = document.getElementById('vg-prompt-sidebar');
-        const _sidebarTxt = document.getElementById('vg-prompt-sidebar-text');
-        if (_activePromptText && _sidebarEl) {
-            _sidebarTxt.textContent = _activePromptText;
-            _sidebarEl.style.display = 'flex';
-        }
 
         // Pre-record countdown
         const cdEl = document.getElementById('vg-countdown-overlay');
@@ -2876,74 +1046,53 @@ $(document).ready(function() {
             cdEl.classList.remove('cd-pop');
             void cdEl.offsetWidth; // reflow to restart animation
             cdEl.classList.add('cd-pop');
-            _playBeep(i === 1 ? 880 : 660, 0.12); // countdown beep
             await new Promise(r => setTimeout(r, 1000));
         }
         cdEl.style.display = 'none';
-        // Sidebar stays visible during recording (it's an HTML overlay — not burned into the video stream)
-
-        // Build the stream to record.
-        // If an overlay is configured, composite camera + overlay on a canvas
-        // and record the canvas stream (video) + audio from currentStream.
-        let recordStream = currentStream;
-        if (appConfig.vgOverlay) {
-            const canvas = document.getElementById('vg-record-canvas');
-            canvas.width  = 1920;
-            canvas.height = 1080;
-            const ctx = canvas.getContext('2d');
-            const overlayImg = appConfig.vgOverlay.img;
-
-            // rAF loop: draw camera frame then overlay
-            function compositeFrame() {
-                ctx.save();
-                // Mirror horizontally to match how selfie cameras appear on screen
-                ctx.translate(1920, 0);
-                ctx.scale(-1, 1);
-                ctx.drawImage(videoEl, 0, 0, 1920, 1080);
-                ctx.restore();
-                ctx.drawImage(overlayImg, 0, 0, 1920, 1080);
-                _vgFrameAnimId = requestAnimationFrame(compositeFrame);
-            }
-            compositeFrame();
-
-            const canvasVideoStream = canvas.captureStream(30);
-            const audioTracks = currentStream.getAudioTracks();
-            const combinedStream = new MediaStream([
-                ...canvasVideoStream.getVideoTracks(),
-                ...audioTracks
-            ]);
-            recordStream = combinedStream;
-        }
 
         // Start recording
         _vgChunks = [];
         _vgElapsed = 0;
-        _vgSaving = false; // reset save guard for this new recording session (also guards against a stale true from a previous session)
-        // Prefer mp4 (H.264+AAC) — widest compatibility for saved files.
-        // Fall back to webm on browsers that don't support mp4 recording.
-        const mimeType = MediaRecorder.isTypeSupported('video/mp4')
-            ? 'video/mp4'
-            : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-            ? 'video/webm;codecs=vp8,opus'
-            : MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
             ? 'video/webm;codecs=vp9,opus'
-            : 'video/webm';
+            : MediaRecorder.isTypeSupported('video/webm')
+            ? 'video/webm'
+            : 'video/mp4';
 
-        // Explicit bitrate caps prevent the encoder from saturating the CPU.
-        // 2.5 Mbps video + 128 kbps audio is more than enough for a guestbook clip.
-        const VG_VIDEO_BITRATE = 2500000; // 2.5 Mbps
-        const VG_AUDIO_BITRATE = 128000;  // 128 kbps
-        const recorderOptions = { mimeType, videoBitsPerSecond: VG_VIDEO_BITRATE, audioBitsPerSecond: VG_AUDIO_BITRATE };
-        try {
-            _vgMediaRecorder = new MediaRecorder(recordStream, recorderOptions);
-        } catch (e) {
-            console.warn('[VG] MediaRecorder with bitrate options failed, retrying with mimeType only:', e.message);
-            try {
-                _vgMediaRecorder = new MediaRecorder(recordStream, { mimeType });
-            } catch (e2) {
-                console.warn('[VG] MediaRecorder with mimeType failed, using browser defaults:', e2.message);
-                _vgMediaRecorder = new MediaRecorder(recordStream);
+        // When a frame/background is set, composite it onto a canvas and record that stream
+        // so the frame is embedded in the saved video file.
+        let recordStream = currentStream;
+        let stopCompositing = false;
+        if (appConfig.vgFrameBg) {
+            const vtrack = currentStream.getVideoTracks()[0];
+            const settings = vtrack ? vtrack.getSettings() : {};
+            const cw = settings.width  || videoEl.videoWidth  || 1280;
+            const ch = settings.height || videoEl.videoHeight || 720;
+            const compositeCanvas = document.createElement('canvas');
+            compositeCanvas.width  = cw;
+            compositeCanvas.height = ch;
+            const compCtx = compositeCanvas.getContext('2d');
+            const frameBg = appConfig.vgFrameBg;
+
+            function drawCompositeFrame() {
+                if (stopCompositing) return;
+                compCtx.drawImage(videoEl, 0, 0, cw, ch);
+                compCtx.drawImage(frameBg, 0, 0, cw, ch);
+                _vgFrameAnimId = requestAnimationFrame(drawCompositeFrame);
             }
+            drawCompositeFrame();
+
+            // Combine canvas video stream with the original audio track
+            const canvasStream = compositeCanvas.captureStream(30);
+            const audioTracks = currentStream.getAudioTracks();
+            audioTracks.forEach(t => canvasStream.addTrack(t));
+            recordStream = canvasStream;
+        }
+
+        try {
+            _vgMediaRecorder = new MediaRecorder(recordStream, { mimeType });
+        } catch (e) {
+            _vgMediaRecorder = new MediaRecorder(recordStream);
         }
 
         _vgMediaRecorder.ondataavailable = function(e) {
@@ -2951,15 +1100,10 @@ $(document).ready(function() {
         };
 
         _vgMediaRecorder.onstop = function() {
-            // Guard against onstop firing more than once (mobile browser quirk or
-            // double-stop race between the max-duration timer and the Stop button).
-            if (_vgSaving) return;
-            _vgSaving = true;
             clearInterval(_vgTimerInterval);
             clearTimeout(_vgMaxTimer);
+            stopCompositing = true;
             if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
-            overlayLive.style.display = 'none';
-            $('#vg-prompt-sidebar').hide();
             $('#vg-hud').hide();
             $('#vg-controls').hide();
             $('#vg-processing-overlay').fadeIn(200);
@@ -2971,11 +1115,6 @@ $(document).ready(function() {
         _vgMediaRecorder.start(500); // collect chunks every 500ms
         $('#vg-hud').show();
         $('#vg-controls').show();
-        // Re-assert prompt sidebar visibility during recording (DOM overlay — not in the recorded stream)
-        if (_activePromptText) {
-            const _sEl = document.getElementById('vg-prompt-sidebar');
-            if (_sEl) _sEl.style.display = 'flex';
-        }
 
         // Update HUD timer every second
         _vgTimerInterval = setInterval(function() {
@@ -2984,15 +1123,16 @@ $(document).ready(function() {
             const secs = _vgElapsed % 60;
             $('#vg-timer').text(mins + ':' + String(secs).padStart(2, '0'));
             const left = appConfig.vgMaxDuration - _vgElapsed;
-            const mLeft = Math.floor(left / 60);
-            const sLeft = left % 60;
-            const leftTxt = mLeft > 0 ? mLeft + ':' + String(sLeft).padStart(2, '0') + ' left' : left + 's left';
-            $('#vg-time-left').text(leftTxt).css('color', left <= 10 ? '#fca5a5' : '#fff');
+            if (left <= 10) {
+                $('#vg-time-left').text(left + 's left').show();
+            }
         }, 1000);
 
         // Auto-stop at max duration
         _vgMaxTimer = setTimeout(function() {
-            stopVgRecordingIfActive();
+            if (_vgMediaRecorder && _vgMediaRecorder.state !== 'inactive') {
+                _vgMediaRecorder.stop();
+            }
         }, appConfig.vgMaxDuration * 1000);
     }
 
@@ -3001,9 +1141,6 @@ $(document).ready(function() {
     });
 
     async function saveVgVideo(blob, ext) {
-        // Stop canvas compositing if it was active
-        if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
-
         const now = new Date();
         const ts = now.getFullYear()
             + String(now.getMonth() + 1).padStart(2, '0')
@@ -3020,53 +1157,26 @@ $(document).ready(function() {
         // Keep a blob URL in memory for gallery playback (intentionally not revoked)
         const galleryBlobUrl = URL.createObjectURL(blob);
         capturedVideos.unshift(galleryBlobUrl);
-        capturedVideoDriveLinks.unshift(null); // will be updated after Drive upload completes
         updateDashboardGallery();
-        // Broadcast thumbnail to Live Viewer peers (fire-and-forget)
-        lvBroadcastVideo(galleryBlobUrl, filename);
 
-        // Save locally (folder or download)
-        if (appConfig.vgSaveLocal) {
-            try {
-                if (vgDirectoryHandle) {
-                    const fileHandle = await vgDirectoryHandle.getFileHandle(filename, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(blob);
-                    await writable.close();
-                } else {
-                    const dlUrl = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = dlUrl;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
-                }
-            } catch (err) {
-                console.error('[VG] Save error:', err);
+        try {
+            if (directoryHandle) {
+                const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+                const writable = await fileHandle.createWritable();
+                await writable.write(blob);
+                await writable.close();
+            } else {
+                const dlUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = dlUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
             }
-        }
-
-        // Upload to Google Drive using VG-specific credentials if enabled
-        let _vgDriveLink = null;
-        if (appConfig.vgSaveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
-            uploadVgToDrive(blob, filename).then(async result => {
-                if (result && result.id) {
-                    await _driveSetPublic(appConfig._vgDriveAccessToken, result.id);
-                    _vgDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
-                    _currentVgDriveLink = _vgDriveLink;
-                    // Store link in gallery parallel array and show QR button in thumbnail
-                    capturedVideoDriveLinks[0] = _vgDriveLink;
-                    _appendGalleryQrBtn(0, 'video', _vgDriveLink);
-                    // Notify live viewer peers
-                    lvBroadcastDriveUpdate(filename, _vgDriveLink);
-                    // Show QR button if preview is still open
-                    if ($('#vg-preview-overlay').is(':visible')) {
-                        $('#btn-vg-qr').fadeIn(200);
-                    }
-                }
-            }).catch(e => console.warn('[Drive] VG upload failed:', e.message));
+        } catch (err) {
+            console.error('[VG] Save error:', err);
         }
 
         // Reset HUD state
@@ -3074,153 +1184,11 @@ $(document).ready(function() {
         $('#vg-timer').text('0:00');
         $('#vg-processing-overlay').fadeOut(200);
 
-        // Show preview with autoplay × 3, then close button
-        if (appConfig.vgPreviewEnabled) {
-            await showVgPreview(galleryBlobUrl);
-        }
-        if (appConfig.vgThankYouEnabled) {
-            await showVgThankYou();
-        }
+        // Brief thank-you pause then return to welcome
+        await new Promise(r => setTimeout(r, 1500));
         $('#vg-booth').hide();
         resetToWelcomeScreen();
     }
-    function showVgThankYou() {
-        return new Promise(resolve => {
-            const overlay  = document.getElementById('vg-thankyou-overlay');
-            const bgImg    = document.getElementById('vg-ty-bg-img');
-            const gradient = document.getElementById('vg-ty-gradient');
-            const doneBtn  = document.getElementById('btn-vg-ty-done');
-            const secs     = Math.max(2, appConfig.vgThankYouDuration || 5);
-
-            // Apply background image if configured
-            if (appConfig.vgThankYouImage) {
-                bgImg.src = appConfig.vgThankYouImage.objectUrl;
-                bgImg.style.display = '';
-                gradient.style.display = '';
-            } else {
-                bgImg.style.display = 'none';
-                bgImg.src = '';
-                gradient.style.display = 'none';
-            }
-
-            overlay.style.display = 'flex';
-            let timerId = null;
-
-            function advance() {
-                clearTimeout(timerId);
-                overlay.style.display = 'none';
-                doneBtn.removeEventListener('click', advance);
-                resolve();
-            }
-
-            doneBtn.addEventListener('click', advance);
-            timerId = setTimeout(advance, secs * 1000);
-        });
-    }
-    function showVgPreview(blobUrl) {
-        return new Promise(resolve => {
-            const overlay      = document.getElementById('vg-preview-overlay');
-            const video        = document.getElementById('vg-preview-video');
-            const closeBtn     = document.getElementById('btn-vg-preview-close');
-            const msg          = document.getElementById('vg-preview-msg');
-            const seekBar      = document.getElementById('vg-seek-bar');
-            const playPauseBtn = document.getElementById('btn-vg-play-pause');
-            const muteBtn      = document.getElementById('btn-vg-mute');
-            const timeDisplay  = document.getElementById('vg-time-display');
-            let loopCount = 0;
-
-            // Reset QR state for this new recording
-            _currentVgDriveLink = null;
-            $('#btn-vg-qr').hide();
-
-            // Helper: format seconds as M:SS
-            function fmtTime(s) {
-                if (!isFinite(s)) return '0:00';
-                const m = Math.floor(s / 60);
-                return m + ':' + String(Math.floor(s % 60)).padStart(2, '0');
-            }
-
-            video.src = blobUrl;
-            video.loop = false;
-            video.muted = false;
-            seekBar.value = 0;
-            timeDisplay.textContent = '0:00 / 0:00';
-            playPauseBtn.textContent = '⏸';
-            muteBtn.textContent = '🔊';
-            msg.style.display = '';
-            msg.textContent = 'Playing back your message…';
-            overlay.style.display = 'flex';
-
-            // Control bar event handlers
-            function onTimeUpdate() {
-                if (video.duration) {
-                    seekBar.value = (video.currentTime / video.duration) * 100;
-                    timeDisplay.textContent = fmtTime(video.currentTime) + ' / ' + fmtTime(video.duration);
-                }
-            }
-            function onLoadedMetadata() {
-                seekBar.value = 0;
-                timeDisplay.textContent = '0:00 / ' + fmtTime(video.duration);
-            }
-            function onSeek() {
-                if (video.duration) video.currentTime = (seekBar.value / 100) * video.duration;
-            }
-            function onPlayPause() {
-                if (video.paused) { video.play().catch(() => {}); } else { video.pause(); }
-            }
-            function onPlay()  { playPauseBtn.textContent = '⏸'; }
-            function onPause() { playPauseBtn.textContent = '▶'; }
-            function onMute() {
-                video.muted = !video.muted;
-                muteBtn.textContent = video.muted ? '🔇' : '🔊';
-            }
-
-            video.addEventListener('timeupdate', onTimeUpdate);
-            video.addEventListener('loadedmetadata', onLoadedMetadata);
-            video.addEventListener('play', onPlay);
-            video.addEventListener('pause', onPause);
-            seekBar.addEventListener('input', onSeek);
-            playPauseBtn.addEventListener('click', onPlayPause);
-            muteBtn.addEventListener('click', onMute);
-
-            function onEnded() {
-                loopCount++;
-                if (loopCount < 3) {
-                    video.currentTime = 0;
-                    video.play().catch(() => {});
-                } else {
-                    msg.style.display = 'none';
-                    playPauseBtn.textContent = '▶';
-                }
-            }
-            video.onended = onEnded;
-
-            function doClose() {
-                // Remove all control bar listeners
-                video.removeEventListener('timeupdate', onTimeUpdate);
-                video.removeEventListener('loadedmetadata', onLoadedMetadata);
-                video.removeEventListener('play', onPlay);
-                video.removeEventListener('pause', onPause);
-                seekBar.removeEventListener('input', onSeek);
-                playPauseBtn.removeEventListener('click', onPlayPause);
-                muteBtn.removeEventListener('click', onMute);
-                video.onended = null;
-                video.pause();
-                video.src = '';
-                overlay.style.display = 'none';
-                closeBtn.removeEventListener('click', doClose);
-                resolve();
-            }
-
-            closeBtn.addEventListener('click', doClose);
-
-            video.play().catch(() => {
-                msg.textContent = 'Tap play to preview your message.';
-                playPauseBtn.textContent = '▶';
-            });
-        });
-    }
-
     // =========================================================
 
     /**
@@ -3246,9 +1214,8 @@ $(document).ready(function() {
         }
 
         const src = source || video;
-        // Support both <video> (videoWidth) and <img> (naturalWidth) sources
-        const fW = src.videoWidth  || src.naturalWidth  || src.width;
-        const fH = src.videoHeight || src.naturalHeight || src.height;
+        const fW = src.width  || src.videoWidth;
+        const fH = src.height || src.videoHeight;
 
         const scale = Math.max(slotW / fW, slotH / fH);
         const srcW  = Math.round(slotW / scale);
@@ -3257,7 +1224,8 @@ $(document).ready(function() {
         const srcY  = Math.max(0, Math.round((fH - srcH) / 2));
 
         ctx.save();
-        // Mirror horizontally for selfie/getUserMedia cameras.
+        // Mirror horizontally — video feed is shown mirrored (selfie UX);
+        // the saved photo is also mirrored so text / pose reads naturally in prints.
         ctx.translate(x + slotW, y);
         ctx.scale(-1, 1);
         ctx.drawImage(src, srcX, srcY, srcW, srcH, 0, 0, slotW, slotH);
@@ -3273,8 +1241,7 @@ $(document).ready(function() {
 
         const filename = makeFilename();
 
-        // --- Save to local folder (or browser download as fallback) ---
-        if (appConfig.saveLocal) {
+        if (appConfig.storage === 'local') {
             try {
                 if (directoryHandle) {
                     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
@@ -3292,6 +1259,9 @@ $(document).ready(function() {
                     document.body.removeChild(downloadLink);
                 }
             } catch (err) { console.error('Save error:', err); }
+        } else {
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
+            await new Promise(r => setTimeout(r, 800));
         }
 
         // Print BEFORE showing preview
@@ -3304,34 +1274,14 @@ $(document).ready(function() {
         // SAVE IMAGE TO ADMIN DASHBOARD GALLERY
         const photoDataUrl = canvas.toDataURL('image/png', 0.8);
         capturedPhotos.unshift(photoDataUrl);
-        capturedPhotoDriveLinks.unshift(null); // will be updated after Drive upload completes
         updateDashboardGallery();
-        // Broadcast to Live Viewer peers (fire-and-forget)
-        lvBroadcastPhoto(photoDataUrl, filename);
 
-        // --- Upload to Google Drive (fire-and-forget, non-blocking) ---
-        // Store the Drive link so QR button can use it when upload completes
-        let _pbDriveLink = null;
-        if (appConfig.saveDrive && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
+        // AUTO-UPLOAD TO GOOGLE DRIVE (Method A) — fire-and-forget, non-blocking
+        if (appConfig.driveUpload && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
-                    const result = await uploadToDrive(blob, filename);
+                    await uploadToDrive(blob, filename);
                     console.log('[Drive] Uploaded:', filename);
-                    if (result && result.id) {
-                        // Make the file publicly readable so guests can download via QR
-                        await _driveSetPublic(appConfig._driveAccessToken, result.id);
-                        _pbDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
-                        // Store link in gallery parallel array and show QR button in thumbnail
-                        capturedPhotoDriveLinks[0] = _pbDriveLink;
-                        _appendGalleryQrBtn(0, 'photo', _pbDriveLink);
-                        // Notify live viewer peers
-                        lvBroadcastDriveUpdate(filename, _pbDriveLink);
-                        // Show QR button in share overlay (if it's still open)
-                        if ($('#share-overlay').is(':visible') && _pbDriveLink) {
-                            _currentPbDriveLink = _pbDriveLink;
-                            $('#btn-share-qr').fadeIn(200);
-                        }
-                    }
                 } catch (e) {
                     console.warn('[Drive] Upload failed:', e.message);
                 }
@@ -3557,32 +1507,6 @@ $(document).ready(function() {
         ctx.textBaseline = 'alphabetic';
     }
 
-    // ==================== AUDIO BEEPS ====================
-    let _audioCtx = null;
-    function _getAudioCtx() {
-        if (!_audioCtx || _audioCtx.state === 'closed') {
-            _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (_audioCtx.state === 'suspended') _audioCtx.resume();
-        return _audioCtx;
-    }
-    function _playBeep(freq, duration, volume) {
-        try {
-            const ctx = _getAudioCtx();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.type = 'sine';
-            osc.frequency.value = freq;
-            gain.gain.setValueAtTime(volume || 0.45, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + duration);
-        } catch (e) { /* audio not available */ }
-    }
-    // =========================================================
-
     function runCountdown(seconds) {
         return new Promise(resolve => {
             let count = seconds;
@@ -3591,7 +1515,6 @@ $(document).ready(function() {
             overlay.removeClass('active').hide();
             void overlay[0].offsetWidth;
             overlay.text(count).show();
-            _playBeep(count === 1 ? 880 : 660, 0.12); // beep on initial display
             requestAnimationFrame(() => overlay.addClass('active'));
             
             const interval = setInterval(() => {
@@ -3600,11 +1523,9 @@ $(document).ready(function() {
                     overlay.removeClass('active');
                     void overlay[0].offsetWidth; 
                     overlay.text(count).addClass('active');
-                    _playBeep(count === 1 ? 880 : 660, 0.12); // beep on each number
                 } else {
                     clearInterval(interval);
                     overlay.removeClass('active');
-                    _playBeep(1100, 0.08); // shutter beep
                     // Resolve only AFTER hide so next countdown never races with this one
                     setTimeout(() => { overlay.hide(); resolve(); }, 250);
                 }
@@ -3634,11 +1555,7 @@ $(document).ready(function() {
         } else {
             capturedPhotos.slice(0, 8).forEach((src, index) => {
                 const num = capturedPhotos.length - index;
-                const driveLink = capturedPhotoDriveLinks[index] || null;
-                const qrBtn = driveLink
-                    ? `<button class="gallery-qr-btn" data-url="${driveLink}" title="Get QR code to download"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/><rect x="14" y="18" width="3" height="0"/></svg>QR</button>`
-                    : '';
-                photoGrid.append(`<div class="gallery-item" data-index="${index}" title="Photo #${num}"><img src="${src}" alt="Photo #${num}"><div class="overlay">Photo #${num}</div>${qrBtn}</div>`);
+                photoGrid.append(`<div class="gallery-item" data-index="${index}" title="Photo #${num}"><img src="${src}" alt="Photo #${num}"><div class="overlay">Photo #${num}</div></div>`);
             });
         }
 
@@ -3650,10 +1567,6 @@ $(document).ready(function() {
         } else {
             capturedVideos.slice(0, 8).forEach((src, index) => {
                 const num = capturedVideos.length - index;
-                const driveLink = capturedVideoDriveLinks[index] || null;
-                const qrBtn = driveLink
-                    ? `<button class="gallery-qr-btn" data-url="${driveLink}" title="Get QR code to download"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/><rect x="14" y="18" width="3" height="0"/></svg>QR</button>`
-                    : '';
                 videoGrid.append(`
                     <div class="gallery-item gallery-item-video" data-vindex="${index}" title="Video #${num}">
                         <video src="${src}" preload="metadata" muted playsinline></video>
@@ -3661,7 +1574,6 @@ $(document).ready(function() {
                             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                         </div>
                         <div class="overlay">Video #${num}</div>
-                        ${qrBtn}
                     </div>`);
             });
         }
@@ -3674,18 +1586,6 @@ $(document).ready(function() {
             $(this).closest('.gallery-section').find('.gallery-tab-content').hide();
             $('#' + target).show();
         });
-    }
-
-    // Append (or show) a QR button on an existing gallery thumbnail without full re-render
-    function _appendGalleryQrBtn(arrIndex, type, driveLink) {
-        if (!driveLink) return;
-        const selector = type === 'video'
-            ? `.gallery-item[data-vindex="${arrIndex}"]`
-            : `.gallery-item[data-index="${arrIndex}"]`;
-        const $item = $(selector);
-        if ($item.length && !$item.find('.gallery-qr-btn').length) {
-            $item.append(`<button class="gallery-qr-btn" data-url="${driveLink}" title="Get QR code to download"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="3" height="3"/><rect x="18" y="18" width="3" height="3"/></svg>QR</button>`);
-        }
     }
 
     // --- Gallery lightbox ---
@@ -3724,12 +1624,6 @@ $(document).ready(function() {
         _renderLightbox();
         $('#photo-lightbox').fadeIn(200);
     }
-    // QR button on gallery thumbnails — stop propagation so lightbox doesn't open
-    $(document).on('click', '.gallery-qr-btn', function(e) {
-        e.stopPropagation();
-        const url = $(this).data('url');
-        if (url) showQrOverlay(url, 'Scan to download your copy');
-    });
     $(document).on('click', '.gallery-item:not(.gallery-item-video)', function() {
         openLightbox(parseInt($(this).data('index')));
     });
@@ -3831,379 +1725,233 @@ $(document).ready(function() {
         const safe = name.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'photobooth';
         $('#filename-preview').text(safe + '_YYYYMMDD_HHMMSS.png');
     }
-
-    // Show/hide inline warning below the event name field when Drive is on but name is empty
-    function _updateEventNameWarnings() {
-        const needsName = (appConfig.saveDrive || appConfig.vgSaveDrive) && !appConfig.eventName;
-        $('#event-name-drive-warning').toggle(needsName);
-        $('#event-name-input').toggleClass('input-required-highlight', needsName);
-    }
-    $('#event-name-input').on('input', function() {
+    $('#event-name-input, #wiz-event-name').on('input', function() {
         appConfig.eventName = this.value.trim();
-        $('#event-name-input').val(appConfig.eventName);
-        // Reset event sub-folder cache so the new name creates a fresh sub-folder
-        appConfig._driveEventFolderId = null;
-        appConfig._vgDriveEventFolderId = null;
+        $('#event-name-input, #wiz-event-name').val(appConfig.eventName);
         _updateFilenamePreview();
-        _updateEventNameWarnings();
     });
 
-    // =========================================================
-    // LIVE GALLERY VIEWER  (WebRTC / PeerJS peer-to-peer)
-    // =========================================================
-    // Protocol messages sent over DataChannel:
-    //   { type:'photo',  data:<dataURL>,       filename:<str>, ts:<ms> }
-    //   { type:'video',  data:<thumbDataURL>,  filename:<str>, ts:<ms>, duration:<secs> }
-    //   { type:'hello',  eventName:<str> }       — sent on new connection
-    //   { type:'ping' }
+    // =============================================
+    // SETUP WIZARD
+    // =============================================
+    let wizStep = 1;
+    const WIZ_TOTAL = 5;
 
-    let _lvPeer        = null;   // Peer instance (host mode)
-    let _lvConns       = [];     // array of active DataConnection objects
-    let _lvSentCount   = 0;
-    const LV_CHUNK_MAX = 16384; // DataChannel safe chunk size (16 KB)
-
-    // ── Host mode ──────────────────────────────────────────────
-    function _lvStart() {
-        if (typeof Peer === 'undefined') {
-            alert('PeerJS library has not loaded yet. Check your internet connection and try again.');
-            return;
+    function wizGo(step) {
+        wizStep = step;
+        $('.wiz-step-item').each(function() {
+            const s = parseInt($(this).data('s'));
+            $(this).toggleClass('active', s === step).toggleClass('done', s < step);
+        });
+        $('.wstep').hide();
+        $('#wstep-' + step).show();
+        $('#wiz-back').toggle(step > 1);
+        if (step === WIZ_TOTAL) {
+            $('#wiz-next').hide();
+        } else {
+            $('#wiz-next').show();
         }
-        _lvPeer = new Peer(); // uses free peerjs.com cloud signaling
-        _lvPeer.on('open', function(id) {
-            // Use admin-configured network address so other devices can reach this URL.
-            // If blank, fall back to window.location (works for same-browser testing only).
-            const addr = (appConfig.lvNetworkAddr || '').trim().replace(/\/+$/, '');
-            const viewerUrl = addr
-                ? addr + window.location.pathname + '?viewer=' + id
-                : window.location.origin + window.location.pathname + '?viewer=' + id;
-            $('#lv-viewer-url').text(viewerUrl);
-            // Render QR code
-            $('#lv-qr-container').empty();
-            new QRCode(document.getElementById('lv-qr-container'), {
-                text: viewerUrl,
-                width: 164,
-                height: 164,
-                colorDark: '#1e293b',
-                colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.M
-            });
-            $('#lv-idle-state').hide();
-            $('#lv-active-state').show();
-            _lvSetStatus('Waiting for viewer…', false);
-        });
-
-        _lvPeer.on('connection', function(conn) {
-            conn.on('open', function() {
-                if (_lvConns.includes(conn)) return; // guard: some browsers fire 'open' twice
-                _lvConns.push(conn);
-                _lvSetStatus(_lvConns.length + ' viewer' + (_lvConns.length > 1 ? 's' : '') + ' connected', true);
-                // Send current event name so viewer shows it in the header
-                conn.send(JSON.stringify({ type: 'hello', eventName: appConfig.eventName || '' }));
-            });
-            conn.on('close', function() {
-                _lvConns = _lvConns.filter(c => c !== conn);
-                const n = _lvConns.length;
-                _lvSetStatus(n > 0 ? n + ' viewer' + (n > 1 ? 's' : '') + ' connected' : 'Waiting for viewer…', n > 0);
-            });
-            conn.on('error', function() {
-                _lvConns = _lvConns.filter(c => c !== conn);
-            });
-        });
-
-        _lvPeer.on('error', function(err) {
-            console.warn('[LiveViewer] PeerJS error:', err.type, err.message);
-            _lvSetStatus('Connection error: ' + err.type, false);
-        });
     }
 
-    function _lvStop() {
-        if (_lvPeer) { _lvPeer.destroy(); _lvPeer = null; }
-        _lvConns = [];
-        _lvSentCount = 0;
-        $('#lv-viewer-count').text('0');
-        $('#lv-sent-count').text('0');
-        $('#lv-active-state').hide();
-        $('#lv-idle-state').show();
-        $('#lv-qr-container').empty();
+    function wizDone() {
+        localStorage.setItem('pb-setup-done', '1');
+        $('#setup-wizard').fadeOut(300);
+        $('#admin-dashboard').fadeIn(300);
     }
 
-    function _lvSetStatus(msg, connected) {
-        $('#lv-status-text').text(msg);
-        $('#lv-status-dot').toggleClass('lv-dot-on', connected);
-        $('#lv-viewer-count').text(_lvConns.length);
+    // First-launch check
+    if (!localStorage.getItem('pb-setup-done')) {
+        $('#admin-dashboard').hide();
+        $('#setup-wizard').fadeIn(300);
+        wizGo(1);
+    } else {
+        $('#setup-wizard').hide();
     }
 
-    // Broadcast a JSON message to all connected viewers
-    function _lvBroadcast(msgObj) {
-        if (!_lvConns.length) return;
-        // Add a unique ID so the viewer can deduplicate if the same message arrives twice
-        msgObj._id = Math.random().toString(36).slice(2) + Date.now().toString(36);
-        const json = JSON.stringify(msgObj);
-        _lvConns.forEach(conn => {
-            try { if (conn.open) conn.send(json); }
-            catch (e) { console.warn('[LiveViewer] send error', e); }
-        });
-        _lvSentCount++;
-        $('#lv-sent-count').text(_lvSentCount);
-    }
+    $('#wiz-next').on('click', function() { if (wizStep < WIZ_TOTAL) wizGo(wizStep + 1); });
+    $('#wiz-back').on('click', function() { if (wizStep > 1) wizGo(wizStep - 1); });
+    $('#wiz-skip').on('click', function() { wizDone(); });
+    $('#wiz-go-dashboard').on('click', function(e) { e.preventDefault(); wizDone(); });
 
-    // Capture a video thumbnail (first frame) as a JPEG data URL.
-    // Uses loadedmetadata → seek to avoid the onloadeddata race condition.
-    function _lvVideoThumb(blobUrl, callback) {
-        const vid = document.createElement('video');
-        const canvas = document.createElement('canvas');
-        let called = false;
-        function done(dataUrl, dur) {
-            if (called) return; called = true;
-            vid.src = ''; callback(dataUrl, dur);
+    // Step 1: Layout — same name="layout" radio group; existing change handler already syncs appConfig + paper info
+
+    // Step 2: Template background
+    $('#wiz-btn-pick-bg').on('click', () => $('#wiz-bg-input').trigger('click'));
+    $('#wiz-bg-empty').on('click', function(e) {
+        if (!$(e.target).is('button')) $('#wiz-bg-input').trigger('click');
+    });
+    $('#wiz-bg-input').on('change', async function() {
+        if (this.files[0]) {
+            const file = this.files[0];
+            await applyBgImage(file);
+            if (appConfig.templateBg) {
+                $('#wiz-bg-thumb').attr('src', appConfig.templateBg.src);
+                $('#wiz-bg-filename').text(file.name);
+                $('#wiz-bg-dims').text(appConfig.templateBg.naturalWidth + ' × ' + appConfig.templateBg.naturalHeight + ' px');
+                $('#wiz-bg-empty').hide();
+                $('#wiz-bg-preview').show();
+            }
         }
-        const guard = setTimeout(() => done(null, 0), 5000); // never hang
-        vid.preload = 'metadata';
-        vid.muted = true;
-        vid.playsInline = true;
-        vid.onloadedmetadata = function() {
-            vid.currentTime = Math.min(0.5, (vid.duration || 1) * 0.1);
-        };
-        vid.onseeked = function() {
-            clearTimeout(guard);
-            const W = Math.min(vid.videoWidth  || 640, 640);
-            const H = Math.min(vid.videoHeight || 360, 360);
-            const scale = Math.min(W / (vid.videoWidth || 640), H / (vid.videoHeight || 360));
-            canvas.width  = Math.round((vid.videoWidth  || 640) * scale);
-            canvas.height = Math.round((vid.videoHeight || 360) * scale);
-            canvas.getContext('2d').drawImage(vid, 0, 0, canvas.width, canvas.height);
-            done(canvas.toDataURL('image/jpeg', 0.72), Math.round(vid.duration || 0));
-        };
-        vid.onerror = function() { clearTimeout(guard); done(null, 0); };
-        vid.src = blobUrl;
-    }
-
-    // Call this whenever a new photo is captured and should be sent to viewers
-    function lvBroadcastPhoto(dataUrl, filename) {
-        if (!_lvConns.length) return;
-        _lvBroadcast({ type: 'photo', data: dataUrl, filename: filename, ts: Date.now(), driveUrl: null });
-    }
-
-    // Call this whenever a new video is captured and should be sent to viewers
-    function lvBroadcastVideo(blobUrl, filename) {
-        if (!_lvConns.length) return;
-        _lvVideoThumb(blobUrl, function(thumbDataUrl, duration) {
-            // Even if thumbnail failed, still send the card with a null thumbnail
-            _lvBroadcast({ type: 'video', data: thumbDataUrl, filename: filename, ts: Date.now(), duration: duration, driveUrl: null });
+        this.value = '';
+    });
+    $('#wiz-btn-clear-bg').on('click', function() {
+        appConfig.templateBg = null;
+        $('#bg-preview-state').hide();
+        $('#bg-empty-state').show();
+        $('#wiz-bg-preview').hide();
+        $('#wiz-bg-empty').show();
+        drawTemplatePreview();
+    });
+    const wizBgZone = document.getElementById('wiz-bg-zone');
+    if (wizBgZone) {
+        wizBgZone.addEventListener('dragover', e => { e.preventDefault(); wizBgZone.classList.add('drag-over'); });
+        wizBgZone.addEventListener('dragleave', () => wizBgZone.classList.remove('drag-over'));
+        wizBgZone.addEventListener('drop', async e => {
+            e.preventDefault();
+            wizBgZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (!file || !file.type.match(/image\/(jpeg|png)/)) return;
+            await applyBgImage(file);
+            if (appConfig.templateBg) {
+                $('#wiz-bg-thumb').attr('src', appConfig.templateBg.src);
+                $('#wiz-bg-filename').text(file.name);
+                $('#wiz-bg-dims').text(appConfig.templateBg.naturalWidth + ' × ' + appConfig.templateBg.naturalHeight + ' px');
+                $('#wiz-bg-empty').hide();
+                $('#wiz-bg-preview').show();
+            }
         });
     }
 
-    // Called after a Drive upload completes to update the viewer card with a QR button
-    function lvBroadcastDriveUpdate(filename, driveUrl) {
-        if (!_lvConns.length || !driveUrl) return;
-        _lvBroadcast({ type: 'drive-update', filename: filename, driveUrl: driveUrl });
-    }
-
-    // Host UI handlers
-    $('#btn-lv-start').on('click', _lvStart);
-    $('#btn-lv-stop').on('click', _lvStop);
-
-    // Save the network address the admin types in
-    $('#lv-network-addr').on('input', function() {
-        appConfig.lvNetworkAddr = $(this).val().trim();
+    // Step 3: Timing sliders
+    $('#wiz-cd-1').on('input', function() {
+        const v = $(this).val();
+        $('#wiz-val-cd-1').text(v + 's');
+        appConfig.countdownFirst = parseInt(v);
+        $('#setting-cd-1').val(v);
+        $('#val-cd-1').text(v);
+    });
+    $('#wiz-cd-others').on('input', function() {
+        const v = $(this).val();
+        $('#wiz-val-cd-others').text(v + 's');
+        appConfig.countdownOthers = parseInt(v);
+        $('#setting-cd-others').val(v);
+        $('#val-cd-others').text(v);
+    });
+    $('#wiz-review').on('input', function() {
+        const v = $(this).val();
+        $('#wiz-val-review').text(v + 's');
+        appConfig.reviewTime = parseInt(v);
+        $('#setting-review').val(v);
+        $('#val-review').text(v);
     });
 
-    // ── Viewer mode ────────────────────────────────────────────
-    (function initViewerMode() {
-        const params = new URLSearchParams(window.location.search);
-        const hostId = params.get('viewer');
-        if (!hostId) return; // normal host mode — nothing to do
-
-        // Hide everything except the viewer overlay
-        $('body > *').not('#viewer-mode').css('visibility', 'hidden');
-        $('#viewer-mode').css('display', 'flex');
-
-        // ── Lightbox helpers ──
-        function _viewerOpenPhoto(dataUrl) {
-            $('#viewer-lb-img').attr('src', dataUrl).show();
-            $('#viewer-lb-qr-wrap').hide();
-            $('#viewer-lb-video-note').hide();
-            $('#viewer-lightbox').css('display', 'flex');
+    // Step 4: Welcome screen
+    $('#wiz-ws-color').on('input', function() {
+        const col = $(this).val();
+        $('#wiz-ws-color-hex').text(col);
+        appConfig.welcomeBg = col;
+        $('#edit-bg-color').val(col);
+        $('#color-hex').text(col);
+        if (!appConfig.welcomeMedia) {
+            $('#designer-preview').css('background-color', col);
+            $('#guest-welcome').css('background-color', col);
+            $('#wiz-ws-preview').css('background-color', col);
         }
-        function _viewerOpenVideoNoLink(thumbDataUrl) {
-            // No Drive link: show thumbnail (or blank) with an explanatory note
-            if (thumbDataUrl) $('#viewer-lb-img').attr('src', thumbDataUrl).show();
-            else $('#viewer-lb-img').hide();
-            $('#viewer-lb-qr-wrap').hide();
-            $('#viewer-lb-video-note').show();
-            $('#viewer-lightbox').css('display', 'flex');
-        }
-        function _viewerOpenQr(driveUrl) {
-            $('#viewer-lb-img').hide().attr('src', '');
-            $('#viewer-lb-qr').empty();
-            new QRCode(document.getElementById('viewer-lb-qr'), {
-                text: driveUrl, width: 220, height: 220,
-                colorDark: '#1e293b', colorLight: '#fff',
-                correctLevel: QRCode.CorrectLevel.M
-            });
-            $('#viewer-lb-drive-url').text(driveUrl);
-            $('#viewer-lb-qr-wrap').show();
-            $('#viewer-lb-video-note').hide();
-            $('#viewer-lightbox').css('display', 'flex');
-        }
-        function _viewerCloseLb() {
-            $('#viewer-lightbox').hide();
-            $('#viewer-lb-img').attr('src', '');
-            $('#viewer-lb-qr').empty();
-            $('#viewer-lb-video-note').hide();
-        }
-        $('#viewer-lb-close').on('click', _viewerCloseLb);
-        $('#viewer-lightbox').on('click', function(e) { if (e.target === this) _viewerCloseLb(); });
+    });
+    $('#wiz-ws-title').on('input', function() {
+        const txt = $(this).val();
+        appConfig.welcomeTitle = txt;
+        $('#edit-title').val(txt);
+        $('#prev-title, #live-ws-title, #wiz-prev-title').text(txt);
+    });
+    $('#wiz-ws-subtitle').on('input', function() {
+        const txt = $(this).val();
+        appConfig.welcomeSubtitle = txt;
+        $('#edit-subtitle').val(txt);
+        $('#prev-subtitle, #live-ws-subtitle, #wiz-prev-subtitle').text(txt);
+    });
 
-        // Map filename → $item for drive-update lookups
-        const _viewerItems = {};
-        // Deduplicate messages by their _id field
-        const _viewerSeenIds = new Set();
+    function syncWizWelcomeMediaUI(type, objectUrl) {
+        const thumbWrap = $('#wiz-ws-thumb-wrap').empty();
+        if (type === 'video') {
+            thumbWrap.html(`<video src="${objectUrl}" class="ws-thumb-media" autoplay loop muted playsinline></video>`);
+        } else {
+            thumbWrap.html(`<img src="${objectUrl}" class="ws-thumb-media">`);
+        }
+        $('#wiz-ws-media-empty').hide();
+        $('#wiz-ws-media-filled').show();
+        if (type === 'video') {
+            $('#wiz-prev-media-img').hide().attr('src', '');
+            const pv = $('#wiz-prev-media-video').attr('src', objectUrl).show()[0];
+            pv.load(); pv.play();
+        } else {
+            const wv = $('#wiz-prev-media-video').hide().attr('src', '')[0];
+            if (wv) wv.load();
+            $('#wiz-prev-media-img').attr('src', objectUrl).show();
+        }
+        $('#wiz-ws-preview').css('background-color', '');
+    }
 
-        function _viewerUpdateDrive(filename, driveUrl) {
-            const $item = _viewerItems[filename];
-            if (!$item || !driveUrl) return;
-            $item.attr('data-drive-url', driveUrl);
-            const $footer = $item.find('.viewer-item-footer');
-            if (!$footer.find('.viewer-qr-btn').length) {
-                const $btn = $('<button class="viewer-qr-btn">&#x1F4F1; QR</button>');
-                $btn.on('click', function(e) { e.stopPropagation(); _viewerOpenQr(driveUrl); });
-                $footer.prepend($btn);
+    $('#wiz-ws-media-drop').on('click', function(e) {
+        if (!$(e.target).closest('#wiz-ws-media-remove, #wiz-btn-pick-media').length) {
+            document.getElementById('wiz-ws-media-input').click();
+        }
+    });
+    $('#wiz-btn-pick-media').on('click', function(e) {
+        e.stopPropagation();
+        document.getElementById('wiz-ws-media-input').click();
+    });
+    $('#wiz-ws-media-input').on('change', function() {
+        const file = this.files[0];
+        if (file) {
+            applyWelcomeMedia(file);
+            syncWizWelcomeMediaUI(appConfig.welcomeMedia.type, appConfig.welcomeMedia.objectUrl);
+        }
+    });
+    $('#wiz-ws-media-drop').on('dragover dragenter', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        $(this).addClass('drag-over');
+    }).on('dragleave drop', function(e) {
+        e.preventDefault(); e.stopPropagation();
+        $(this).removeClass('drag-over');
+        if (e.type === 'drop') {
+            const file = e.originalEvent.dataTransfer.files[0];
+            if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
+                applyWelcomeMedia(file);
+                syncWizWelcomeMediaUI(appConfig.welcomeMedia.type, appConfig.welcomeMedia.objectUrl);
             }
         }
+    });
+    $('#wiz-ws-media-remove').on('click', function(e) {
+        e.stopPropagation();
+        clearWelcomeMedia();
+        $('#wiz-ws-media-empty').show();
+        $('#wiz-ws-media-filled').hide();
+        $('#wiz-ws-thumb-wrap').empty();
+        const wv = $('#wiz-prev-media-video').hide().attr('src', '')[0];
+        if (wv) wv.load();
+        $('#wiz-prev-media-img').hide().attr('src', '');
+        $('#wiz-ws-preview').css('background-color', appConfig.welcomeBg);
+    });
 
-        let _viewerCount = 0;
-        function _viewerAddItem(msg, type) {
-            _viewerCount++;
-            $('#viewer-empty').hide();
-            const ts  = new Date(msg.ts).toLocaleTimeString();
-            const dur = msg.duration ? ' (' + msg.duration + 's)' : '';
-            const label = type === 'video' ? 'Video' + dur : 'Photo';
-            const driveUrl = msg.driveUrl || null;
+    // Step 5: Storage
+    $('input[name="wiz-storage"]').on('change', function() {
+        const val = $(this).val();
+        appConfig.storage = val;
+        $(`input[name="storage"][value="${val}"]`).prop('checked', true);
+        const showFolder = val === 'local';
+        $('#wiz-folder-config').toggle(showFolder);
+        if (showFolder) { $('#local-folder-config').slideDown(); }
+        else { $('#local-folder-config').slideUp(); }
+    });
+    $('#wiz-btn-select-dir').on('click', function() {
+        $('#btn-select-dir').trigger('click');
+    });
 
-            let mediaHtml = '';
-            if (type === 'photo') {
-                mediaHtml = msg.data
-                    ? `<img src="${msg.data}" alt="Photo" style="width:100%;height:100%;object-fit:cover;display:block;">`
-                    : `<div style="width:100%;height:100%;background:#1e293b;display:flex;align-items:center;justify-content:center;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>`;
-            } else {
-                mediaHtml = msg.data
-                    ? `<img src="${msg.data}" alt="Video" style="width:100%;height:100%;object-fit:cover;display:block;opacity:0.9;">`
-                    : `<div style="width:100%;height:100%;background:#1e293b;display:flex;align-items:center;justify-content:center;"><svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" style="color:#475569;"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>`;
-                // Play icon overlay on thumbnail
-                if (msg.data) {
-                    mediaHtml += `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;"><div style="width:46px;height:46px;background:rgba(0,0,0,0.6);border-radius:50%;display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><polygon points="5 3 19 12 5 21 5 3"/></svg></div></div>`;
-                }
-            }
-
-            const qrBtnHtml = driveUrl ? '<button class="viewer-qr-btn">&#x1F4F1; QR</button>' : '';
-
-            const $item = $(`
-                <div class="viewer-item viewer-item-new" data-type="${type}" data-filename="${(msg.filename||'').replace(/"/g,'')}"
-                     ${driveUrl ? 'data-drive-url="' + driveUrl + '"' : ''}>
-                    <div class="viewer-item-media" style="position:relative;width:100%;padding-top:${type==='video'?'56.25%':'75%'};overflow:hidden;border-radius:8px 8px 0 0;cursor:pointer;">
-                        <div style="position:absolute;inset:0;">${mediaHtml}</div>
-                    </div>
-                    <div class="viewer-item-footer" style="padding:0.4rem 0.6rem;display:flex;align-items:center;gap:0.4rem;">
-                        ${qrBtnHtml}
-                        <span style="font-size:0.78rem;font-weight:600;color:#f1f5f9;flex:1;">${label}</span>
-                        <span style="font-size:0.72rem;color:#64748b;">${ts}</span>
-                    </div>
-                </div>
-            `);
-
-            // Tap media area:
-            //   Photo  → open full image in lightbox
-            //   Video + Drive link → open Drive URL in new tab so browser/Drive app plays it
-            //   Video + no Drive   → show thumbnail in lightbox with explanatory note
-            $item.find('.viewer-item-media').on('click', function() {
-                const dUrl = $item.attr('data-drive-url') || null;
-                if (type === 'photo') {
-                    if (msg.data) _viewerOpenPhoto(msg.data);
-                } else {
-                    if (dUrl) window.open(dUrl, '_blank');
-                    else      _viewerOpenVideoNoLink(msg.data);
-                }
-            });
-
-            // QR button: always shows the Drive QR code overlay
-            $item.find('.viewer-qr-btn').on('click', function(e) {
-                e.stopPropagation();
-                const dUrl = $item.attr('data-drive-url') || driveUrl;
-                if (dUrl) _viewerOpenQr(dUrl);
-            });
-
-            if (msg.filename) _viewerItems[msg.filename] = $item;
-
-            $('#viewer-gallery').prepend($item);
-            setTimeout(() => $item.removeClass('viewer-item-new'), 600);
-        }
-
-        // ── Wake Lock: keep screen on while viewer is open ──────
-        let _viewerWakeLock = null;
-        async function _acquireWakeLock() {
-            if (!('wakeLock' in navigator)) return;
-            try {
-                _viewerWakeLock = await navigator.wakeLock.request('screen');
-                _viewerWakeLock.addEventListener('release', function() { _viewerWakeLock = null; });
-            } catch (e) {
-                console.warn('[Viewer] Wake Lock:', e.message);
-            }
-        }
-        // Wake lock is released when the page is hidden; re-acquire on return
-        document.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'visible' && !_viewerWakeLock) _acquireWakeLock();
-        });
-        _acquireWakeLock();
-
-        // ── WebRTC connection with auto-reconnect ─────────────────
-        let _viewerPeer = null;
-        function connectToHost() {
-            if (typeof Peer === 'undefined') { setTimeout(connectToHost, 200); return; }
-            // Destroy any previous peer before creating a new one
-            if (_viewerPeer) { try { _viewerPeer.destroy(); } catch (e) {} _viewerPeer = null; }
-            const peer = new Peer();
-            _viewerPeer = peer;
-            peer.on('open', function() {
-                const conn = peer.connect(hostId, { reliable: true });
-                conn.on('open', function() {
-                    $('#viewer-status-dot').css('background', '#22c55e');
-                    $('#viewer-status-text').text('Live');
-                    $('#viewer-event-name').text('Connected — waiting for captures…');
-                });
-                conn.on('data', function(raw) {
-                    try {
-                        const msg = JSON.parse(raw);
-                        // Deduplicate: skip messages we've already processed
-                        if (msg._id) {
-                            if (_viewerSeenIds.has(msg._id)) return;
-                            _viewerSeenIds.add(msg._id);
-                        }
-                        if      (msg.type === 'hello')        { if (msg.eventName) $('#viewer-event-name').text(msg.eventName); }
-                        else if (msg.type === 'photo')        { _viewerAddItem(msg, 'photo'); }
-                        else if (msg.type === 'video')        { _viewerAddItem(msg, 'video'); }
-                        else if (msg.type === 'drive-update') { _viewerUpdateDrive(msg.filename, msg.driveUrl); }
-                    } catch (e) { /* ignore malformed */ }
-                });
-                conn.on('close', function() {
-                    $('#viewer-status-dot').css('background', '#f59e0b');
-                    $('#viewer-status-text').text('Reconnecting…');
-                    setTimeout(connectToHost, 3000);
-                });
-                conn.on('error', function() {
-                    $('#viewer-status-dot').css('background', '#f59e0b');
-                    $('#viewer-status-text').text('Reconnecting…');
-                    setTimeout(connectToHost, 3000);
-                });
-            });
-            peer.on('error', function(err) {
-                console.warn('[Viewer] Peer error:', err.type);
-                $('#viewer-status-dot').css('background', '#f59e0b');
-                $('#viewer-status-text').text('Reconnecting…');
-                setTimeout(connectToHost, 4000);
-            });
-        }
-        connectToHost();
-    })();
+    // Launch kiosk from wizard
+    $('#wiz-launch-kiosk').on('click', function() {
+        wizDone();
+        $('#btn-launch-booth').trigger('click');
+    });
 
 });
