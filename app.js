@@ -453,7 +453,7 @@ $(document).ready(function() {
 
     // Click on upload zone opens file picker
     $('#ws-media-drop').on('click', function(e) {
-        if (!$(e.target).closest('#ws-media-remove, #btn-pick-ws-media').length) {
+        if (!$(e.target).closest('#ws-media-remove').length) {
             document.getElementById('ws-media-input').click();
         }
     });
@@ -665,7 +665,7 @@ $(document).ready(function() {
 
         // File picker
         $('#ty-media-drop').on('click', function(e) {
-            if ($(e.target).closest('#ty-media-remove, #ty-media-filled, #btn-pick-ty-media').length) return;
+            if ($(e.target).closest('#ty-media-remove, #ty-media-filled').length) return;
             document.getElementById('ty-media-input').click();
         });
         $('#ty-media-input').on('change', function() {
@@ -868,7 +868,7 @@ $(document).ready(function() {
     }
 
     $('#bg-empty-state').on('click', function(e) {
-        if (!$(e.target).closest('#btn-pick-bg').length) document.getElementById('upload-template-bg').click();
+        document.getElementById('upload-template-bg').click();
     });
     $('#upload-template-bg').on('change', async function() {
         if (this.files[0]) await applyBgImage(this.files[0]);
@@ -1889,11 +1889,8 @@ $(document).ready(function() {
     }
 
     // --- Video Overlay upload ---
-    // The #btn-pick-vg-overlay label already opens the file picker natively (safe on mobile).
-    // The drop-zone click handler only fires when clicking elsewhere on the drop zone.
     $('#vg-overlay-drop').on('click', function(e) {
-        // Let label, remove button, and thumb handle themselves
-        if ($(e.target).closest('#btn-pick-vg-overlay, #vg-overlay-remove').length) return;
+        if ($(e.target).closest('#vg-overlay-remove').length) return;
         $('#vg-overlay-input')[0].click();
     });
 
@@ -3887,7 +3884,7 @@ $(document).ready(function() {
 
     // Step 2: Template background
     $('#wiz-bg-empty').on('click', function(e) {
-        if (!$(e.target).closest('#wiz-btn-pick-bg').length) document.getElementById('wiz-bg-input').click();
+        document.getElementById('wiz-bg-input').click();
     });
     $('#wiz-bg-input').on('change', async function() {
         if (this.files[0]) {
@@ -4002,7 +3999,7 @@ $(document).ready(function() {
     }
 
     $('#wiz-ws-media-drop').on('click', function(e) {
-        if (!$(e.target).closest('#wiz-ws-media-remove, #wiz-btn-pick-media').length) {
+        if (!$(e.target).closest('#wiz-ws-media-remove').length) {
             document.getElementById('wiz-ws-media-input').click();
         }
     });
