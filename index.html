@@ -206,14 +206,13 @@
                     <h2 class="wstep-title">Photo Template Background</h2>
                     <p class="wstep-sub">Upload an image that fills behind every captured photo. Leave blank for a plain white background — you can change this any time in the dashboard.</p>
                     <div class="settings-card template-upload-card" id="wiz-bg-zone">
-                        <input type="file" id="wiz-bg-input" accept=".jpg,.jpeg,.png">
                         <div class="upload-empty-state" id="wiz-bg-empty">
                             <div class="upload-icon">🖼️</div>
                             <div class="upload-prompt">
                                 <span class="upload-title">Upload Background</span>
                                 <span class="upload-sub">Click anywhere or drag &amp; drop a JPG / PNG here</span>
                             </div>
-                            <label for="wiz-bg-input" class="btn-outline btn-upload" id="wiz-btn-pick-bg" style="display:inline-block; cursor:pointer;">Choose File</label>
+                            <label class="btn-outline btn-upload" id="wiz-btn-pick-bg" style="position:relative; overflow:hidden; display:inline-block; cursor:pointer;">Choose File<input type="file" id="wiz-bg-input" accept=".jpg,.jpeg,.png"></label>
                         </div>
                         <div class="upload-preview-state" id="wiz-bg-preview" style="display:none;">
                             <img class="upload-thumb" id="wiz-bg-thumb" src="" alt="Background preview">
@@ -267,12 +266,11 @@
                             <div class="tool-group">
                                 <label>Background Media</label>
                                 <div id="wiz-ws-media-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer; min-height:90px;">
-                                    <input type="file" id="wiz-ws-media-input" accept="image/*,video/*">
                                     <div class="upload-empty-state" id="wiz-ws-media-empty" style="padding:1.25rem 1.5rem; gap:0.5rem;">
                                         <span style="font-size:1.5rem;">🎬</span>
                                         <p style="font-weight:600; margin:0; color:#374151; font-size:0.9rem;">Click or drag image / video</p>
                                         <p style="margin:0; color:#9ca3af; font-size:0.78rem;">JPG, PNG &middot; MP4, MOV, WEBM</p>
-                                        <label for="wiz-ws-media-input" class="btn-outline btn-upload" id="wiz-btn-pick-media" style="display:inline-block; cursor:pointer;">Choose File</label>
+                                        <label class="btn-outline btn-upload" id="wiz-btn-pick-media" style="position:relative; overflow:hidden; display:inline-block; cursor:pointer;">Choose File<input type="file" id="wiz-ws-media-input" accept="image/*,video/*"></label>
                                     </div>
                                     <div id="wiz-ws-media-filled" style="display:none; padding:0.75rem;">
                                         <div id="wiz-ws-thumb-wrap" style="width:100%; border-radius:6px; overflow:hidden; aspect-ratio:16/9; background:#000;"></div>
@@ -1121,12 +1119,11 @@
                         <div class="tool-group">
                             <label>Background Media</label>
                             <div id="ws-media-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer;">
-                                <input type="file" id="ws-media-input" accept="image/*,video/*">
                                 <div class="upload-empty-state" id="ws-media-empty">
                                     <span style="font-size:2rem;">🖼️</span>
                                     <p style="font-weight:600; margin:0; color:#374151;">Click or drag image / video</p>
                                     <p style="margin:0; color:#9ca3af; font-size:0.8rem;">JPG, PNG, GIF &middot; MP4, MOV, WEBM</p>
-                                        <label for="ws-media-input" class="btn-outline btn-upload" id="btn-pick-ws-media" style="display:inline-block; cursor:pointer;">Choose File</label>
+                                        <label class="btn-outline btn-upload" id="btn-pick-ws-media" style="position:relative; overflow:hidden; display:inline-block; cursor:pointer;">Choose File<input type="file" id="ws-media-input" accept="image/*,video/*"></label>
                                 </div>
                                 <div id="ws-media-filled" style="display:none; padding:0.75rem;">
                                     <div id="ws-media-thumb-wrap" style="width:100%; border-radius:6px; overflow:hidden; aspect-ratio:16/9; background:#000;"></div>
@@ -1199,14 +1196,13 @@
                         Accepts <strong>JPG, JPEG, PNG</strong> &middot; Recommended size: <strong><span id="bg-size-hint">1200 × 1800 px</span></strong>
                     </p>
                     <div class="settings-card template-upload-card" id="bg-upload-zone">
-                        <input type="file" id="upload-template-bg" accept=".jpg,.jpeg,.png">
                         <div class="upload-empty-state" id="bg-empty-state">
                             <div class="upload-icon">🖼️</div>
                             <div class="upload-prompt">
                                 <span class="upload-title">Upload Background</span>
                                 <span class="upload-sub">Click anywhere or drag &amp; drop a file here</span>
                             </div>
-                            <label for="upload-template-bg" class="btn-outline btn-upload" id="btn-pick-bg" style="display:inline-block; cursor:pointer;">Choose File</label>
+                            <label class="btn-outline btn-upload" id="btn-pick-bg" style="position:relative; overflow:hidden; display:inline-block; cursor:pointer;">Choose File<input type="file" id="upload-template-bg" accept=".jpg,.jpeg,.png"></label>
                         </div>
                         <div class="upload-preview-state" id="bg-preview-state" style="display:none;">
                             <img class="upload-thumb" id="bg-thumb" src="" alt="Background preview">
@@ -1492,12 +1488,11 @@
                     </p>
 
                     <div id="vg-overlay-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer;">
-                        <input type="file" id="vg-overlay-input" accept=".png,image/png">
                         <div class="upload-empty-state" id="vg-overlay-empty">
                             <span style="font-size:2rem;">🎞️</span>
                             <p style="font-weight:600; margin:0; color:#374151;">Click or drag a PNG overlay here</p>
                             <p style="margin:0; color:#9ca3af; font-size:0.8rem;">PNG only &middot; 1920 × 1080 px</p>
-                            <label for="vg-overlay-input" class="btn-outline btn-upload" id="btn-pick-vg-overlay" style="display:inline-block; cursor:pointer;">Choose File</label>
+                            <label class="btn-outline btn-upload" id="btn-pick-vg-overlay" style="position:relative; overflow:hidden; display:inline-block; cursor:pointer;">Choose File<input type="file" id="vg-overlay-input" accept=".png,image/png"></label>
                         </div>
                         <div id="vg-overlay-filled" style="display:none; padding:0.75rem;">
                             <img id="vg-overlay-thumb" style="width:100%; border-radius:6px; display:block; aspect-ratio:16/9; object-fit:contain; background:#111;" alt="Overlay preview">
@@ -1668,12 +1663,11 @@
                     <div class="settings-section">
                         <h3 class="section-title">Background Image</h3>
                         <div id="ty-media-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer;">
-                            <input type="file" id="ty-media-input" accept="image/*">
                             <div class="upload-empty-state" id="ty-media-empty">
                                 <span style="font-size:2rem;">🖼️</span>
                                 <p style="font-weight:600; margin:0; color:#374151;">Click or drag an image</p>
                                 <p style="margin:0; color:#9ca3af; font-size:0.8rem;">JPG, PNG &middot; Recommended: 1080 &times; 1920 px (portrait) or 1920 &times; 1080 px (landscape)</p>
-                                <label for="ty-media-input" class="btn-outline btn-upload" id="btn-pick-ty-media" style="display:inline-block; cursor:pointer;">Choose File</label>
+                                <label class="btn-outline btn-upload" id="btn-pick-ty-media" style="position:relative; overflow:hidden; display:inline-block; cursor:pointer;">Choose File<input type="file" id="ty-media-input" accept="image/*"></label>
                             </div>
                             <div id="ty-media-filled" style="display:none; padding:0.75rem;">
                                 <div id="ty-media-thumb-wrap" style="width:100%; border-radius:6px; overflow:hidden; aspect-ratio:16/9; background:#000;"></div>
