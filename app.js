@@ -457,12 +457,6 @@ $(document).ready(function() {
             document.getElementById('ws-media-input').click();
         }
     });
-    // Dedicated Choose File button — native .click() so the browser trusts it as a real user gesture
-    $('#btn-pick-ws-media').on('click', function(e) {
-        e.stopPropagation();
-        document.getElementById('ws-media-input').click();
-    });
-
     // File selected via input
     $('#ws-media-input').on('change', function() {
         const file = this.files[0];
@@ -671,11 +665,7 @@ $(document).ready(function() {
 
         // File picker
         $('#ty-media-drop').on('click', function(e) {
-            if ($(e.target).closest('#ty-media-remove, #ty-media-filled').length) return;
-            document.getElementById('ty-media-input').click();
-        });
-        $('#btn-pick-ty-media').on('click', function(e) {
-            e.stopPropagation();
+            if ($(e.target).closest('#ty-media-remove, #ty-media-filled, #btn-pick-ty-media').length) return;
             document.getElementById('ty-media-input').click();
         });
         $('#ty-media-input').on('change', function() {
@@ -877,9 +867,8 @@ $(document).ready(function() {
         } catch(e) { console.error('Failed to load background image', e); }
     }
 
-    $('#btn-pick-bg').on('click', function(e) { e.stopPropagation(); document.getElementById('upload-template-bg').click(); });
     $('#bg-empty-state').on('click', function(e) {
-        if (!$(e.target).is('button')) $('#upload-template-bg').click();
+        if (!$(e.target).closest('#btn-pick-bg').length) $('#upload-template-bg').click();
     });
     $('#upload-template-bg').on('change', async function() {
         if (this.files[0]) await applyBgImage(this.files[0]);
@@ -1905,7 +1894,7 @@ $(document).ready(function() {
     $('#vg-overlay-drop').on('click', function(e) {
         // Let label, remove button, and thumb handle themselves
         if ($(e.target).closest('#btn-pick-vg-overlay, #vg-overlay-remove').length) return;
-        $('#vg-overlay-input').trigger('click');
+        $('#vg-overlay-input')[0].click();
     });
 
     $('#vg-overlay-input').on('change', function() {
@@ -3897,9 +3886,8 @@ $(document).ready(function() {
     // Step 1: Layout — same name="layout" radio group; existing change handler already syncs appConfig + paper info
 
     // Step 2: Template background
-    $('#wiz-btn-pick-bg').on('click', () => $('#wiz-bg-input').trigger('click'));
     $('#wiz-bg-empty').on('click', function(e) {
-        if (!$(e.target).is('button')) $('#wiz-bg-input').trigger('click');
+        if (!$(e.target).closest('#wiz-btn-pick-bg').length) document.getElementById('wiz-bg-input').click();
     });
     $('#wiz-bg-input').on('change', async function() {
         if (this.files[0]) {
@@ -4017,10 +4005,6 @@ $(document).ready(function() {
         if (!$(e.target).closest('#wiz-ws-media-remove, #wiz-btn-pick-media').length) {
             document.getElementById('wiz-ws-media-input').click();
         }
-    });
-    $('#wiz-btn-pick-media').on('click', function(e) {
-        e.stopPropagation();
-        document.getElementById('wiz-ws-media-input').click();
     });
     $('#wiz-ws-media-input').on('change', function() {
         const file = this.files[0];
