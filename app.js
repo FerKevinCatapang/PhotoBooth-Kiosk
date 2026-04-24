@@ -1,6 +1,7 @@
 let currentStream = null;
 let directoryHandle = null;
 let vgDirectoryHandle = null;
+let kioskWakeLock = null;
 
 let capturedPhotos = [];           // In-memory database of captured session photos
 let capturedPhotoDriveLinks = [];  // parallel: Drive share URL for each photo, or null
@@ -2350,6 +2351,33 @@ $(document).ready(function() {
     // Populate on load (non-blocking)
     populateCameraList();
 
+    // --- Screen Wake Lock (keeps display on while Kiosk Mode is active) ---
+    async function acquireKioskWakeLock() {
+        if (!('wakeLock' in navigator)) return;
+        try {
+            kioskWakeLock = await navigator.wakeLock.request('screen');
+            kioskWakeLock.addEventListener('release', function() { kioskWakeLock = null; }, { once: true });
+        } catch (e) {
+            console.warn('[WakeLock] Could not acquire:', e.message);
+        }
+    }
+
+    function releaseKioskWakeLock() {
+        if (kioskWakeLock) {
+            kioskWakeLock.release().catch(function(e) {
+                console.warn('[WakeLock] Could not release:', e.message);
+            });
+            kioskWakeLock = null;
+        }
+    }
+
+    // Re-acquire the lock when the page becomes visible again (browser releases it on hide)
+    document.addEventListener('visibilitychange', async function() {
+        if (document.visibilityState === 'visible' && $('#kiosk-mode').is(':visible') && !kioskWakeLock) {
+            await acquireKioskWakeLock();
+        }
+    });
+
     // --- Launch Kiosk ---
     // Mobile duplicate button delegates to the main launch button
     $('#btn-launch-booth-mobile').on('click', function() { $('#btn-launch-booth').trigger('click'); });
@@ -2386,6 +2414,7 @@ $(document).ready(function() {
                 $('#admin-dashboard').hide();
                 $('#kiosk-mode').fadeIn(400);
                 resetToWelcomeScreen();
+                await acquireKioskWakeLock();
                 return;
             }
 
@@ -2440,7 +2469,7 @@ $(document).ready(function() {
             $('#admin-dashboard').hide();
             $('#kiosk-mode').fadeIn(400);
             resetToWelcomeScreen();
-            
+            await acquireKioskWakeLock();
         } catch (err) {
             console.error("Camera error:", err);
             let hint = '';
@@ -2459,6 +2488,7 @@ $(document).ready(function() {
 
     $('#btn-exit-kiosk').on('click', function() {
         stopVgRecordingIfActive();
+        releaseKioskWakeLock();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
         // Clear any wireless src streams on the feed elements
         ['camera-feed', 'vg-camera-feed'].forEach(function(id) {
