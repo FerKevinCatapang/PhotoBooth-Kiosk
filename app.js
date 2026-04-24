@@ -154,74 +154,6 @@ window.addEventListener('beforeunload', saveConfig);
 loadConfig();
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─── INDEXED DB — Binary Asset Persistence ────────────────────────────────────
-// localStorage is text-only (~5 MB cap). Binary blobs — welcome screen media,
-// photo template background, VG video overlay, VG thank-you image — are stored
-// in IndexedDB, which natively holds Blob objects and has a much larger quota.
-const IDB_NAME    = 'pb_assets_db';
-const IDB_VERSION = 1;
-const IDB_STORE   = 'assets';
-
-function _idbOpen() {
-    return new Promise(function(resolve, reject) {
-        const req = indexedDB.open(IDB_NAME, IDB_VERSION);
-        req.onupgradeneeded = function(e) {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains(IDB_STORE)) {
-                db.createObjectStore(IDB_STORE, { keyPath: 'key' });
-            }
-        };
-        req.onsuccess = function(e) { resolve(e.target.result); };
-        req.onerror   = function(e) { reject(e.target.error); };
-    });
-}
-
-async function idbSave(key, blob, meta) {
-    try {
-        const db = await _idbOpen();
-        await new Promise(function(resolve, reject) {
-            const tx    = db.transaction(IDB_STORE, 'readwrite');
-            const store = tx.objectStore(IDB_STORE);
-            store.put({ key: key, blob: blob, meta: meta || {} });
-            tx.oncomplete = resolve;
-            tx.onerror    = function(e) { reject(e.target.error); };
-        });
-    } catch (e) {
-        console.warn('[IDB] Save failed (' + key + '):', e);
-    }
-}
-
-async function idbLoad(key) {
-    try {
-        const db = await _idbOpen();
-        return await new Promise(function(resolve, reject) {
-            const tx    = db.transaction(IDB_STORE, 'readonly');
-            const store = tx.objectStore(IDB_STORE);
-            const req   = store.get(key);
-            req.onsuccess = function(e) { resolve(e.target.result || null); };
-            req.onerror   = function(e) { reject(e.target.error); };
-        });
-    } catch (e) {
-        console.warn('[IDB] Load failed (' + key + '):', e);
-        return null;
-    }
-}
-
-async function idbDelete(key) {
-    try {
-        const db = await _idbOpen();
-        await new Promise(function(resolve) {
-            const tx    = db.transaction(IDB_STORE, 'readwrite');
-            const store = tx.objectStore(IDB_STORE);
-            store.delete(key);
-            tx.oncomplete = resolve;
-        });
-    } catch (e) {
-        console.warn('[IDB] Delete failed (' + key + '):', e);
-    }
-}
-// ─────────────────────────────────────────────────────────────────────────────
-
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
 // 1. Go to console.cloud.google.com → APIs & Services → Credentials
 // 2. Create OAuth 2.0 Client ID → Web application
@@ -315,9 +247,6 @@ const LAYOUT_DEFS = {
 };
 
 $(document).ready(function() {
-    // Suppresses IDB re-save when restoring persisted blobs on page load
-    let _idbRestoring = false;
-
     // ── Restore persisted settings into UI controls ───────────────────────────
     function syncUiFromConfig() {
         // Layout
@@ -565,7 +494,6 @@ $(document).ready(function() {
             $('#ws-image-bg').attr('src', objectUrl).show();
         }
         $('#guest-welcome').css('background-color', '');
-        if (!_idbRestoring) idbSave('welcome_media', file, { type: type });
     }
 
     function clearWelcomeMedia() {
@@ -588,7 +516,6 @@ $(document).ready(function() {
         $('#ws-media-filled').hide();
         $('#ws-media-thumb-wrap').empty();
         $('#ws-media-input').val('');
-        idbDelete('welcome_media');
     }
 
     // Click on upload zone opens file picker
@@ -751,7 +678,6 @@ $(document).ready(function() {
     })();
 
     // --- Thank You Screen — Video Guestbook admin settings ---
-    // Hoisted so restoreAssets() can call them after the IIFE runs
     let _applyTyImage, _clearTyImage;
     (function initVgThankYou() {
         function _syncToggle() {
@@ -779,7 +705,6 @@ $(document).ready(function() {
             // Preview frame
             $('#ty-preview-bg').attr('src', objectUrl).show();
             $('#ty-preview-frame').addClass('has-bg');
-            if (!_idbRestoring) idbSave('vg_thankyou', file);
         };
 
         _clearTyImage = function() {
@@ -793,7 +718,6 @@ $(document).ready(function() {
             $('#ty-media-input').val('');
             $('#ty-preview-bg').attr('src', '').hide();
             $('#ty-preview-frame').removeClass('has-bg');
-            idbDelete('vg_thankyou');
         };
 
         // Duration slider
@@ -1019,7 +943,6 @@ $(document).ready(function() {
             $('#bg-empty-state').hide();
             $('#bg-preview-state').show();
             drawTemplatePreview();
-            if (!_idbRestoring) idbSave('template_bg', file, { name: file.name });
         } catch(e) { console.error('Failed to load background image', e); }
     }
 
@@ -1036,7 +959,6 @@ $(document).ready(function() {
         $('#bg-preview-state').hide();
         $('#bg-empty-state').show();
         drawTemplatePreview();
-        idbDelete('template_bg');
     });
 
     // Drag-and-drop on background upload zone
@@ -2106,7 +2028,6 @@ $(document).ready(function() {
         $('#vg-overlay-thumb').attr('src', '');
         $('#vg-overlay-live').hide().attr('src', '');
         _clearOverlayError();
-        idbDelete('vg_overlay');
     });
 
     function _applyVgOverlay(url, filename, img, fileBlob) {
@@ -2117,7 +2038,6 @@ $(document).ready(function() {
         $('#vg-overlay-empty').hide();
         $('#vg-overlay-filled').show();
         _clearOverlayError();
-        if (fileBlob) idbSave('vg_overlay', fileBlob, { name: filename });
     }
 
     function _showOverlayError(msg) {
@@ -4592,44 +4512,5 @@ $(document).ready(function() {
         }
         connectToHost();
     })();
-
-    // ─── RESTORE BINARY ASSETS FROM INDEXED DB ───────────────────────────────
-    // Runs after all admin UI handler functions have been defined.
-    // Re-applies any previously uploaded binary assets using blobs retrieved
-    // from IndexedDB so they survive page reloads without re-uploading.
-    (async function restoreAssets() {
-        // 1. Welcome Screen Media (image or video background)
-        const wm = await idbLoad('welcome_media');
-        if (wm) {
-            _idbRestoring = true;
-            applyWelcomeMedia(new File([wm.blob], 'welcome_media', { type: wm.blob.type }));
-            _idbRestoring = false;
-        }
-        // 2. Photo Template Background image
-        const tb = await idbLoad('template_bg');
-        if (tb) {
-            _idbRestoring = true;
-            await applyBgImage(new File([tb.blob], tb.meta.name || 'template_bg', { type: tb.blob.type }));
-            _idbRestoring = false;
-        }
-        // 3. VG Video Overlay (must be 1920×1080 PNG)
-        const vo = await idbLoad('vg_overlay');
-        if (vo) {
-            const voUrl  = URL.createObjectURL(vo.blob);
-            const voName = vo.meta.name || 'overlay.png';
-            const voImg  = new Image();
-            voImg.onload  = () => _applyVgOverlay(voUrl, voName, voImg); // no fileBlob → skips re-save
-            voImg.onerror = () => { URL.revokeObjectURL(voUrl); idbDelete('vg_overlay'); };
-            voImg.src = voUrl;
-        }
-        // 4. VG Thank You Screen background image
-        const ty = await idbLoad('vg_thankyou');
-        if (ty && _applyTyImage) {
-            _idbRestoring = true;
-            _applyTyImage(new File([ty.blob], 'thankyou_bg', { type: ty.blob.type }));
-            _idbRestoring = false;
-        }
-    })();
-    // ─────────────────────────────────────────────────────────────────────────
 
 });
