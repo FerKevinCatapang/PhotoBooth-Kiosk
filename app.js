@@ -84,7 +84,63 @@ let appConfig = {
 
     // Capture Review — Video Guestbook
     vgCaptureReviewEnabled: true, // play back the recording for guest review after capture
+
+    // Kiosk exit PIN (empty string = no PIN required)
+    kioskPin: '',
+
+    // Live Gallery Viewer — operator's local network address (e.g. http://192.168.1.50)
+    lvNetworkAddr: '',
 };
+
+// ── Persisted config keys (serializable, non-sensitive) ──────────────────────
+// Media blobs (welcomeMedia, templateBg, vgOverlay, vgThankYouImage) and Drive
+// tokens are intentionally excluded — they cannot be JSON-serialised or should
+// not be stored across sessions.
+const PERSISTED_KEYS = [
+    'layout', 'saveLocal', 'saveDrive', 'countdownFirst', 'countdownOthers',
+    'reviewTime', 'welcomeBg', 'welcomeTitle', 'welcomeSubtitle', 'photoMode',
+    'captureMode', 'vgMaxDuration', 'vgPromptText', 'vgCountdown',
+    'vgSelectedCameraId', 'vgFacingMode', 'vgSelectedMicId', 'vgSelectedSpeakerId',
+    'vgSaveLocal', 'vgSaveDrive', 'printCopies', 'printQuality',
+    'paperSizeOverride', 'colorMode', 'borderless', 'socialShare', 'eventName',
+    'printMode', 'printServer', 'selectedCameraId', 'facingMode',
+    'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
+    'driveFolderName', 'vgDriveFolderName', 'vgDriveClientId',
+    'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts',
+    'vgThankYouEnabled', 'vgThankYouDuration', 'vgCaptureReviewEnabled',
+    'kioskPin', 'lvNetworkAddr'
+];
+
+// Restore persisted config immediately — before DOM ready — so all subsequent
+// init code reads the correct values from appConfig.
+(function() {
+    try {
+        const saved = localStorage.getItem('photobooth_config');
+        if (!saved) return;
+        const parsed = JSON.parse(saved);
+        PERSISTED_KEYS.forEach(function(k) {
+            if (parsed[k] !== undefined) appConfig[k] = parsed[k];
+        });
+    } catch (e) {
+        console.warn('[Config] Could not restore saved settings:', e);
+    }
+})();
+
+function saveConfig() {
+    try {
+        const data = {};
+        PERSISTED_KEYS.forEach(function(k) { data[k] = appConfig[k]; });
+        localStorage.setItem('photobooth_config', JSON.stringify(data));
+    } catch (e) {
+        console.warn('[Config] Could not save settings:', e);
+    }
+}
+
+let _saveTimer = null;
+function _scheduleSave() {
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(saveConfig, 800);
+}
 
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
 // 1. Go to console.cloud.google.com → APIs & Services → Credentials
@@ -446,6 +502,7 @@ $(document).ready(function() {
             $('#vg-prompts-list').find('.vg-prompt-del').on('click', function() {
                 appConfig.vgCustomPrompts.splice(parseInt($(this).data('idx'), 10), 1);
                 _renderPromptList();
+                _scheduleSave();
             });
         }
 
@@ -472,6 +529,7 @@ $(document).ready(function() {
             $('.prompt-cat-btn').removeClass('active');
             $(this).addClass('active');
             _renderPromptList();
+            _scheduleSave();
         });
 
         function _addCustomPrompt() {
@@ -480,6 +538,7 @@ $(document).ready(function() {
             appConfig.vgCustomPrompts.push(val);
             $('#vg-custom-prompt-input').val('');
             _renderPromptList();
+            _scheduleSave();
         }
 
         $('#btn-add-vg-prompt').on('click', _addCustomPrompt);
@@ -633,32 +692,6 @@ $(document).ready(function() {
         }
     });
 
-    $('#btn-share-whatsapp').on('click', function() {
-        const a = document.createElement('a');
-        a.href = $('#share-preview-img').attr('src');
-        a.download = makeFilename();
-        a.click();
-        setTimeout(() => window.open('https://wa.me/', '_blank'), 600);
-    });
-
-    $('#btn-share-facebook').on('click', function() {
-        window.open('https://www.facebook.com/', '_blank');
-    });
-
-    $('#btn-share-x').on('click', function() {
-        window.open('https://x.com/', '_blank');
-    });
-
-    $('#btn-share-email').on('click', function() {
-        const a = document.createElement('a');
-        a.href = $('#share-preview-img').attr('src');
-        a.download = makeFilename();
-        a.click();
-        const sub  = encodeURIComponent('Check out my photo booth picture!');
-        const body = encodeURIComponent('I just took this awesome photo at the booth!');
-        setTimeout(() => { window.location.href = `mailto:?subject=${sub}&body=${body}`; }, 600);
-    });
-
     // --- Printer Setup ---
     $('input[name="paper-size"]').on('change', function() {
         appConfig.paperSizeOverride = $(this).val();
@@ -668,11 +701,13 @@ $(document).ready(function() {
     $('#btn-copies-up').on('click', function() {
         appConfig.printCopies = Math.min(10, appConfig.printCopies + 1);
         $('#print-copies-display').text(appConfig.printCopies);
+        _scheduleSave();
     });
 
     $('#btn-copies-down').on('click', function() {
         appConfig.printCopies = Math.max(1, appConfig.printCopies - 1);
         $('#print-copies-display').text(appConfig.printCopies);
+        _scheduleSave();
     });
 
     $('input[name="color-mode"]').on('change', function() {
@@ -1271,6 +1306,7 @@ $(document).ready(function() {
             // Set capture mode based on active tab
             appConfig.captureMode = (target === 'cap-tab-videoguestbook') ? 'videoguestbook' : 'photobooth';
             updateAdvancedNavForMode(appConfig.captureMode);
+            _scheduleSave();
         });
     });
 
@@ -2015,25 +2051,92 @@ $(document).ready(function() {
             console.error("Camera error:", err);
             let hint = '';
             if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                hint = '\n\nThe selected camera was not found. Unplug and replug the USB cable, confirm UVC mode is active on the camera, then tap Refresh in Camera Settings.';
+                hint = 'The selected camera was not found. Unplug and replug the USB cable, confirm UVC mode is active on the camera, then tap Refresh in Camera Settings.';
             } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                hint = '\n\nCamera permission was denied. Go to Android Settings → Apps → Chrome → Permissions → Camera → Allow, then try again.';
+                hint = 'Camera permission was denied. Go to Settings → Apps → Chrome → Permissions → Camera → Allow, then try again.';
             } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-                hint = '\n\nThe camera is in use by another app, or the USB connection dropped. Unplug and replug, close other camera apps, then try again.';
+                hint = 'The camera is in use by another app, or the USB connection dropped. Unplug and replug, close other camera apps, then try again.';
+            } else {
+                hint = err.message;
             }
-            alert(`Camera error: ${err.name}\n${err.message}${hint}`);
+            $('#camera-error-title').text('Camera error: ' + err.name);
+            $('#camera-error-msg').text(hint);
+            $('#camera-error-card').slideDown(200);
         } finally {
             launchBtn.prop('disabled', false).text('🚀 Launch Kiosk Mode');
         }
     });
 
-    $('#btn-exit-kiosk').on('click', function() {
+    // --- Camera error card dismiss ---
+    $('#btn-camera-error-close').on('click', function() {
+        $('#camera-error-card').slideUp(200);
+    });
+
+    // --- Kiosk PIN input (admin dashboard) ---
+    $('#kiosk-pin-input').on('input', function() {
+        appConfig.kioskPin = this.value;
+    });
+
+    // --- PIN modal logic ---
+    let _pinBuffer = '';
+
+    function _renderPinDisplay() {
+        const len = _pinBuffer.length;
+        const max = Math.max(len, 4);
+        $('#pin-display').text(Array.from({ length: max }, (_, i) => i < len ? '●' : '–').join(''));
+    }
+
+    function _showPinModal() {
+        _pinBuffer = '';
+        _renderPinDisplay();
+        $('#pin-error').hide();
+        $('#pin-overlay').css('display', 'flex');
+    }
+
+    function _hidePinModal() {
+        $('#pin-overlay').hide();
+    }
+
+    function _doExitKiosk() {
         stopVgRecordingIfActive();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
         $('#kiosk-mode').hide();
         $('#vg-booth').hide();
         $('#live-booth').hide();
         $('#admin-dashboard').fadeIn(400);
+    }
+
+    $('#btn-exit-kiosk').on('click', function() {
+        if (appConfig.kioskPin) {
+            _showPinModal();
+        } else {
+            _doExitKiosk();
+        }
+    });
+
+    $('#btn-pin-cancel').on('click', _hidePinModal);
+
+    $('#btn-pin-del').on('click', function() {
+        _pinBuffer = _pinBuffer.slice(0, -1);
+        _renderPinDisplay();
+        $('#pin-error').hide();
+    });
+
+    $(document).on('click', '.pin-key[data-k]', function() {
+        if (_pinBuffer.length >= 8) return;
+        _pinBuffer += $(this).data('k').toString();
+        _renderPinDisplay();
+        $('#pin-error').hide();
+        if (_pinBuffer.length >= appConfig.kioskPin.length && appConfig.kioskPin.length > 0) {
+            if (_pinBuffer === appConfig.kioskPin) {
+                _hidePinModal();
+                _doExitKiosk();
+            } else {
+                $('#pin-error').show();
+                _pinBuffer = '';
+                _renderPinDisplay();
+            }
+        }
     });
 
     // --- Kiosk Logic (PhotoBooth) ---
@@ -3485,6 +3588,7 @@ $(document).ready(function() {
 
     function wizDone() {
         localStorage.setItem('pb-setup-done', '1');
+        saveConfig();
         $('#setup-wizard').fadeOut(300);
         $('#admin-dashboard').fadeIn(300);
     }
@@ -4071,5 +4175,148 @@ $(document).ready(function() {
         }
         connectToHost();
     })();
+
+    // ── Sync all UI controls to the loaded appConfig ──────────────────────────
+    // Called once after all event handlers are wired so that the DOM reflects
+    // whatever was restored from localStorage.
+    function syncUIFromConfig() {
+
+        // Layout radio
+        $('input[name="layout"][value="' + appConfig.layout + '"]').prop('checked', true);
+        updatePaperMappingInfo();
+        updateTemplateSizeHint();
+
+        // Capture mode tabs
+        const isVg = appConfig.captureMode === 'videoguestbook';
+        const capTarget = isVg ? 'cap-tab-videoguestbook' : 'cap-tab-photobooth';
+        document.querySelectorAll('.capture-tab-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.capTab === capTarget);
+        });
+        document.querySelectorAll('.cap-tab-content').forEach(function(c) { c.style.display = 'none'; });
+        const capEl = document.getElementById(capTarget);
+        if (capEl) capEl.style.display = '';
+        updateAdvancedNavForMode(appConfig.captureMode);
+
+        // Event name
+        $('#event-name-input').val(appConfig.eventName);
+        $('#wiz-event-name').val(appConfig.eventName);
+        if (appConfig.eventName) {
+            const prefix = appConfig.eventName.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
+            $('#filename-preview').text(prefix + '_YYYYMMDD_HHMMSS.png');
+        }
+
+        // Kiosk PIN
+        $('#kiosk-pin-input').val(appConfig.kioskPin);
+
+        // Countdown sliders (both main dashboard and wizard)
+        $('#setting-cd-1').val(appConfig.countdownFirst);
+        $('#val-cd-1').text(appConfig.countdownFirst);
+        $('#wiz-cd-1').val(appConfig.countdownFirst);
+        $('#wiz-val-cd-1').text(appConfig.countdownFirst + 's');
+        $('#setting-cd-others').val(appConfig.countdownOthers);
+        $('#val-cd-others').text(appConfig.countdownOthers);
+        $('#wiz-cd-others').val(appConfig.countdownOthers);
+        $('#wiz-val-cd-others').text(appConfig.countdownOthers + 's');
+        $('#setting-review').val(appConfig.reviewTime);
+        $('#val-review').text(appConfig.reviewTime);
+        $('#wiz-review').val(appConfig.reviewTime);
+        $('#wiz-val-review').text(appConfig.reviewTime + 's');
+
+        // Welcome screen
+        $('#edit-bg-color').val(appConfig.welcomeBg);
+        $('#wiz-ws-color').val(appConfig.welcomeBg);
+        $('#color-hex').text(appConfig.welcomeBg);
+        $('#wiz-ws-color-hex').text(appConfig.welcomeBg);
+        $('#edit-title').val(appConfig.welcomeTitle);
+        $('#wiz-ws-title').val(appConfig.welcomeTitle);
+        $('#edit-subtitle').val(appConfig.welcomeSubtitle);
+        $('#wiz-ws-subtitle').val(appConfig.welcomeSubtitle);
+        $('#prev-title, #live-ws-title, #wiz-prev-title').text(appConfig.welcomeTitle);
+        $('#prev-subtitle, #live-ws-subtitle, #wiz-prev-subtitle').text(appConfig.welcomeSubtitle);
+        if (!appConfig.welcomeMedia) {
+            $('#designer-preview, #guest-welcome, #wiz-ws-preview').css('background-color', appConfig.welcomeBg);
+        }
+
+        // Photo mode toggle
+        $('#toggle-photo-mode').prop('checked', appConfig.photoMode)
+            .closest('.toggle-switch').toggleClass('is-on', appConfig.photoMode);
+        $('#toggle-photo-label').text(appConfig.photoMode ? 'ON' : 'OFF');
+
+        // Social share toggle
+        $('#toggle-social-share').prop('checked', appConfig.socialShare)
+            .closest('.toggle-switch').toggleClass('is-on', appConfig.socialShare);
+        $('#toggle-social-label').text(appConfig.socialShare ? 'ON' : 'OFF');
+
+        // Storage — Photo Booth
+        $('#chk-save-local').prop('checked', appConfig.saveLocal);
+        $('#local-folder-config').toggle(appConfig.saveLocal);
+        $('#chk-save-drive').prop('checked', appConfig.saveDrive);
+        $('#pb-drive-config').toggle(appConfig.saveDrive);
+        $('#drive-folder-name').val(appConfig.driveFolderName);
+
+        // Printer settings
+        $('input[name="paper-size"][value="' + appConfig.paperSizeOverride + '"]').prop('checked', true);
+        $('input[name="color-mode"][value="' + appConfig.colorMode + '"]').prop('checked', true);
+        $('input[name="print-quality"][value="' + appConfig.printQuality + '"]').prop('checked', true);
+        $('#print-copies-display').text(appConfig.printCopies);
+        $('#toggle-borderless').prop('checked', appConfig.borderless)
+            .closest('.toggle-switch').toggleClass('is-on', appConfig.borderless);
+        $('#toggle-borderless-label').text(appConfig.borderless ? 'ON' : 'OFF');
+        $('input[name="print-mode"][value="' + appConfig.printMode + '"]').prop('checked', true);
+        $('#print-server-config').toggle(appConfig.printMode === 'server');
+        $('#print-server-url').val(appConfig.printServer);
+        $('input[name="print-mode"]').each(function() {
+            $(this).closest('label')
+                .css('border-color', this.checked ? '#be185d' : '#e5e7eb')
+                .css('background',   this.checked ? '#fdf2f8' : '');
+        });
+
+        // Camera — Photo Booth
+        const fmVal = appConfig.facingMode || 'user';
+        $('input[name="facing-mode"][value="' + fmVal + '"]').prop('checked', true);
+        $('#camera-specific-card').toggle(appConfig.facingMode === '');
+        if (appConfig.selectedCameraId) $('#camera-select').val(appConfig.selectedCameraId);
+
+        // VG settings
+        $('#setting-vg-duration').val(appConfig.vgMaxDuration);
+        $('#val-vg-duration').text(appConfig.vgMaxDuration);
+        $('#setting-vg-countdown').val(appConfig.vgCountdown);
+        $('#val-vg-countdown').text(appConfig.vgCountdown);
+        $('#setting-vg-prompt').val(appConfig.vgPromptText);
+        const vgFmVal = appConfig.vgFacingMode || 'user';
+        $('input[name="vg-facing-mode"][value="' + vgFmVal + '"]').prop('checked', true);
+        $('#vg-camera-specific-card').toggle(appConfig.vgFacingMode === '');
+        if (appConfig.vgSelectedCameraId) $('#vg-camera-select').val(appConfig.vgSelectedCameraId);
+
+        // VG storage
+        $('#chk-vg-save-local').prop('checked', appConfig.vgSaveLocal);
+        $('#vg-local-folder-config').toggle(appConfig.vgSaveLocal);
+        $('#chk-vg-save-drive').prop('checked', appConfig.vgSaveDrive);
+        $('#vg-drive-config').toggle(appConfig.vgSaveDrive);
+        $('#vg-drive-folder-name').val(appConfig.vgDriveFolderName);
+        if (appConfig.vgDriveClientId) $('#vg-drive-client-id').val(appConfig.vgDriveClientId);
+
+        // VG prompts — category button (toggle/list handled by initVgPrompts above)
+        $('.prompt-cat-btn').removeClass('active');
+        $('.prompt-cat-btn[data-cat="' + appConfig.vgPromptCategory + '"]').addClass('active');
+
+        // VG thank you duration (toggle handled by initVgThankYou above)
+        $('#setting-ty-duration').val(appConfig.vgThankYouDuration);
+        $('#val-ty-duration').text(appConfig.vgThankYouDuration);
+
+        // Live Viewer network address
+        $('#lv-network-addr').val(appConfig.lvNetworkAddr || '');
+
+        _updateEventNameWarnings();
+    }
+
+    syncUIFromConfig();
+
+    // Auto-save on any admin UI input change (covers text, checkboxes, radios, selects, sliders)
+    $(document).on('change input',
+        '#admin-dashboard input, #admin-dashboard select, #admin-dashboard textarea,' +
+        '#setup-wizard input, #setup-wizard select, #setup-wizard textarea',
+        _scheduleSave
+    );
 
 });
