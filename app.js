@@ -89,70 +89,6 @@ let appConfig = {
     vgThankYouDuration: 5,        // seconds before auto-advancing to welcome screen
 };
 
-// ─── CONFIG PERSISTENCE ───────────────────────────────────────────────────────
-// Serializable fields only — excludes object URLs, file handles, binary blobs,
-// and OAuth tokens which cannot survive a page reload anyway.
-const PERSIST_KEYS = [
-    'layout', 'captureMode',
-    'saveLocal', 'saveDrive',
-    'countdownFirst', 'countdownOthers', 'reviewTime',
-    'welcomeBg', 'welcomeTitle', 'welcomeSubtitle',
-    'photoMode', 'socialShare',
-    'eventName',
-    'selectedCameraId', 'facingMode', 'wirelessCameraUrl',
-    'printMode', 'printServer', 'printCopies', 'printQuality',
-    'paperSizeOverride', 'colorMode', 'borderless',
-    'driveFolderName',
-    'vgMaxDuration', 'vgCountdown', 'vgPromptText',
-    'vgSelectedCameraId', 'vgFacingMode', 'vgWirelessCameraUrl',
-    'vgSelectedMicId', 'vgSelectedSpeakerId',
-    'vgSaveLocal', 'vgSaveDrive',
-    'vgDriveFolderName', 'vgDriveClientId',
-    'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts',
-    'vgPreviewEnabled',
-    'vgThankYouEnabled', 'vgThankYouDuration',
-    'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
-];
-
-const CONFIG_STORAGE_KEY = 'pb_appConfig';
-
-function saveConfig() {
-    try {
-        const data = {};
-        PERSIST_KEYS.forEach(k => { data[k] = appConfig[k]; });
-        localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(data));
-    } catch (e) {
-        console.warn('[Config] Could not save settings:', e);
-    }
-}
-
-function loadConfig() {
-    try {
-        const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
-        if (!raw) return;
-        const saved = JSON.parse(raw);
-        PERSIST_KEYS.forEach(k => {
-            if (k in saved && saved[k] !== undefined) {
-                appConfig[k] = saved[k];
-            }
-        });
-    } catch (e) {
-        console.warn('[Config] Could not load settings:', e);
-    }
-}
-
-// Debounced auto-save: triggers 800 ms after the last config change
-let _saveTimer = null;
-function scheduleSave() {
-    clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(saveConfig, 800);
-}
-
-// Always save right before the page unloads (tab close, refresh, navigation)
-window.addEventListener('beforeunload', saveConfig);
-
-// Apply saved config into appConfig now, before the DOM is ready
-loadConfig();
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── REPLACE THIS WITH YOUR OWN GOOGLE OAUTH CLIENT ID ───────────────────────
@@ -359,10 +295,6 @@ $(document).ready(function() {
     }
     syncUiFromConfig();
     // ─────────────────────────────────────────────────────────────────────────
-
-    // Auto-save whenever any setting input/select/textarea changes (debounced).
-    // Excludes file inputs — those produce object URLs that cannot be persisted.
-    $(document).on('input change', 'input:not([type="file"]), select, textarea', scheduleSave);
 
     updateDashboardGallery();
 
@@ -847,13 +779,11 @@ $(document).ready(function() {
     $('#btn-copies-up').on('click', function() {
         appConfig.printCopies = Math.min(10, appConfig.printCopies + 1);
         $('#print-copies-display').text(appConfig.printCopies);
-        scheduleSave();
     });
 
     $('#btn-copies-down').on('click', function() {
         appConfig.printCopies = Math.max(1, appConfig.printCopies - 1);
         $('#print-copies-display').text(appConfig.printCopies);
-        scheduleSave();
     });
 
     $('input[name="color-mode"]').on('change', function() {
@@ -3950,19 +3880,14 @@ $(document).ready(function() {
     }
 
     function wizDone() {
-        localStorage.setItem('pb-setup-done', '1');
         $('#setup-wizard').fadeOut(300);
         $('#admin-dashboard').fadeIn(300);
     }
 
-    // First-launch check
-    if (!localStorage.getItem('pb-setup-done')) {
-        $('#admin-dashboard').hide();
-        $('#setup-wizard').fadeIn(300);
-        wizGo(1);
-    } else {
-        $('#setup-wizard').hide();
-    }
+    // Always show the setup wizard on load
+    $('#admin-dashboard').hide();
+    $('#setup-wizard').fadeIn(300);
+    wizGo(1);
 
     $('#wiz-next').on('click', function() { if (wizStep < WIZ_TOTAL) wizGo(wizStep + 1); });
     $('#wiz-back').on('click', function() { if (wizStep > 1) wizGo(wizStep - 1); });
@@ -4459,40 +4384,6 @@ $(document).ready(function() {
         });
         _acquireWakeLock();
 
-        // ── Gallery persistence across page refreshes (sessionStorage) ──
-        const _storeKey = 'lv_gallery_' + hostId;
-        const STORE_MAX = 20;
-
-        function _storedItems() {
-            try { return JSON.parse(sessionStorage.getItem(_storeKey) || '[]'); }
-            catch (e) { return []; }
-        }
-        function _saveItem(msg, type) {
-            try {
-                const items = _storedItems();
-                items.unshift({ type: type, data: msg.data, filename: msg.filename, ts: msg.ts, duration: msg.duration, driveUrl: msg.driveUrl || null });
-                if (items.length > STORE_MAX) items.length = STORE_MAX;
-                sessionStorage.setItem(_storeKey, JSON.stringify(items));
-            } catch (e) { /* quota exceeded — skip caching this item */ }
-        }
-        function _saveUpdateDrive(filename, driveUrl) {
-            try {
-                const items = _storedItems();
-                const item = items.find(function(i) { return i.filename === filename; });
-                if (item) { item.driveUrl = driveUrl; sessionStorage.setItem(_storeKey, JSON.stringify(items)); }
-            } catch (e) {}
-        }
-
-        // Restore previously received captures after a page refresh
-        (function _restoreGallery() {
-            const saved = _storedItems();
-            if (!saved.length) return;
-            // saved is newest-first; reverse so repeated prepend keeps newest on top
-            saved.slice().reverse().forEach(function(item) {
-                _viewerAddItem(item, item.type);
-            });
-        })();
-
         // ── WebRTC connection with auto-reconnect ─────────────────
         let _viewerPeer = null;
         function connectToHost() {
@@ -4517,9 +4408,9 @@ $(document).ready(function() {
                             _viewerSeenIds.add(msg._id);
                         }
                         if      (msg.type === 'hello')        { if (msg.eventName) $('#viewer-event-name').text(msg.eventName); }
-                        else if (msg.type === 'photo')        { _viewerAddItem(msg, 'photo');  _saveItem(msg, 'photo'); }
-                        else if (msg.type === 'video')        { _viewerAddItem(msg, 'video');  _saveItem(msg, 'video'); }
-                        else if (msg.type === 'drive-update') { _viewerUpdateDrive(msg.filename, msg.driveUrl); _saveUpdateDrive(msg.filename, msg.driveUrl); }
+                        else if (msg.type === 'photo')        { _viewerAddItem(msg, 'photo'); }
+                        else if (msg.type === 'video')        { _viewerAddItem(msg, 'video'); }
+                        else if (msg.type === 'drive-update') { _viewerUpdateDrive(msg.filename, msg.driveUrl); }
                     } catch (e) { /* ignore malformed */ }
                 });
                 conn.on('close', function() {
