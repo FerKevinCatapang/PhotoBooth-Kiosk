@@ -77,9 +77,6 @@ let appConfig = {
     vgPromptCategory: 'wedding', // 'wedding' | 'birthday' | 'teambuilding'
     vgCustomPrompts: [],          // admin-added prompts appended to the active template pool
 
-    // Preview after recording — Video Guestbook
-    vgPreviewEnabled: true,       // show the video playback overlay after each recording
-
     // Thank You screen — Video Guestbook
     vgThankYouEnabled: false,
     vgThankYouImage: null,        // { objectUrl: string } or null — custom background image
@@ -1281,21 +1278,6 @@ $(document).ready(function() {
     $('#setting-vg-prompt').on('input', function() {
         appConfig.vgPromptText = this.value;
     });
-
-    // --- VG Preview toggle ---
-    (function initVgPreview() {
-        function _syncPreviewToggle() {
-            const on = appConfig.vgPreviewEnabled;
-            $('#toggle-vg-preview').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
-            $('#toggle-vg-preview-label').text(on ? 'ON' : 'OFF');
-        }
-        _syncPreviewToggle();
-        $('#toggle-vg-preview').on('change', function() {
-            appConfig.vgPreviewEnabled = this.checked;
-            $('#toggle-vg-preview-label').text(this.checked ? 'ON' : 'OFF');
-            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-        });
-    })();
 
     // --- VG Camera Selection ---
     async function populateVgCameraList() {
@@ -2698,9 +2680,7 @@ $(document).ready(function() {
         $('#vg-processing-overlay').fadeOut(200);
 
         // Show preview with autoplay × 3, then close button
-        if (appConfig.vgPreviewEnabled) {
-            await showVgPreview(galleryBlobUrl);
-        }
+        await showVgPreview(galleryBlobUrl);
         if (appConfig.vgThankYouEnabled) {
             await showVgThankYou();
         }
