@@ -1708,6 +1708,7 @@ $(document).ready(function() {
 
             $('#admin-dashboard').hide();
             $('#kiosk-mode').fadeIn(400);
+            _requestFullscreen();
             resetToWelcomeScreen();
             
         } catch (err) {
@@ -1773,9 +1774,21 @@ $(document).ready(function() {
         $('#pin-overlay').hide();
     }
 
+    function _requestFullscreen() {
+        const el = document.documentElement;
+        const fn = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+        if (fn) fn.call(el).catch(() => {});
+    }
+
+    function _exitFullscreen() {
+        const fn = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+        if (fn) fn.call(document).catch(() => {});
+    }
+
     function _doExitKiosk() {
         stopVgRecordingIfActive();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
+        _exitFullscreen();
         $('#kiosk-mode').hide();
         $('#vg-booth').hide();
         $('#live-booth').hide();
@@ -1859,6 +1872,17 @@ $(document).ready(function() {
     document.getElementById('kiosk-mode').addEventListener('touchmove', function(e) {
         e.preventDefault();
     }, { passive: false });
+
+    // If fullscreen is exited while kiosk is active (e.g. Escape key), treat it as Exit button press
+    document.addEventListener('fullscreenchange', function() {
+        if (!document.fullscreenElement && $('#kiosk-mode').is(':visible')) {
+            if (appConfig.kioskPin && appConfig.kioskPinLen > 0) {
+                _showPinModal();
+            } else {
+                _doExitKiosk();
+            }
+        }
+    });
 
     function applyKioskViewfinderSize() {
         // Derive slot AR from the chosen layout so the viewfinder shows
