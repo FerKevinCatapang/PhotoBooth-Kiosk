@@ -1673,7 +1673,9 @@ $(document).ready(function() {
             const isVgMode = appConfig.captureMode === 'videoguestbook';
             const videoConstraints = isVgMode
                 ? { width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 30, max: 30 } }
-                : { width: { ideal: 4096 }, height: { ideal: 3072 } };
+                // 1920×1080 for the live preview stream; ImageCapture.takePhoto() still uses the
+                // camera's full sensor resolution for actual captures, so print quality is unaffected.
+                : { width: { ideal: 1920 }, height: { ideal: 1080 } };
             if (appConfig.selectedCameraId && appConfig.facingMode === '') {
                 videoConstraints.deviceId = { exact: appConfig.selectedCameraId };
             } else if (appConfig.facingMode) {
@@ -2459,6 +2461,7 @@ $(document).ready(function() {
         const galleryBlobUrl = URL.createObjectURL(blob);
         capturedVideos.unshift(galleryBlobUrl);
         capturedVideoDriveLinks.unshift(null); // will be updated after Drive upload completes
+        _evictOldCaptures();
         updateDashboardGallery();
         // Broadcast thumbnail to Live Viewer peers (fire-and-forget)
         lvBroadcastVideo(galleryBlobUrl, filename);
@@ -2713,6 +2716,22 @@ $(document).ready(function() {
         }
     }
 
+    // Cap how many captures are kept in the in-memory gallery to bound RAM growth.
+    // Files are already saved to disk/Drive; these arrays are only for the dashboard preview.
+    const MAX_GALLERY_PHOTOS = 30;
+    const MAX_GALLERY_VIDEOS = 10;
+    function _evictOldCaptures() {
+        while (capturedPhotos.length > MAX_GALLERY_PHOTOS) {
+            capturedPhotos.pop();           // data URL string — GC reclaims the memory
+            capturedPhotoDriveLinks.pop();
+        }
+        while (capturedVideos.length > MAX_GALLERY_VIDEOS) {
+            const old = capturedVideos.pop();
+            capturedVideoDriveLinks.pop();
+            if (old && old.startsWith('blob:')) URL.revokeObjectURL(old); // release the binary blob
+        }
+    }
+
     async function processAndSaveImage(canvas) {
         $('#processing-overlay').fadeIn(200);
 
@@ -2750,6 +2769,7 @@ $(document).ready(function() {
         const photoDataUrl = canvas.toDataURL('image/png', 0.8);
         capturedPhotos.unshift(photoDataUrl);
         capturedPhotoDriveLinks.unshift(null); // will be updated after Drive upload completes
+        _evictOldCaptures();
         updateDashboardGallery();
         // Broadcast to Live Viewer peers (fire-and-forget)
         lvBroadcastPhoto(photoDataUrl, filename);
