@@ -87,8 +87,9 @@ let appConfig = {
     // Capture Review — Video Guestbook
     vgCaptureReviewEnabled: true, // play back the recording for guest review after capture
 
-    // Kiosk exit PIN (empty string = no PIN required)
+    // Kiosk exit PIN — stored as SHA-256 hex hash, '' = no PIN required
     kioskPin: '',
+    kioskPinLen: 0,  // original PIN length (needed to know when to auto-compare)
 
     // Live Gallery Viewer — operator's local network address (e.g. http://192.168.1.50)
     lvNetworkAddr: '',
@@ -110,7 +111,7 @@ const PERSISTED_KEYS = [
     'driveFolderName', 'vgDriveFolderName', 'vgDriveClientId',
     'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts',
     'vgThankYouEnabled', 'vgThankYouDuration', 'vgCaptureReviewEnabled',
-    'kioskPin', 'lvNetworkAddr'
+    'kioskPin', 'kioskPinLen', 'lvNetworkAddr'
 ];
 
 // Restore persisted config immediately — before DOM ready — so all subsequent

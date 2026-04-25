@@ -443,8 +443,9 @@
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6b7280" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                         <div style="flex:1; min-width:0;">
                             <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Exit PIN <span style="font-weight:400; color:#9ca3af;">(optional)</span></label>
-                            <input type="password" id="kiosk-pin-input" class="text-input" inputmode="numeric" maxlength="8" placeholder="Leave blank to exit without a PIN" style="width:100%; max-width:280px;">
-                            <p style="margin:0.3rem 0 0; font-size:0.78rem; color:#9ca3af;">When set, this PIN is required to exit Kiosk Mode — prevents guests from accessing settings.</p>
+                            <input type="password" id="kiosk-pin-input" class="text-input" inputmode="numeric" maxlength="8" placeholder="Enter new PIN to set or change" style="width:100%; max-width:280px;">
+                            <p id="kiosk-pin-status" style="margin:0.25rem 0 0; font-size:0.78rem; color:#6b7280; font-weight:500;"></p>
+                            <p style="margin:0.2rem 0 0; font-size:0.78rem; color:#9ca3af;">When set, this PIN is required to exit Kiosk Mode — prevents guests from accessing settings.</p>
                         </div>
                     </div>
                 </div>

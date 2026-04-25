@@ -1735,9 +1735,22 @@ $(document).ready(function() {
         $('#camera-error-card').slideUp(200);
     });
 
+    // Returns the SHA-256 hex digest of a PIN string, or '' for empty input.
+    async function _hashPin(pin) {
+        if (!pin) return '';
+        const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin));
+        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
     // --- Kiosk PIN input (admin dashboard) ---
-    $('#kiosk-pin-input').on('input', function() {
-        appConfig.kioskPin = this.value;
+    // Hash on blur/change so we never keep the raw PIN in appConfig or localStorage.
+    $('#kiosk-pin-input').on('change', async function() {
+        const raw = this.value.trim();
+        appConfig.kioskPin    = await _hashPin(raw);
+        appConfig.kioskPinLen = raw.length;
+        this.value = ''; // clear field — raw PIN must not persist in the DOM
+        $('#kiosk-pin-status').text(raw.length > 0 ? 'PIN set ✓' : 'No PIN — exit without prompt');
+        saveConfig();
     });
 
     // --- PIN modal logic ---
@@ -1770,7 +1783,7 @@ $(document).ready(function() {
     }
 
     $('#btn-exit-kiosk').on('click', function() {
-        if (appConfig.kioskPin) {
+        if (appConfig.kioskPin && appConfig.kioskPinLen > 0) {
             _showPinModal();
         } else {
             _doExitKiosk();
@@ -1785,13 +1798,15 @@ $(document).ready(function() {
         $('#pin-error').hide();
     });
 
-    $(document).on('click', '.pin-key[data-k]', function() {
+    // Compare hash of entered digits against stored hash once enough digits entered.
+    $(document).on('click', '.pin-key[data-k]', async function() {
         if (_pinBuffer.length >= 8) return;
         _pinBuffer += $(this).data('k').toString();
         _renderPinDisplay();
         $('#pin-error').hide();
-        if (_pinBuffer.length >= appConfig.kioskPin.length && appConfig.kioskPin.length > 0) {
-            if (_pinBuffer === appConfig.kioskPin) {
+        if (_pinBuffer.length >= appConfig.kioskPinLen && appConfig.kioskPinLen > 0) {
+            const inputHash = await _hashPin(_pinBuffer);
+            if (inputHash === appConfig.kioskPin) {
                 _hidePinModal();
                 _doExitKiosk();
             } else {
@@ -2091,47 +2106,52 @@ $(document).ready(function() {
     // =========================================================
 
     async function triggerCaptureSequence() {
-        $('#live-booth').show();
-        const video = $('#camera-feed')[0];
-        const previewCanvas = $('#photo-canvas')[0];
-        const previewCtx = previewCanvas.getContext('2d');
+        try {
+            $('#live-booth').show();
+            const video = $('#camera-feed')[0];
+            const previewCanvas = $('#photo-canvas')[0];
+            const previewCtx = previewCanvas.getContext('2d');
 
-        const fW = video.videoWidth  || video.naturalWidth  || video.width;
-        const fH = video.videoHeight || video.naturalHeight || video.height;
+            const fW = video.videoWidth  || video.naturalWidth  || video.width;
+            const fH = video.videoHeight || video.naturalHeight || video.height;
 
-        const { cWidth, cHeight, photoSlots } = computeLayout(fW, fH);
+            const { cWidth, cHeight, photoSlots } = computeLayout(fW, fH);
 
-        const stripCanvas = document.createElement('canvas');
-        stripCanvas.width = cWidth;
-        stripCanvas.height = cHeight;
-        const stripCtx = stripCanvas.getContext('2d');
+            const stripCanvas = document.createElement('canvas');
+            stripCanvas.width = cWidth;
+            stripCanvas.height = cHeight;
+            const stripCtx = stripCanvas.getContext('2d');
 
-        // Background: custom uploaded image or white fill
-        if (appConfig.templateBg) {
-            stripCtx.drawImage(appConfig.templateBg, 0, 0, cWidth, cHeight);
-        } else {
-            stripCtx.fillStyle = '#FFFFFF';
-            stripCtx.fillRect(0, 0, cWidth, cHeight);
+            // Background: custom uploaded image or white fill
+            if (appConfig.templateBg) {
+                stripCtx.drawImage(appConfig.templateBg, 0, 0, cWidth, cHeight);
+            } else {
+                stripCtx.fillStyle = '#FFFFFF';
+                stripCtx.fillRect(0, 0, cWidth, cHeight);
+            }
+
+            // --- DYNAMIC SEQUENCE LOOP ---
+            for (let i = 0; i < photoSlots.length; i++) {
+                let waitTime = (i === 0) ? appConfig.countdownFirst : appConfig.countdownOthers;
+                await runCountdown(waitTime);
+                triggerFlash();
+                await new Promise(r => setTimeout(r, 150)); // let flash peak before capture
+                const slot = photoSlots[i];
+                await drawPhoto(stripCtx, video, slot.x, slot.y, slot.w, slot.h);
+            }
+
+            previewCanvas.width = cWidth;
+            previewCanvas.height = cHeight;
+            previewCtx.drawImage(stripCanvas, 0, 0);
+
+            $(video).hide();
+            $(previewCanvas).show();
+
+            await processAndSaveImage(stripCanvas);
+        } catch (err) {
+            console.error('[Capture] Fatal error in capture sequence:', err);
+            resetToWelcomeScreen();
         }
-
-        // --- DYNAMIC SEQUENCE LOOP ---
-        for (let i = 0; i < photoSlots.length; i++) {
-            let waitTime = (i === 0) ? appConfig.countdownFirst : appConfig.countdownOthers;
-            await runCountdown(waitTime);
-            triggerFlash();
-            await new Promise(r => setTimeout(r, 150)); // let flash peak before capture
-            const slot = photoSlots[i];
-            await drawPhoto(stripCtx, video, slot.x, slot.y, slot.w, slot.h);
-        }
-
-        previewCanvas.width = cWidth;
-        previewCanvas.height = cHeight;
-        previewCtx.drawImage(stripCanvas, 0, 0);
-
-        $(video).hide();
-        $(previewCanvas).show();
-
-        await processAndSaveImage(stripCanvas);
     }
 
     function computeLayout(fW, fH) {
@@ -2202,6 +2222,7 @@ $(document).ready(function() {
     }
 
     async function triggerVgSequence() {
+      try {
         $('#vg-booth').show();
         const videoEl = $('#vg-camera-feed')[0];
 
@@ -2373,6 +2394,11 @@ $(document).ready(function() {
         _vgMaxTimer = setTimeout(function() {
             stopVgRecordingIfActive();
         }, appConfig.vgMaxDuration * 1000);
+      } catch (err) {
+        console.error('[VG] Fatal error in VG sequence:', err);
+        stopVgRecordingIfActive();
+        resetToWelcomeScreen();
+      }
     }
 
     $('#btn-vg-stop').on('click', function() {
@@ -3868,8 +3894,9 @@ $(document).ready(function() {
             $('#filename-preview').text(prefix + '_YYYYMMDD_HHMMSS.png');
         }
 
-        // Kiosk PIN
-        $('#kiosk-pin-input').val(appConfig.kioskPin);
+        // Kiosk PIN — field is always empty; we only store the hash
+        $('#kiosk-pin-input').val('');
+        $('#kiosk-pin-status').text(appConfig.kioskPin ? 'PIN set ✓' : 'No PIN — exit without prompt');
 
         // Countdown sliders (both main dashboard and wizard)
         $('#setting-cd-1').val(appConfig.countdownFirst);
