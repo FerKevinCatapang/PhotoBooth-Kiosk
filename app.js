@@ -83,7 +83,6 @@ $(document).ready(function() {
             directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
             const label = `Saving to: /${directoryHandle.name}`;
             $('#dir-status').text(label);
-            $('#wiz-dir-status').text(label);
         } catch (err) {
             console.log("Directory picker cancelled or failed.", err);
         }
@@ -3454,234 +3453,14 @@ $(document).ready(function() {
         $('#event-name-drive-warning').toggle(needsName);
         $('#event-name-input').toggleClass('input-required-highlight', needsName);
     }
-    $('#event-name-input, #wiz-event-name').on('input', function() {
+    $('#event-name-input').on('input', function() {
         appConfig.eventName = this.value.trim();
-        $('#event-name-input, #wiz-event-name').val(appConfig.eventName);
+        $('#event-name-input').val(appConfig.eventName);
         // Reset event sub-folder cache so the new name creates a fresh sub-folder
         appConfig._driveEventFolderId = null;
         appConfig._vgDriveEventFolderId = null;
         _updateFilenamePreview();
         _updateEventNameWarnings();
-    });
-
-    // =============================================
-    // SETUP WIZARD
-    // =============================================
-    let wizStep = 1;
-    const WIZ_TOTAL = 5;
-
-    function wizGo(step) {
-        wizStep = step;
-        $('.wiz-step-item').each(function() {
-            const s = parseInt($(this).data('s'));
-            $(this).toggleClass('active', s === step).toggleClass('done', s < step);
-        });
-        $('.wstep').hide();
-        $('#wstep-' + step).show();
-        $('#wiz-back').toggle(step > 1);
-        if (step === WIZ_TOTAL) {
-            $('#wiz-next').hide();
-        } else {
-            $('#wiz-next').show();
-        }
-    }
-
-    function wizDone() {
-        localStorage.setItem('pb-setup-done', '1');
-        saveConfig();
-        $('#setup-wizard').fadeOut(300);
-        $('#admin-dashboard').fadeIn(300);
-    }
-
-    // First-launch check
-    if (!localStorage.getItem('pb-setup-done')) {
-        $('#admin-dashboard').hide();
-        $('#setup-wizard').fadeIn(300);
-        wizGo(1);
-    } else {
-        $('#setup-wizard').hide();
-    }
-
-    $('#wiz-next').on('click', function() { if (wizStep < WIZ_TOTAL) wizGo(wizStep + 1); });
-    $('#wiz-back').on('click', function() { if (wizStep > 1) wizGo(wizStep - 1); });
-    $('#wiz-skip').on('click', function() { wizDone(); });
-    $('#wiz-go-dashboard').on('click', function(e) { e.preventDefault(); wizDone(); });
-
-    // Step 1: Layout — same name="layout" radio group; existing change handler already syncs appConfig + paper info
-
-    // Step 2: Template background
-    $('#wiz-bg-empty').on('click', function(e) {
-        if (!$(e.target).closest('button, label').length) $('#wiz-bg-input').trigger('click');
-    });
-    $('#wiz-bg-input').on('change', async function() {
-        if (this.files[0]) {
-            const file = this.files[0];
-            await applyBgImage(file);
-            if (appConfig.templateBg) {
-                $('#wiz-bg-thumb').attr('src', appConfig.templateBg.src);
-                $('#wiz-bg-filename').text(file.name);
-                $('#wiz-bg-dims').text(appConfig.templateBg.naturalWidth + ' × ' + appConfig.templateBg.naturalHeight + ' px');
-                $('#wiz-bg-empty').hide();
-                $('#wiz-bg-preview').show();
-            }
-        }
-        this.value = '';
-    });
-    $('#wiz-btn-clear-bg').on('click', function() {
-        appConfig.templateBg = null;
-        $('#bg-preview-state').hide();
-        $('#bg-empty-state').show();
-        $('#wiz-bg-preview').hide();
-        $('#wiz-bg-empty').show();
-        drawTemplatePreview();
-    });
-    const wizBgZone = document.getElementById('wiz-bg-zone');
-    if (wizBgZone) {
-        wizBgZone.addEventListener('dragover', e => { e.preventDefault(); wizBgZone.classList.add('drag-over'); });
-        wizBgZone.addEventListener('dragleave', () => wizBgZone.classList.remove('drag-over'));
-        wizBgZone.addEventListener('drop', async e => {
-            e.preventDefault();
-            wizBgZone.classList.remove('drag-over');
-            const file = e.dataTransfer.files[0];
-            if (!file || !file.type.match(/image\/(jpeg|png)/)) return;
-            await applyBgImage(file);
-            if (appConfig.templateBg) {
-                $('#wiz-bg-thumb').attr('src', appConfig.templateBg.src);
-                $('#wiz-bg-filename').text(file.name);
-                $('#wiz-bg-dims').text(appConfig.templateBg.naturalWidth + ' × ' + appConfig.templateBg.naturalHeight + ' px');
-                $('#wiz-bg-empty').hide();
-                $('#wiz-bg-preview').show();
-            }
-        });
-    }
-
-    // Step 3: Timing sliders
-    $('#wiz-cd-1').on('input', function() {
-        const v = $(this).val();
-        $('#wiz-val-cd-1').text(v + 's');
-        appConfig.countdownFirst = parseInt(v);
-        $('#setting-cd-1').val(v);
-        $('#val-cd-1').text(v);
-    });
-    $('#wiz-cd-others').on('input', function() {
-        const v = $(this).val();
-        $('#wiz-val-cd-others').text(v + 's');
-        appConfig.countdownOthers = parseInt(v);
-        $('#setting-cd-others').val(v);
-        $('#val-cd-others').text(v);
-    });
-    $('#wiz-review').on('input', function() {
-        const v = $(this).val();
-        $('#wiz-val-review').text(v + 's');
-        appConfig.reviewTime = parseInt(v);
-        $('#setting-review').val(v);
-        $('#val-review').text(v);
-    });
-
-    // Step 4: Welcome screen
-    $('#wiz-ws-color').on('input', function() {
-        const col = $(this).val();
-        $('#wiz-ws-color-hex').text(col);
-        appConfig.welcomeBg = col;
-        $('#edit-bg-color').val(col);
-        $('#color-hex').text(col);
-        if (!appConfig.welcomeMedia) {
-            $('#designer-preview').css('background-color', col);
-            $('#guest-welcome').css('background-color', col);
-            $('#wiz-ws-preview').css('background-color', col);
-        }
-    });
-    $('#wiz-ws-title').on('input', function() {
-        const txt = $(this).val();
-        appConfig.welcomeTitle = txt;
-        $('#edit-title').val(txt);
-        $('#prev-title, #live-ws-title, #wiz-prev-title').text(txt);
-    });
-    $('#wiz-ws-subtitle').on('input', function() {
-        const txt = $(this).val();
-        appConfig.welcomeSubtitle = txt;
-        $('#edit-subtitle').val(txt);
-        $('#prev-subtitle, #live-ws-subtitle, #wiz-prev-subtitle').text(txt);
-    });
-
-    function syncWizWelcomeMediaUI(type, objectUrl) {
-        const thumbWrap = $('#wiz-ws-thumb-wrap').empty();
-        if (type === 'video') {
-            thumbWrap.html(`<video src="${objectUrl}" class="ws-thumb-media" autoplay loop muted playsinline></video>`);
-        } else {
-            thumbWrap.html(`<img src="${objectUrl}" class="ws-thumb-media">`);
-        }
-        $('#wiz-ws-media-empty').hide();
-        $('#wiz-ws-media-filled').show();
-        if (type === 'video') {
-            $('#wiz-prev-media-img').hide().attr('src', '');
-            const pv = $('#wiz-prev-media-video').attr('src', objectUrl).show()[0];
-            pv.load(); pv.play();
-        } else {
-            const wv = $('#wiz-prev-media-video').hide().attr('src', '')[0];
-            if (wv) wv.load();
-            $('#wiz-prev-media-img').attr('src', objectUrl).show();
-        }
-        $('#wiz-ws-preview').css('background-color', '');
-    }
-
-    $('#wiz-ws-media-drop').on('click', function(e) {
-        if (!$(e.target).closest('#wiz-ws-media-remove, #wiz-btn-pick-media').length) {
-            document.getElementById('wiz-ws-media-input').click();
-        }
-    });
-    $('#wiz-ws-media-input').on('change', function() {
-        const file = this.files[0];
-        if (file) {
-            applyWelcomeMedia(file);
-            syncWizWelcomeMediaUI(appConfig.welcomeMedia.type, appConfig.welcomeMedia.objectUrl);
-        }
-    });
-    $('#wiz-ws-media-drop').on('dragover dragenter', function(e) {
-        e.preventDefault(); e.stopPropagation();
-        $(this).addClass('drag-over');
-    }).on('dragleave drop', function(e) {
-        e.preventDefault(); e.stopPropagation();
-        $(this).removeClass('drag-over');
-        if (e.type === 'drop') {
-            const file = e.originalEvent.dataTransfer.files[0];
-            if (file && (file.type.startsWith('image/') || file.type.startsWith('video/'))) {
-                applyWelcomeMedia(file);
-                syncWizWelcomeMediaUI(appConfig.welcomeMedia.type, appConfig.welcomeMedia.objectUrl);
-            }
-        }
-    });
-    $('#wiz-ws-media-remove').on('click', function(e) {
-        e.stopPropagation();
-        clearWelcomeMedia();
-        $('#wiz-ws-media-empty').show();
-        $('#wiz-ws-media-filled').hide();
-        $('#wiz-ws-thumb-wrap').empty();
-        const wv = $('#wiz-prev-media-video').hide().attr('src', '')[0];
-        if (wv) wv.load();
-        $('#wiz-prev-media-img').hide().attr('src', '');
-        $('#wiz-ws-preview').css('background-color', appConfig.welcomeBg);
-    });
-
-    // Step 5: Storage
-    $('input[name="wiz-storage"]').on('change', function() {
-        const val = $(this).val();
-        const isLocal = val === 'local';
-        appConfig.saveLocal = isLocal;
-        $('#chk-save-local').prop('checked', isLocal);
-        const showFolder = isLocal;
-        $('#wiz-folder-config').toggle(showFolder);
-        if (showFolder) { $('#local-folder-config').slideDown(); }
-        else { $('#local-folder-config').slideUp(); }
-    });
-    $('#wiz-btn-select-dir').on('click', function() {
-        $('#btn-select-dir').trigger('click');
-    });
-
-    // Launch kiosk from wizard
-    $('#wiz-launch-kiosk').on('click', function() {
-        wizDone();
-        $('#btn-launch-booth').trigger('click');
     });
 
     // =========================================================
@@ -4099,7 +3878,6 @@ $(document).ready(function() {
 
         // Event name
         $('#event-name-input').val(appConfig.eventName);
-        $('#wiz-event-name').val(appConfig.eventName);
         if (appConfig.eventName) {
             const prefix = appConfig.eventName.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '');
             $('#filename-preview').text(prefix + '_YYYYMMDD_HHMMSS.png');
@@ -4109,33 +3887,23 @@ $(document).ready(function() {
         $('#kiosk-pin-input').val('');
         $('#kiosk-pin-status').text(appConfig.kioskPin ? 'PIN set ✓' : 'No PIN — exit without prompt');
 
-        // Countdown sliders (both main dashboard and wizard)
+        // Countdown sliders
         $('#setting-cd-1').val(appConfig.countdownFirst);
         $('#val-cd-1').text(appConfig.countdownFirst);
-        $('#wiz-cd-1').val(appConfig.countdownFirst);
-        $('#wiz-val-cd-1').text(appConfig.countdownFirst + 's');
         $('#setting-cd-others').val(appConfig.countdownOthers);
         $('#val-cd-others').text(appConfig.countdownOthers);
-        $('#wiz-cd-others').val(appConfig.countdownOthers);
-        $('#wiz-val-cd-others').text(appConfig.countdownOthers + 's');
         $('#setting-review').val(appConfig.reviewTime);
         $('#val-review').text(appConfig.reviewTime);
-        $('#wiz-review').val(appConfig.reviewTime);
-        $('#wiz-val-review').text(appConfig.reviewTime + 's');
 
         // Welcome screen
         $('#edit-bg-color').val(appConfig.welcomeBg);
-        $('#wiz-ws-color').val(appConfig.welcomeBg);
         $('#color-hex').text(appConfig.welcomeBg);
-        $('#wiz-ws-color-hex').text(appConfig.welcomeBg);
         $('#edit-title').val(appConfig.welcomeTitle);
-        $('#wiz-ws-title').val(appConfig.welcomeTitle);
         $('#edit-subtitle').val(appConfig.welcomeSubtitle);
-        $('#wiz-ws-subtitle').val(appConfig.welcomeSubtitle);
-        $('#prev-title, #live-ws-title, #wiz-prev-title').text(appConfig.welcomeTitle);
-        $('#prev-subtitle, #live-ws-subtitle, #wiz-prev-subtitle').text(appConfig.welcomeSubtitle);
+        $('#prev-title, #live-ws-title').text(appConfig.welcomeTitle);
+        $('#prev-subtitle, #live-ws-subtitle').text(appConfig.welcomeSubtitle);
         if (!appConfig.welcomeMedia) {
-            $('#designer-preview, #guest-welcome, #wiz-ws-preview').css('background-color', appConfig.welcomeBg);
+            $('#designer-preview, #guest-welcome').css('background-color', appConfig.welcomeBg);
         }
 
         // Photo mode toggle
@@ -4215,8 +3983,7 @@ $(document).ready(function() {
 
     // Auto-save on any admin UI input change (covers text, checkboxes, radios, selects, sliders)
     $(document).on('change input',
-        '#admin-dashboard input, #admin-dashboard select, #admin-dashboard textarea,' +
-        '#setup-wizard input, #setup-wizard select, #setup-wizard textarea',
+        '#admin-dashboard input, #admin-dashboard select, #admin-dashboard textarea',
         _scheduleSave
     );
 
