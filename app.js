@@ -1325,10 +1325,12 @@ $(document).ready(function() {
 
     $('#vg-mic-select').on('change', function() {
         appConfig.vgSelectedMicId = this.value;
+        _scheduleSave();
     });
 
     $('#vg-speaker-select').on('change', function() {
         appConfig.vgSelectedSpeakerId = this.value;
+        _scheduleSave();
     });
 
     $('#btn-refresh-vg-audio').on('click', function() {
@@ -1691,14 +1693,34 @@ $(document).ready(function() {
                     videoConstraints.facingMode = { ideal: appConfig.vgFacingMode };
                 }
             }
-            const audioConstraint = (isVgMode && appConfig.vgSelectedMicId)
-                ? { deviceId: { exact: appConfig.vgSelectedMicId } }
-                : true;
-            const constraints = isVgMode
-                ? { video: videoConstraints, audio: audioConstraint }
-                : { video: videoConstraints };
-
-            currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+            if (isVgMode) {
+                // Two separate getUserMedia calls: Android Chrome ignores audio.deviceId
+                // when paired with a video.deviceId in a single call (the camera's built-in
+                // audio wins). Splitting them forces the browser to honour the mic selection.
+                const videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+                let audioTracks = [];
+                try {
+                    const audioConstraint = appConfig.vgSelectedMicId
+                        ? { deviceId: { exact: appConfig.vgSelectedMicId } }
+                        : true;
+                    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
+                    audioTracks = audioStream.getAudioTracks();
+                } catch (audioErr) {
+                    console.warn('[VG] Requested mic unavailable, trying default:', audioErr.message);
+                    try {
+                        const fallback = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        audioTracks = fallback.getAudioTracks();
+                    } catch (e2) {
+                        console.warn('[VG] No audio track available:', e2.message);
+                    }
+                }
+                currentStream = new MediaStream([
+                    ...videoStream.getVideoTracks(),
+                    ...audioTracks
+                ]);
+            } else {
+                currentStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+            }
 
             if (appConfig.captureMode === 'videoguestbook') {
                 const vgFeedEl = $('#vg-camera-feed')[0];
