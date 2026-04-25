@@ -1296,6 +1296,15 @@ $(document).ready(function() {
             }
             appConfig.vgSelectedSpeakerId = spkSel.value;
 
+            // Show "Grant Bluetooth Access" button when Chrome hides output labels (requires selectAudioOutput())
+            const hasBlankOutputLabel = audioOutputs.some(d => !d.label);
+            const grantBtn = document.getElementById('btn-grant-audio-output');
+            if (grantBtn) {
+                grantBtn.style.display =
+                    (hasBlankOutputLabel && typeof navigator.mediaDevices.selectAudioOutput === 'function')
+                    ? '' : 'none';
+            }
+
             // Diagnostic summary
             const inputLines  = audioInputs.map((d, i) => `<span style="display:block;">[${i + 1}] ${d.label || '<em style="color:#f59e0b;">no label</em>'}</span>`).join('');
             const outputLines = audioOutputs.map((d, i) => `<span style="display:block;">[${i + 1}] ${d.label || '<em style="color:#f59e0b;">no label</em>'}</span>`).join('');
@@ -2643,10 +2652,17 @@ $(document).ready(function() {
 
             closeBtn.addEventListener('click', doClose);
 
-            video.play().catch(() => {
-                msg.textContent = 'Tap play to preview your message.';
-                playPauseBtn.textContent = '▶';
-            });
+            const _startPreviewPlay = () => {
+                video.play().catch(() => {
+                    msg.textContent = 'Tap play to preview your message.';
+                    playPauseBtn.textContent = '▶';
+                });
+            };
+            if (appConfig.vgSelectedSpeakerId && typeof video.setSinkId === 'function') {
+                video.setSinkId(appConfig.vgSelectedSpeakerId).then(_startPreviewPlay).catch(_startPreviewPlay);
+            } else {
+                _startPreviewPlay();
+            }
         });
     }
 
@@ -3010,6 +3026,72 @@ $(document).ready(function() {
             osc.stop(ctx.currentTime + duration);
         } catch (e) { /* audio not available */ }
     }
+
+    // Play a short 880 Hz tone through the given audio output device (or default if sinkId is empty).
+    // Routes via a hidden Audio element so setSinkId() can override Android's default routing
+    // (needed when a USB mic is connected and Android steals default audio output away from Bluetooth).
+    function _testSpeakerOutput(sinkId) {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+            const ctx = new AudioCtx();
+            const dest = ctx.createMediaStreamDestination();
+            const osc  = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(dest);
+            osc.type = 'sine';
+            osc.frequency.value = 880;
+            gain.gain.setValueAtTime(0.4, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.5);
+
+            const el = new Audio();
+            el.srcObject = dest.stream;
+            const startPlay = () => {
+                el.play().catch(() => {});
+                setTimeout(() => { el.srcObject = null; ctx.close(); }, 1200);
+            };
+            if (sinkId && typeof el.setSinkId === 'function') {
+                el.setSinkId(sinkId).then(startPlay).catch(startPlay);
+            } else {
+                startPlay();
+            }
+        } catch (e) { /* audio not available */ }
+    }
+
+    $('#btn-test-speaker').on('click', function() {
+        _testSpeakerOutput(appConfig.vgSelectedSpeakerId);
+    });
+
+    $('#btn-grant-audio-output').on('click', async function() {
+        if (typeof navigator.mediaDevices.selectAudioOutput !== 'function') {
+            $(this).hide();
+            return;
+        }
+        const btn = $(this);
+        btn.prop('disabled', true).text('Opening picker…');
+        try {
+            const device = await navigator.mediaDevices.selectAudioOutput();
+            appConfig.vgSelectedSpeakerId = device.deviceId;
+            await populateVgAudioDeviceList();
+            // Re-select the device that was just granted
+            const spkSel = document.getElementById('vg-speaker-select');
+            if ([...spkSel.options].some(o => o.value === device.deviceId)) {
+                spkSel.value = device.deviceId;
+                appConfig.vgSelectedSpeakerId = device.deviceId;
+            }
+            saveConfig();
+        } catch (e) {
+            if (e.name !== 'AbortError') {
+                const diag = document.getElementById('vg-audio-diag');
+                if (diag) diag.innerHTML += `<span style="color:#dc2626; display:block;"> ⚠ ${e.message}</span>`;
+            }
+        } finally {
+            btn.prop('disabled', false).text('🔑 Grant Bluetooth Access');
+        }
+    });
     // =========================================================
 
     function runCountdown(seconds) {
