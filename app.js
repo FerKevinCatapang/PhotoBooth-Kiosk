@@ -537,16 +537,16 @@ $(document).ready(function() {
         const btn = $(this);
         const msg = $('#server-status-msg');
         if (!appConfig.printServer) {
-            msg.text('⚠ Enter a server URL first.').css('color', '#d97706').show();
+            msg.html('<i class="fa-solid fa-triangle-exclamation"></i> Enter a server URL first.').css('color', '#d97706').show();
             return;
         }
         btn.prop('disabled', true).text('Testing…');
         msg.hide();
         try {
             const data = await checkPrintServer();
-            msg.html('✅ Connected — ' + (data.printer || data.server || 'server ready')).css('color', '#16a34a').show();
+            msg.html('<i class="fa-solid fa-circle-check"></i> Connected — ' + (data.printer || data.server || 'server ready')).css('color', '#16a34a').show();
         } catch (e) {
-            msg.html('❌ Could not reach server: ' + e.message).css('color', '#dc2626').show();
+            msg.html('<i class="fa-solid fa-circle-xmark"></i> Could not reach server: ' + e.message).css('color', '#dc2626').show();
         } finally {
             btn.prop('disabled', false).text('Test Connection');
         }
@@ -625,7 +625,7 @@ $(document).ready(function() {
     function _driveSetStatus(msg, isError) {
         const el = document.getElementById('drive-auth-status');
         if (!el) return;
-        el.textContent = msg;
+        el.innerHTML = msg;
         el.style.color = isError ? '#ef4444' : '#16a34a';
     }
 
@@ -805,7 +805,7 @@ $(document).ready(function() {
         _driveSetStatus('');
         try {
             await _driveRequestToken();
-            _driveSetStatus('✓ Connected — photos will upload automatically', false);
+            _driveSetStatus('<i class="fa-solid fa-check"></i> Connected — photos will upload automatically', false);
             btn.hide();
             $('#btn-drive-signout').show();
         } catch (e) {
@@ -838,7 +838,7 @@ $(document).ready(function() {
 
     function _vgDriveSetStatus(msg, isErr = false) {
         const el = document.getElementById('vg-drive-auth-status');
-        if (el) { el.textContent = msg; el.style.color = isErr ? '#dc2626' : '#6b7280'; }
+        if (el) { el.innerHTML = msg; el.style.color = isErr ? '#dc2626' : '#6b7280'; }
     }
 
     async function _vgDriveRequestToken() {
@@ -935,7 +935,7 @@ $(document).ready(function() {
         _vgDriveSetStatus('');
         try {
             await _vgDriveRequestToken();
-            _vgDriveSetStatus('✓ Connected — videos will upload automatically', false);
+            _vgDriveSetStatus('<i class="fa-solid fa-check"></i> Connected — videos will upload automatically', false);
             btn.hide();
             $('#btn-vg-drive-signout').show();
         } catch (e) {
@@ -979,7 +979,7 @@ $(document).ready(function() {
             const allDenied = permResults.every(r => r.status === 'rejected');
             if (allDenied) {
                 const err = permResults[0].reason;
-                setDiag(`<span style="color:#dc2626;">⚠ Camera permission denied (${err.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
+                setDiag(`<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Camera permission denied (${err.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
                 document.getElementById('camera-select').innerHTML = '<option value="">— permission denied —</option>';
                 return;
             }
@@ -992,7 +992,7 @@ $(document).ready(function() {
             sel.innerHTML = '';
             if (videoInputs.length === 0) {
                 sel.innerHTML = '<option value="">No cameras found</option>';
-                setDiag('<span style="color:#dc2626;">⚠ No cameras detected. Plug in the camera, make sure it is in UVC mode, then tap Refresh.</span>');
+                setDiag('<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> No cameras detected. Plug in the camera, make sure it is in UVC mode, then tap Refresh.</span>');
                 return;
             }
 
@@ -1023,12 +1023,12 @@ $(document).ready(function() {
                 return `<span style="display:block;">[${i + 1}] ${lbl}${shortId}</span>`;
             }).join('');
             const hint = videoInputs.some(c => !c.label)
-                ? '<span style="color:#f59e0b; display:block; margin-top:3px;">⚠ Some cameras have no label — grant camera permission and tap Refresh.</span>'
+                ? '<span style="color:#f59e0b; display:block; margin-top:3px;"><i class="fa-solid fa-triangle-exclamation"></i> Some cameras have no label — grant camera permission and tap Refresh.</span>'
                 : '';
             setDiag(`<span style="font-weight:600;">${videoInputs.length} camera(s) detected:</span><span style="display:block; margin-top:2px;">${lines}</span>${hint}`);
 
         } catch (e) {
-            setDiag(`<span style="color:#dc2626;">⚠ Error: ${e.name} — ${e.message}</span>`);
+            setDiag(`<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Error: ${e.name} — ${e.message}</span>`);
             console.warn('populateCameraList:', e);
         }
     }
@@ -1045,7 +1045,7 @@ $(document).ready(function() {
         const pv = document.getElementById('camera-test-preview');
         if (pv) pv.srcObject = null;
         $('#camera-test-card').hide();
-        $('#btn-test-camera').text('▶ Test');
+        $('#btn-test-camera').html('<i class="fa-solid fa-play"></i> Test');
     }
 
     $('#btn-test-camera').on('click', async function() {
@@ -1071,10 +1071,10 @@ $(document).ready(function() {
             if (info) info.textContent = `${track.label}  ·  ${settings.width || '?'} × ${settings.height || '?'}`;
 
             $('#camera-test-card').show();
-            btn.prop('disabled', false).text('⏹ Stop Test');
+            btn.prop('disabled', false).html('<i class="fa-solid fa-stop"></i> Stop Test');
         } catch (e) {
-            btn.prop('disabled', false).text('▶ Test');
-            const msg = `<span style="color:#dc2626;">⚠ Could not open camera: <strong>${e.name}</strong> — ${e.message}</span>`;
+            btn.prop('disabled', false).html('<i class="fa-solid fa-play"></i> Test');
+            const msg = `<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Could not open camera: <strong>${e.name}</strong> — ${e.message}</span>`;
             if (diag) diag.innerHTML = msg;
         }
     });
@@ -1127,7 +1127,7 @@ $(document).ready(function() {
             const allDenied = permResults.every(r => r.status === 'rejected');
             if (allDenied) {
                 const err = permResults[0].reason;
-                setDiag(`<span style="color:#dc2626;">⚠ Camera permission denied (${err.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
+                setDiag(`<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Camera permission denied (${err.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
                 document.getElementById('vg-camera-select').innerHTML = '<option value="">— permission denied —</option>';
                 return;
             }
@@ -1140,7 +1140,7 @@ $(document).ready(function() {
             sel.innerHTML = '';
             if (videoInputs.length === 0) {
                 sel.innerHTML = '<option value="">No cameras found</option>';
-                setDiag('<span style="color:#dc2626;">⚠ No cameras detected. Plug in the camera, make sure it is in UVC mode, then tap Refresh.</span>');
+                setDiag('<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> No cameras detected. Plug in the camera, make sure it is in UVC mode, then tap Refresh.</span>');
                 return;
             }
 
@@ -1168,11 +1168,11 @@ $(document).ready(function() {
                 return `<span style="display:block;">[${i + 1}] ${lbl}${shortId}</span>`;
             }).join('');
             const hint = videoInputs.some(c => !c.label)
-                ? '<span style="color:#f59e0b; display:block; margin-top:3px;">⚠ Some cameras have no label — grant camera permission and tap Refresh.</span>'
+                ? '<span style="color:#f59e0b; display:block; margin-top:3px;"><i class="fa-solid fa-triangle-exclamation"></i> Some cameras have no label — grant camera permission and tap Refresh.</span>'
                 : '';
             setDiag(`<span style="font-weight:600;">${videoInputs.length} camera(s) detected:</span><span style="display:block; margin-top:2px;">${lines}</span>${hint}`);
         } catch (e) {
-            setDiag(`<span style="color:#dc2626;">⚠ Error: ${e.name} — ${e.message}</span>`);
+            setDiag(`<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Error: ${e.name} — ${e.message}</span>`);
             console.warn('populateVgCameraList:', e);
         }
     }
@@ -1200,7 +1200,7 @@ $(document).ready(function() {
         const pv = document.getElementById('vg-camera-test-preview');
         if (pv) pv.srcObject = null;
         $('#vg-camera-test-card').hide();
-        $('#btn-test-vg-camera').text('▶ Test');
+        $('#btn-test-vg-camera').html('<i class="fa-solid fa-play"></i> Test');
     }
 
     $('#btn-test-vg-camera').on('click', async function() {
@@ -1225,10 +1225,10 @@ $(document).ready(function() {
             if (info) info.textContent = `${track.label}  ·  ${settings.width || '?'} × ${settings.height || '?'}`;
 
             $('#vg-camera-test-card').show();
-            btn.prop('disabled', false).text('⏹ Stop Test');
+            btn.prop('disabled', false).html('<i class="fa-solid fa-stop"></i> Stop Test');
         } catch (e) {
-            btn.prop('disabled', false).text('▶ Test');
-            const msg = `<span style="color:#dc2626;">⚠ Could not open camera: <strong>${e.name}</strong> — ${e.message}</span>`;
+            btn.prop('disabled', false).html('<i class="fa-solid fa-play"></i> Test');
+            const msg = `<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Could not open camera: <strong>${e.name}</strong> — ${e.message}</span>`;
             if (diag) diag.innerHTML = msg;
         }
     });
@@ -1247,7 +1247,7 @@ $(document).ready(function() {
             try {
                 permStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             } catch (e) {
-                setDiag(`<span style="color:#dc2626;">⚠ Microphone permission denied (${e.name}). Grant microphone access in browser settings, then tap ↺ Refresh.</span>`);
+                setDiag(`<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Microphone permission denied (${e.name}). Grant microphone access in browser settings, then tap ↺ Refresh.</span>`);
                 return;
             } finally {
                 if (permStream) permStream.getTracks().forEach(t => t.stop());
@@ -1308,7 +1308,7 @@ $(document).ready(function() {
             const inputLines  = audioInputs.map((d, i) => `<span style="display:block;">[${i + 1}] ${d.label || '<em style="color:#f59e0b;">no label</em>'}</span>`).join('');
             const outputLines = audioOutputs.map((d, i) => `<span style="display:block;">[${i + 1}] ${d.label || '<em style="color:#f59e0b;">no label</em>'}</span>`).join('');
             const noOutputHint = audioOutputs.length === 0
-                ? '<span style="color:#f59e0b; display:block; margin-top:3px;">⚠ No audio output devices found — speaker selection not available on this browser/device.</span>'
+                ? '<span style="color:#f59e0b; display:block; margin-top:3px;"><i class="fa-solid fa-triangle-exclamation"></i> No audio output devices found — speaker selection not available on this browser/device.</span>'
                 : '';
             setDiag(
                 `<span style="font-weight:600;">${audioInputs.length} mic(s) · ${audioOutputs.length} output(s) detected:</span>` +
@@ -1317,7 +1317,7 @@ $(document).ready(function() {
                 noOutputHint
             );
         } catch (e) {
-            setDiag(`<span style="color:#dc2626;">⚠ Error: ${e.name} — ${e.message}</span>`);
+            setDiag(`<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Error: ${e.name} — ${e.message}</span>`);
             console.warn('populateVgAudioDeviceList:', e);
         }
     }
@@ -1760,7 +1760,7 @@ $(document).ready(function() {
             $('#camera-error-msg').text(hint);
             $('#camera-error-card').slideDown(200);
         } finally {
-            launchBtn.prop('disabled', false).text('🚀 Launch Kiosk Mode');
+            launchBtn.prop('disabled', false).html('<i class="fa-solid fa-rocket"></i> Launch Kiosk Mode');
         }
     });
 
@@ -1783,7 +1783,7 @@ $(document).ready(function() {
         appConfig.kioskPin    = await _hashPin(raw);
         appConfig.kioskPinLen = raw.length;
         this.value = ''; // clear field — raw PIN must not persist in the DOM
-        $('#kiosk-pin-status').text(raw.length > 0 ? 'PIN set ✓' : 'No PIN — exit without prompt');
+        $('#kiosk-pin-status').html(raw.length > 0 ? '<i class="fa-solid fa-lock"></i> PIN set' : 'No PIN — exit without prompt');
         saveConfig();
     });
 
@@ -1999,10 +1999,10 @@ $(document).ready(function() {
                 $grid.show();
                 _rcmItems.forEach(function(item, idx) {
                     if (item.type === 'photo') {
-                        const $card = $('<div class="rcm-card" data-idx="' + idx + '"><img src="' + item.src + '" alt=""><div class="rcm-badge">📸</div></div>');
+                        const $card = $('<div class="rcm-card" data-idx="' + idx + '"><img src="' + item.src + '" alt=""><div class="rcm-badge"><i class="fa-solid fa-camera"></i></div></div>');
                         $grid.append($card);
                     } else {
-                        const $card = $('<div class="rcm-card rcm-card-video" data-idx="' + idx + '"><video src="' + item.src + '" muted playsinline preload="metadata"></video><div class="rcm-badge">🎬</div><div class="rcm-play-icon">▶</div></div>');
+                        const $card = $('<div class="rcm-card rcm-card-video" data-idx="' + idx + '"><video src="' + item.src + '" muted playsinline preload="metadata"></video><div class="rcm-badge"><i class="fa-solid fa-clapperboard"></i></div><div class="rcm-play-icon"><i class="fa-solid fa-play"></i></div></div>');
                         $grid.append($card);
                         // Seek to a frame for thumbnail
                         const vid = $card.find('video')[0];
@@ -2609,8 +2609,8 @@ $(document).ready(function() {
             video.muted = false;
             seekBar.value = 0;
             timeDisplay.textContent = '0:00 / 0:00';
-            playPauseBtn.textContent = '⏸';
-            muteBtn.textContent = '🔊';
+            playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+            muteBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
             msg.style.display = '';
             msg.textContent = 'Playing back your message…';
             overlay.style.display = 'flex';
@@ -2632,11 +2632,11 @@ $(document).ready(function() {
             function onPlayPause() {
                 if (video.paused) { video.play().catch(() => {}); } else { video.pause(); }
             }
-            function onPlay()  { playPauseBtn.textContent = '⏸'; }
-            function onPause() { playPauseBtn.textContent = '▶'; }
+            function onPlay()  { playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i>'; }
+            function onPause() { playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>'; }
             function onMute() {
                 video.muted = !video.muted;
-                muteBtn.textContent = video.muted ? '🔇' : '🔊';
+                muteBtn.innerHTML = video.muted ? '<i class="fa-solid fa-volume-xmark"></i>' : '<i class="fa-solid fa-volume-high"></i>';
             }
 
             video.addEventListener('timeupdate', onTimeUpdate);
@@ -2654,7 +2654,7 @@ $(document).ready(function() {
                     video.play().catch(() => {});
                 } else {
                     msg.style.display = 'none';
-                    playPauseBtn.textContent = '▶';
+                    playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
                 }
             }
             video.onended = onEnded;
@@ -2681,7 +2681,7 @@ $(document).ready(function() {
             const _startPreviewPlay = () => {
                 video.play().catch(() => {
                     msg.textContent = 'Tap play to preview your message.';
-                    playPauseBtn.textContent = '▶';
+                    playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
                 });
             };
             // Prefer AudioContext routing (already wired at kiosk launch via _setupSinkBeep —
@@ -3190,10 +3190,10 @@ $(document).ready(function() {
         } catch (e) {
             if (e.name !== 'AbortError') {
                 const diag = document.getElementById('vg-audio-diag');
-                if (diag) diag.innerHTML += `<span style="color:#dc2626; display:block;"> ⚠ ${e.message}</span>`;
+                if (diag) diag.innerHTML += `<span style="color:#dc2626; display:block;"><i class="fa-solid fa-triangle-exclamation"></i> ${e.message}</span>`;
             }
         } finally {
-            btn.prop('disabled', false).text('🔑 Grant Bluetooth Access');
+            btn.prop('disabled', false).html('<i class="fa-solid fa-key"></i> Grant Bluetooth Access');
         }
     });
     // =========================================================
@@ -3885,7 +3885,7 @@ $(document).ready(function() {
 
         // Kiosk PIN — field is always empty; we only store the hash
         $('#kiosk-pin-input').val('');
-        $('#kiosk-pin-status').text(appConfig.kioskPin ? 'PIN set ✓' : 'No PIN — exit without prompt');
+        $('#kiosk-pin-status').html(appConfig.kioskPin ? '<i class="fa-solid fa-lock"></i> PIN set' : 'No PIN — exit without prompt');
 
         // Countdown sliders
         $('#setting-cd-1').val(appConfig.countdownFirst);
