@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -20,7 +20,7 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- QR Code generator -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <!-- PeerJS (WebRTC) â€” for Live Gallery Viewer feature -->
+    <!-- PeerJS (WebRTC) — for Live Gallery Viewer feature -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
 </head>
 <body>
@@ -32,7 +32,7 @@
         
         <aside class="sidebar">
             <div class="sidebar-header">
-                <button id="btn-launch-booth" class="btn-primary w-100">ðŸš€ Launch Kiosk Mode</button>
+                <button id="btn-launch-booth" class="btn-primary w-100">🚀 Launch Kiosk Mode</button>
                 <div id="camera-error-card" style="display:none; margin-top:0.75rem; padding:0.75rem 1rem; background:#fef2f2; border:1px solid #fecaca; border-radius:8px; font-size:0.82rem; color:#dc2626;">
                     <strong id="camera-error-title"></strong>
                     <p id="camera-error-msg" style="margin:0.3rem 0 0.5rem; color:#991b1b; line-height:1.4;"></p>
@@ -41,27 +41,27 @@
             </div>
             
             <nav class="nav-menu">
-                <a href="#" class="nav-item active" data-target="panel-dashboard">Dashboard</a>
+                <a href="#" class="nav-item active" data-target="panel-dashboard"><span class="icon">🖥️</span> Dashboard</a>
 
                 <div class="nav-section">BASIC</div>
-                <a href="#" class="nav-item" data-target="panel-capture">Capture settings</a>
+                <a href="#" class="nav-item" data-target="panel-capture"><span class="icon">📸</span> Capture settings</a>
                 
                 <div class="nav-section">ADVANCED</div>
-                <a href="#" class="nav-item" data-target="panel-welcome">Welcome screen</a>
-                <a href="#" class="nav-item" id="nav-photo-layout" data-target="panel-photo-layout">Photo Layout</a>
-                <a href="#" class="nav-item" id="nav-template" data-target="panel-template">Photo Template</a>
-                <a href="#" class="nav-item" id="nav-printer" data-target="panel-printer">Printer Setup</a>
-                <a href="#" class="nav-item" id="nav-video-overlay" data-target="panel-video-overlay" style="display:none;">Video Overlay</a>
-                <a href="#" class="nav-item" id="nav-vg-thankyou" data-target="panel-vg-thankyou" style="display:none;">Thank You Screen</a>
-                <a href="#" class="nav-item" id="nav-vg-prompts" data-target="panel-vg-prompts" style="display:none;">Pre-Recording Prompts</a>
-                <a href="#" class="nav-item" id="nav-disclaimer" data-target="panel-disclaimer">Disclaimer</a>
-                <a href="#" class="nav-item" id="nav-stitch" data-target="panel-stitch" style="display:none;">Stitch Videos</a>
-                <a href="#" class="nav-item" id="nav-live-viewer" data-target="panel-live-viewer">Live Gallery Viewer</a>
+                <a href="#" class="nav-item" data-target="panel-welcome"><span class="icon">📱</span> Welcome screen</a>
+                <a href="#" class="nav-item" id="nav-photo-layout" data-target="panel-photo-layout"><span class="icon">📐</span> Photo Layout</a>
+                <a href="#" class="nav-item" id="nav-template" data-target="panel-template"><span class="icon">🖼️</span> Photo Template</a>
+                <a href="#" class="nav-item" id="nav-printer" data-target="panel-printer"><span class="icon">🖨️</span> Printer Setup</a>
+                <a href="#" class="nav-item" id="nav-video-overlay" data-target="panel-video-overlay" style="display:none;"><span class="icon">🎞️</span> Video Overlay</a>
+                <a href="#" class="nav-item" id="nav-vg-thankyou" data-target="panel-vg-thankyou" style="display:none;"><span class="icon">🎉</span> Thank You Screen</a>
+                <a href="#" class="nav-item" id="nav-vg-prompts" data-target="panel-vg-prompts" style="display:none;"><span class="icon">💬</span> Pre-Recording Prompts</a>
+                <a href="#" class="nav-item" id="nav-disclaimer" data-target="panel-disclaimer"><span class="icon">📋</span> Disclaimer</a>
+                <a href="#" class="nav-item" id="nav-stitch" data-target="panel-stitch" style="display:none;"><span class="icon">🎬</span> Stitch Videos</a>
+                <a href="#" class="nav-item" id="nav-live-viewer" data-target="panel-live-viewer"><span class="icon">📹</span> Live Gallery Viewer</a>
             </nav>
             
             <div class="sidebar-footer">
                 <!-- visible only on mobile (header is hidden on mobile) -->
-                <button id="btn-launch-booth-mobile" class="btn-primary">ðŸš€ Launch</button>
+                <button id="btn-launch-booth-mobile" class="btn-primary">🚀 Launch</button>
             </div>
         </aside>
 
@@ -70,7 +70,7 @@
             <!-- PANEL: DASHBOARD (NEW) -->
             <div id="panel-dashboard" class="admin-panel">
                 <div class="content-header">
-                    <h1>Dashboard</h1>
+                    <h1>🖥️ Dashboard</h1>
                 </div>
 
                 <!-- Event Name -->
@@ -86,7 +86,7 @@
                                 Used as the filename prefix and as the <strong>Google Drive sub-folder name</strong> for this event.
                             </p>
                             <div id="event-name-drive-warning" style="display:none; margin-top:0.5rem; padding:0.5rem 0.75rem; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:0.82rem; color:#dc2626; font-weight:500;">
-                                âš  Enter an Event Name â€” it is required to organise files into sub-folders on Google Drive.
+                                ⚠ Enter an Event Name — it is required to organise files into sub-folders on Google Drive.
                             </div>
                         </div>
                         <div style="font-size:0.78rem; color:#9ca3af; white-space:nowrap; flex-shrink:0; padding-top:1.5rem;">
@@ -102,7 +102,7 @@
                             <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Exit PIN <span style="font-weight:400; color:#9ca3af;">(optional)</span></label>
                             <input type="password" id="kiosk-pin-input" class="text-input" inputmode="numeric" maxlength="8" placeholder="Enter new PIN to set or change" style="width:100%; max-width:280px;">
                             <p id="kiosk-pin-status" style="margin:0.25rem 0 0; font-size:0.78rem; color:#6b7280; font-weight:500;"></p>
-                            <p style="margin:0.2rem 0 0; font-size:0.78rem; color:#9ca3af;">When set, this PIN is required to exit Kiosk Mode â€” prevents guests from accessing settings.</p>
+                            <p style="margin:0.2rem 0 0; font-size:0.78rem; color:#9ca3af;">When set, this PIN is required to exit Kiosk Mode — prevents guests from accessing settings.</p>
                         </div>
                     </div>
                 </div>
@@ -111,7 +111,7 @@
                 <div class="gallery-section">
                     <div class="gallery-header">
                         <h3 class="section-title" style="margin:0;">Recent Captures</h3>
-                        <a href="#" id="btn-view-all-gallery">View all â†’</a>
+                        <a href="#" id="btn-view-all-gallery">View all →</a>
                     </div>
                     <!-- Gallery tabs -->
                     <div class="capture-tabs-nav" style="margin-bottom:1.25rem;">
@@ -142,7 +142,7 @@
             <!-- PANEL: CAPTURE SETTINGS -->
             <div id="panel-capture" class="admin-panel" style="display: none;">
                 <div class="content-header">
-                    <h1>Capture Settings</h1>
+                    <h1>📸 Capture Settings</h1>
                 </div>
 
                 <!-- Capture Settings Tabs -->
@@ -189,23 +189,23 @@
                         <div style="flex:1; min-width:0;">
                             <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Specific Camera Device</label>
                             <select id="camera-select" class="text-input" style="width:100%; max-width:420px; cursor:pointer;">
-                                <option value="">â€” detecting camerasâ€¦ â€”</option>
+                                <option value="">— detecting cameras… —</option>
                             </select>
-                            <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Select <em>Use Specific Camera</em> above, plug in your camera, then tap <strong>â†º Refresh</strong>.</p>
-                            <!-- Camera diagnostic output â€” populated by JS -->
+                            <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Select <em>Use Specific Camera</em> above, plug in your camera, then tap <strong>↺ Refresh</strong>.</p>
+                            <!-- Camera diagnostic output — populated by JS -->
                             <div id="camera-diag" style="margin-top:0.55rem; font-size:0.8rem; line-height:1.6; color:#374151;"></div>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:0.5rem; flex-shrink:0; padding-top:1.4rem;">
-                            <button id="btn-refresh-cameras" class="btn-outline" style="white-space:nowrap;">â†º Refresh</button>
-                            <button id="btn-test-camera"    class="btn-outline" style="white-space:nowrap;">â–¶ Test</button>
+                            <button id="btn-refresh-cameras" class="btn-outline" style="white-space:nowrap;">↺ Refresh</button>
+                            <button id="btn-test-camera"    class="btn-outline" style="white-space:nowrap;">▶ Test</button>
                         </div>
                     </div>
 
-                    <!-- Live test preview (hidden until â–¶ Test is clicked) -->
+                    <!-- Live test preview (hidden until ▶ Test is clicked) -->
                     <div id="camera-test-card" class="settings-card" style="display:none; margin-top:0.75rem;">
                         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                            <span style="font-weight:600; font-size:0.88rem; color:#374151;">ðŸ“· Camera Preview</span>
-                            <button id="btn-stop-camera-test" class="btn-outline" style="font-size:0.8rem; padding:0.3rem 0.7rem;">â¹ Stop</button>
+                            <span style="font-weight:600; font-size:0.88rem; color:#374151;">📷 Camera Preview</span>
+                            <button id="btn-stop-camera-test" class="btn-outline" style="font-size:0.8rem; padding:0.3rem 0.7rem;">⏹ Stop</button>
                         </div>
                         <video id="camera-test-preview" autoplay playsinline muted
                                style="width:100%; max-height:260px; border-radius:8px; background:#000; display:block; object-fit:contain;"></video>
@@ -291,24 +291,24 @@
                 <div class="settings-section">
                     <h3 class="section-title">Save Destination</h3>
                     <div class="settings-card">
-                        <p style="font-size:0.82rem; color:#6b7280; margin:0 0 0.9rem;">Enable one or both destinations â€” captures are saved to all enabled locations.</p>
+                        <p style="font-size:0.82rem; color:#6b7280; margin:0 0 0.9rem;">Enable one or both destinations — captures are saved to all enabled locations.</p>
                         <div class="save-dest-grid">
                             <!-- Local Folder toggle -->
                             <label class="save-dest-card" id="lbl-save-local">
                                 <input type="checkbox" id="chk-save-local" checked>
                                 <div class="save-dest-inner">
-                                    <span class="save-dest-icon">ðŸ’¾</span>
+                                    <span class="save-dest-icon">💾</span>
                                     <span class="save-dest-title">Local Folder</span>
-                                    <span class="save-dest-check">âœ“</span>
+                                    <span class="save-dest-check">✓</span>
                                 </div>
                             </label>
                             <!-- Google Drive toggle -->
                             <label class="save-dest-card" id="lbl-save-drive">
                                 <input type="checkbox" id="chk-save-drive">
                                 <div class="save-dest-inner">
-                                    <span class="save-dest-icon">â˜ï¸</span>
+                                    <span class="save-dest-icon">☁️</span>
                                     <span class="save-dest-title">Google Drive</span>
-                                    <span class="save-dest-check">âœ“</span>
+                                    <span class="save-dest-check">✓</span>
                                 </div>
                             </label>
                         </div>
@@ -326,7 +326,7 @@
                                 <div>
                                     <label class="form-label">Google OAuth Client ID</label>
                                     <input type="text" id="drive-client-id" class="text-input" placeholder="123456789-xxxx.apps.googleusercontent.com" autocomplete="off" spellcheck="false">
-                                    <p style="font-size:0.76rem; color:#9ca3af; margin-top:0.3rem;">Paste your Client ID from <strong>console.cloud.google.com</strong> â†’ Credentials. Leave blank to use the built-in default.</p>
+                                    <p style="font-size:0.76rem; color:#9ca3af; margin-top:0.3rem;">Paste your Client ID from <strong>console.cloud.google.com</strong> → Credentials. Leave blank to use the built-in default.</p>
                                 </div>
                                 <div>
                                     <label class="form-label">Save photos to folder <span style="font-weight:400; color:#9ca3af;">(created automatically if it doesn't exist)</span></label>
@@ -342,13 +342,13 @@
                                 </div>
                                 <details>
                                     <summary style="cursor:pointer; font-weight:600; font-size:0.9rem; color:#374151; padding:0.5rem 0;">Alternative: Laptop Print Server <span style="font-size:0.78rem; font-weight:500; color:#9ca3af;">(silent, automatic)</span></summary>
-                                    <p style="color:#6b7280; font-size:0.88rem; margin:0.5rem 0 0.75rem;">Your laptop runs the print server, which also uploads photos to Drive silently using a service account â€” no login popup, perfect for a kiosk. Enable <strong>Local Print Server</strong> mode in Printer Setup first.</p>
+                                    <p style="color:#6b7280; font-size:0.88rem; margin:0.5rem 0 0.75rem;">Your laptop runs the print server, which also uploads photos to Drive silently using a service account — no login popup, perfect for a kiosk. Enable <strong>Local Print Server</strong> mode in Printer Setup first.</p>
                                     <div class="info-box" style="flex-direction:column; align-items:flex-start; gap:0.25rem; font-size:0.82rem;">
                                         <ol style="padding-left:1.25rem; line-height:1.9;">
-                                            <li>In Google Cloud Console, go to <strong>IAM &amp; Admin</strong> â†’ <strong>Service Accounts</strong> â†’ create a service account.</li>
-                                            <li>Click the service account â†’ <strong>Keys</strong> â†’ <strong>Add Key</strong> â†’ <strong>JSON</strong>. Download the file.</li>
+                                            <li>In Google Cloud Console, go to <strong>IAM &amp; Admin</strong> → <strong>Service Accounts</strong> → create a service account.</li>
+                                            <li>Click the service account → <strong>Keys</strong> → <strong>Add Key</strong> → <strong>JSON</strong>. Download the file.</li>
                                             <li>Copy it to your <code>print-server/</code> folder and name it <code>service-account.json</code>.</li>
-                                            <li>In Google Drive, create a folder (e.g. <em>Photo Booth Captures</em>). Right-click â†’ <strong>Share</strong> â†’ paste the service account email (found in the JSON file under <code>client_email</code>) and give it <strong>Editor</strong> access.</li>
+                                            <li>In Google Drive, create a folder (e.g. <em>Photo Booth Captures</em>). Right-click → <strong>Share</strong> → paste the service account email (found in the JSON file under <code>client_email</code>) and give it <strong>Editor</strong> access.</li>
                                             <li>In <code>print-server/server.js</code>, set the <code>DRIVE_FOLDER_ID</code> variable to the folder's ID (the string after <code>/folders/</code> in the Drive URL).</li>
                                             <li>Run <code>npm install</code> inside <code>print-server/</code> to install the <code>googleapis</code> package, then restart the server.</li>
                                         </ol>
@@ -393,22 +393,22 @@
                             <div style="flex:1; min-width:0;">
                                 <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">Specific Camera Device</label>
                                 <select id="vg-camera-select" class="text-input" style="width:100%; max-width:420px; cursor:pointer;">
-                                    <option value="">â€” detecting camerasâ€¦ â€”</option>
+                                    <option value="">— detecting cameras… —</option>
                                 </select>
-                                <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Select <em>Use Specific Camera</em> above, plug in your camera, then tap <strong>â†º Refresh</strong>.</p>
+                                <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Select <em>Use Specific Camera</em> above, plug in your camera, then tap <strong>↺ Refresh</strong>.</p>
                                 <div id="vg-camera-diag" style="margin-top:0.55rem; font-size:0.8rem; line-height:1.6; color:#374151;"></div>
                             </div>
                             <div style="display:flex; flex-direction:column; gap:0.5rem; flex-shrink:0; padding-top:1.4rem;">
-                                <button id="btn-refresh-vg-cameras" class="btn-outline" style="white-space:nowrap;">â†º Refresh</button>
-                                <button id="btn-test-vg-camera" class="btn-outline" style="white-space:nowrap;">â–¶ Test</button>
+                                <button id="btn-refresh-vg-cameras" class="btn-outline" style="white-space:nowrap;">↺ Refresh</button>
+                                <button id="btn-test-vg-camera" class="btn-outline" style="white-space:nowrap;">▶ Test</button>
                             </div>
                         </div>
 
-                        <!-- Live test preview (hidden until â–¶ Test is clicked) -->
+                        <!-- Live test preview (hidden until ▶ Test is clicked) -->
                         <div id="vg-camera-test-card" class="settings-card" style="display:none; margin-top:0.75rem;">
                             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
-                                <span style="font-weight:600; font-size:0.88rem; color:#374151;">ðŸ“· Camera Preview</span>
-                                <button id="btn-stop-vg-camera-test" class="btn-outline" style="font-size:0.8rem; padding:0.3rem 0.7rem;">â¹ Stop</button>
+                                <span style="font-weight:600; font-size:0.88rem; color:#374151;">📷 Camera Preview</span>
+                                <button id="btn-stop-vg-camera-test" class="btn-outline" style="font-size:0.8rem; padding:0.3rem 0.7rem;">⏹ Stop</button>
                             </div>
                             <video id="vg-camera-test-preview" autoplay playsinline muted
                                    style="width:100%; max-height:260px; border-radius:8px; background:#000; display:block; object-fit:contain;"></video>
@@ -425,31 +425,31 @@
 
                                 <!-- Microphone -->
                                 <div>
-                                    <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">ðŸŽ™ï¸ Microphone</label>
+                                    <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">🎙️ Microphone</label>
                                     <select id="vg-mic-select" class="text-input" style="width:100%; max-width:420px; cursor:pointer;">
-                                        <option value="">â€” Default microphone â€”</option>
+                                        <option value="">— Default microphone —</option>
                                     </select>
-                                    <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Select your Bluetooth or USB mic (e.g. DJI Mic Mini). Pair the device first, then tap <strong>â†º Refresh</strong>.</p>
+                                    <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Select your Bluetooth or USB mic (e.g. DJI Mic Mini). Pair the device first, then tap <strong>↺ Refresh</strong>.</p>
                                 </div>
 
                                 <!-- Speaker / Output -->
                                 <div>
-                                    <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">ðŸ”Š Speaker / Output</label>
+                                    <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.35rem;">🔊 Speaker / Output</label>
                                     <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
                                         <select id="vg-speaker-select" class="text-input" style="flex:1; min-width:0; max-width:320px; cursor:pointer;">
-                                            <option value="">â€” Default speaker â€”</option>
+                                            <option value="">— Default speaker —</option>
                                         </select>
-                                        <button id="btn-test-speaker" class="btn-outline" style="font-size:0.8rem; padding:0.35rem 0.75rem; white-space:nowrap;">â–¶ Test</button>
+                                        <button id="btn-test-speaker" class="btn-outline" style="font-size:0.8rem; padding:0.35rem 0.75rem; white-space:nowrap;">▶ Test</button>
                                     </div>
-                                    <button id="btn-grant-audio-output" class="btn-outline" style="display:none; margin-top:0.4rem; font-size:0.8rem; padding:0.35rem 0.75rem;">ðŸ”‘ Grant Bluetooth Access</button>
-                                    <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Pair your speaker (e.g. JBL Flip 4) via Android Bluetooth settings first, then tap <strong>â†º Refresh</strong>. If it shows no name, tap <strong>Grant Bluetooth Access</strong>.</p>
+                                    <button id="btn-grant-audio-output" class="btn-outline" style="display:none; margin-top:0.4rem; font-size:0.8rem; padding:0.35rem 0.75rem;">🔑 Grant Bluetooth Access</button>
+                                    <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Pair your speaker (e.g. JBL Flip 4) via Android Bluetooth settings first, then tap <strong>↺ Refresh</strong>. If it shows no name, tap <strong>Grant Bluetooth Access</strong>.</p>
                                 </div>
 
                                 <div id="vg-audio-diag" style="font-size:0.8rem; line-height:1.6; color:#374151;"></div>
                             </div>
 
                             <div style="display:flex; flex-direction:column; gap:0.5rem; flex-shrink:0; padding-top:1.4rem;">
-                                <button id="btn-refresh-vg-audio" class="btn-outline" style="white-space:nowrap;">â†º Refresh</button>
+                                <button id="btn-refresh-vg-audio" class="btn-outline" style="white-space:nowrap;">↺ Refresh</button>
                             </div>
                         </div>
                     </div>
@@ -489,24 +489,24 @@
                     <div class="settings-section">
                         <h3 class="section-title">Save Destination</h3>
                         <div class="settings-card">
-                            <p style="font-size:0.82rem; color:#6b7280; margin:0 0 0.9rem;">Enable one or both destinations â€” recordings are saved to all enabled locations.</p>
+                            <p style="font-size:0.82rem; color:#6b7280; margin:0 0 0.9rem;">Enable one or both destinations — recordings are saved to all enabled locations.</p>
                             <div class="save-dest-grid">
                                 <!-- Local Folder toggle -->
                                 <label class="save-dest-card" id="lbl-vg-save-local">
                                     <input type="checkbox" id="chk-vg-save-local" checked>
                                     <div class="save-dest-inner">
-                                        <span class="save-dest-icon">ðŸ’¾</span>
+                                        <span class="save-dest-icon">💾</span>
                                         <span class="save-dest-title">Local Folder</span>
-                                        <span class="save-dest-check">âœ“</span>
+                                        <span class="save-dest-check">✓</span>
                                     </div>
                                 </label>
                                 <!-- Google Drive toggle -->
                                 <label class="save-dest-card" id="lbl-vg-save-drive">
                                     <input type="checkbox" id="chk-vg-save-drive">
                                     <div class="save-dest-inner">
-                                        <span class="save-dest-icon">â˜ï¸</span>
+                                        <span class="save-dest-icon">☁️</span>
                                         <span class="save-dest-title">Google Drive</span>
-                                        <span class="save-dest-check">âœ“</span>
+                                        <span class="save-dest-check">✓</span>
                                     </div>
                                 </label>
                             </div>
@@ -522,7 +522,7 @@
 
                             <!-- VG Google Drive config (shown when drive is checked) -->
                             <div id="vg-drive-config" style="display:none; margin-top:0.75rem; border-top:1px solid #f3f4f6; padding-top:0.75rem;">
-                                <p style="font-weight:600; font-size:0.9rem; color:#374151; margin:0 0 0.75rem;">Google Drive â€” Video Guestbook</p>
+                                <p style="font-weight:600; font-size:0.9rem; color:#374151; margin:0 0 0.75rem;">Google Drive — Video Guestbook</p>
                                 <div style="display:flex; flex-direction:column; gap:1rem;">
                                     <div>
                                         <label class="form-label">Google OAuth Client ID</label>
@@ -554,7 +554,7 @@
                     <div class="settings-section">
                         <div class="settings-card feature-toggle-row">
                             <div class="feature-toggle-left">
-                                <div class="feature-icon">â–¶ï¸</div>
+                                <div class="feature-icon">▶️</div>
                                 <div>
                                     <div class="feature-title">Capture Review</div>
                                     <div class="feature-subtitle">Play back the recording so guests can review it before it's saved</div>
@@ -575,17 +575,17 @@
             <!-- PANEL: PHOTO LAYOUT -->
             <div id="panel-photo-layout" class="admin-panel" style="display: none;">
                 <div class="content-header">
-                    <h1>Photo Layout</h1>
+                    <h1>📐 Photo Layout</h1>
                 </div>
 
                 <div class="settings-section">
                     <h3 class="section-title">Photo layout</h3>
                     <p style="color:#6b7280; font-size:0.9rem; margin-bottom:1.25rem;">All layouts use the polaroid-style template. Photos are square-cropped to fit. Select the paper size that matches your Canon Selphy CP1500.</p>
 
-                    <!-- 2Ã—6 Strip -->
+                    <!-- 2×6 Strip -->
                     <div class="layout-size-group">
                         <div class="layout-size-header">
-                            <span class="layout-size-name">2 Ã— 6 in Strip</span>
+                            <span class="layout-size-name">2 × 6 in Strip</span>
                             <span class="selphy-badge selphy-wide">Selphy Wide paper</span>
                         </div>
                         <div class="settings-card" style="padding: 1rem; margin-bottom: 0;">
@@ -621,11 +621,11 @@
                         </div>
                     </div>
 
-                    <!-- 4Ã—6 Portrait -->
+                    <!-- 4×6 Portrait -->
                     <div class="layout-size-group">
                         <div class="layout-size-header">
-                            <span class="layout-size-name">4 Ã— 6 in Portrait</span>
-                            <span class="selphy-badge selphy-native">âœ“ Selphy native</span>
+                            <span class="layout-size-name">4 × 6 in Portrait</span>
+                            <span class="selphy-badge selphy-native">✓ Selphy native</span>
                         </div>
                         <div class="settings-card" style="padding: 1rem; margin-bottom: 0;">
                             <div class="layout-grid">
@@ -673,11 +673,11 @@
                         </div>
                     </div>
 
-                    <!-- 4Ã—6 Landscape -->
+                    <!-- 4×6 Landscape -->
                     <div class="layout-size-group">
                         <div class="layout-size-header">
-                            <span class="layout-size-name">4 Ã— 6 in Landscape</span>
-                            <span class="selphy-badge selphy-native">âœ“ Selphy native</span>
+                            <span class="layout-size-name">4 × 6 in Landscape</span>
+                            <span class="selphy-badge selphy-native">✓ Selphy native</span>
                         </div>
                         <div class="settings-card" style="padding: 1rem; margin-bottom: 0;">
                             <div class="layout-grid">
@@ -724,11 +724,11 @@
                         </div>
                     </div>
 
-                    <!-- 5Ã—7 Portrait -->
+                    <!-- 5×7 Portrait -->
                     <div class="layout-size-group">
                         <div class="layout-size-header">
-                            <span class="layout-size-name">5 Ã— 7 in Portrait</span>
-                            <span class="selphy-badge selphy-scaled">Scales to 4Ã—6 on Selphy</span>
+                            <span class="layout-size-name">5 × 7 in Portrait</span>
+                            <span class="selphy-badge selphy-scaled">Scales to 4×6 on Selphy</span>
                         </div>
                         <div class="settings-card" style="padding: 1rem; margin-bottom: 0;">
                             <div class="layout-grid">
@@ -761,10 +761,10 @@
                         </div>
                     </div>
 
-                    <!-- 6Ã—8 Portrait -->
+                    <!-- 6×8 Portrait -->
                     <div class="layout-size-group">
                         <div class="layout-size-header">
-                            <span class="layout-size-name">6 Ã— 8 in Portrait</span>
+                            <span class="layout-size-name">6 × 8 in Portrait</span>
                             <span class="selphy-badge selphy-scaled">Scales to Wide on Selphy</span>
                         </div>
                         <div class="settings-card" style="padding: 1rem; margin-bottom: 0;">
@@ -806,7 +806,7 @@
             <!-- PANEL: WELCOME SCREEN DESIGNER -->
             <div id="panel-welcome" class="admin-panel" style="display: none;">
                 <div class="content-header flex-between">
-                    <h1>Welcome Screen Designer</h1>
+                    <h1>📱 Welcome Screen Designer</h1>
                 </div>
 
                 <div class="designer-layout">
@@ -817,7 +817,7 @@
                             <label>Background Media</label>
                             <div id="ws-media-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer;">
                                 <div class="upload-empty-state" id="ws-media-empty">
-                                    <span style="font-size:2rem;">ðŸ–¼ï¸</span>
+                                    <span style="font-size:2rem;">🖼️</span>
                                     <p style="font-weight:600; margin:0; color:#374151;">Click or drag image / video</p>
                                     <p style="margin:0; color:#9ca3af; font-size:0.8rem;">JPG, PNG, GIF &middot; MP4, MOV, WEBM</p>
                                         <label class="btn-outline btn-upload" id="btn-pick-ws-media" style="position:relative; overflow:hidden; display:inline-block; cursor:pointer;">Choose File<input type="file" id="ws-media-input" accept="image/*,video/*"></label>
@@ -870,17 +870,18 @@
             <!-- PANEL: PHOTO TEMPLATE -->
             <div id="panel-template" class="admin-panel" style="display: none;">
                 <div class="content-header">
-                    <h1>Photo Template</h1>
+                    <h1>🖼️ Photo Template</h1>
                 </div>
 
                 <!-- Active layout size hint bar -->
                 <div class="template-hint-bar">
+                    <div class="hint-icon">📐</div>
                     <div class="hint-text">
                         <div class="hint-layout-row">
-                            <strong id="hint-layout-name">4Ã—6 Portrait Â· 1 photo</strong>
-                            <span class="hint-size-badge" id="hint-canvas-size">1200 Ã— 1800 px</span>
+                            <strong id="hint-layout-name">4×6 Portrait · 1 photo</strong>
+                            <span class="hint-size-badge" id="hint-canvas-size">1200 × 1800 px</span>
                         </div>
-                        <div class="hint-sub" id="hint-paper">Postcard paper (KP-108IN) Â· Selphy CP1500 native âœ“</div>
+                        <div class="hint-sub" id="hint-paper">Postcard paper (KP-108IN) · Selphy CP1500 native ✓</div>
                     </div>
                 </div>
 
@@ -889,11 +890,11 @@
                     <h3 class="section-title">Background Image</h3>
                     <p style="color:#6b7280; font-size:0.9rem; margin-bottom:1rem;">
                         Fills the canvas behind your captured photos. If no image is uploaded, the background defaults to white.<br>
-                        Accepts <strong>JPG, JPEG, PNG</strong> &middot; Recommended size: <strong><span id="bg-size-hint">1200 Ã— 1800 px</span></strong>
+                        Accepts <strong>JPG, JPEG, PNG</strong> &middot; Recommended size: <strong><span id="bg-size-hint">1200 × 1800 px</span></strong>
                     </p>
                     <div class="settings-card template-upload-card" id="bg-upload-zone">
                         <div class="upload-empty-state" id="bg-empty-state">
-                            <div class="upload-icon">ðŸ–¼ï¸</div>
+                            <div class="upload-icon">🖼️</div>
                             <div class="upload-prompt">
                                 <span class="upload-title">Upload Background</span>
                                 <span class="upload-sub">Click anywhere or drag &amp; drop a file here</span>
@@ -905,7 +906,7 @@
                             <div class="upload-preview-info">
                                 <span class="upload-filename" id="bg-filename">image.png</span>
                                 <span class="upload-dims" id="bg-dims"></span>
-                                <button class="btn-outline btn-remove-upload" id="btn-clear-bg">âœ• Remove</button>
+                                <button class="btn-outline btn-remove-upload" id="btn-clear-bg">✕ Remove</button>
                             </div>
                         </div>
                     </div>
@@ -916,7 +917,7 @@
                     <h3 class="section-title">Live Preview</h3>
                     <div class="template-canvas-wrap">
                         <canvas id="template-preview-canvas"></canvas>
-                        <span class="template-canvas-label" id="template-canvas-label">4Ã—6 Portrait Â· 1 photo</span>
+                        <span class="template-canvas-label" id="template-canvas-label">4×6 Portrait · 1 photo</span>
                     </div>
                 </div>
             </div>
@@ -924,7 +925,7 @@
             <!-- PANEL: PRINTER SETUP -->
             <div id="panel-printer" class="admin-panel" style="display: none;">
                 <div class="content-header">
-                    <h1>Printer Setup</h1>
+                    <h1>🖨️ Printer Setup</h1>
                 </div>
 
                 <!-- Printer Status -->
@@ -987,7 +988,7 @@
                                 <div class="paper-card-content">
                                     <div class="paper-thumb paper-4x6"></div>
                                     <div class="paper-label">4 &times; 6 in</div>
-                                    <div class="paper-sublabel">âœ“ Selphy native</div>
+                                    <div class="paper-sublabel">✓ Selphy native</div>
                                 </div>
                             </label>
 
@@ -1011,7 +1012,7 @@
 
                         </div>
                         <div class="paper-mapping-info" id="paper-mapping-info">
-                            <span class="info-tag">Active paper:</span> <strong>4Ã—6 in (Portrait)</strong>
+                            <span class="info-tag">Active paper:</span> <strong>4×6 in (Portrait)</strong>
                         </div>
                     </div>
                 </div>
@@ -1100,7 +1101,7 @@
                                     <div style="font-size:0.8rem; color:#6b7280; margin-top:2px;">
                                         Uses <code>window.print()</code>.
                                         On <strong>iPad</strong> this opens the native AirPrint sheet (works out-of-the-box with SELPHY CP1500).
-                                        On <strong>Android</strong> it opens the system print dialog â€” install <em>Canon PRINT Inkjet/SELPHY</em> from the Play Store so the printer appears there.
+                                        On <strong>Android</strong> it opens the system print dialog — install <em>Canon PRINT Inkjet/SELPHY</em> from the Play Store so the printer appears there.
                                     </div>
                                 </div>
                             </label>
@@ -1110,7 +1111,7 @@
                                 <div>
                                     <div style="font-weight:600; color:#374151; font-size:0.92rem;">Local Print Server <span style="background:#dcfce7; color:#166534; font-size:0.72rem; padding:1px 6px; border-radius:4px; margin-left:4px;">Recommended for kiosks</span></div>
                                     <div style="font-size:0.8rem; color:#6b7280; margin-top:2px;">
-                                        Silently POSTs photos to a Node.js server running on the same WiFi network (e.g. a Raspberry Pi). No dialog shown to guests â€” fully automated. Works on any device: iPad, Android, tablet, PC.
+                                        Silently POSTs photos to a Node.js server running on the same WiFi network (e.g. a Raspberry Pi). No dialog shown to guests — fully automated. Works on any device: iPad, Android, tablet, PC.
                                     </div>
                                 </div>
                             </label>
@@ -1147,8 +1148,8 @@
                         <div class="info-box" style="margin-top:0.5rem; flex-direction:column; align-items:flex-start; gap:0.25rem; font-size:0.82rem;">
                             <ol style="padding-left:1.25rem; line-height:1.9;">
                                 <li>Connect the Canon SELPHY CP1500 to the same WiFi as the iPad.</li>
-                                <li>On the SELPHY, enable <strong>Wi-Fi</strong> (menu â†’ Wi-Fi settings â†’ Infrastructure mode).</li>
-                                <li>The printer will appear automatically in iOS AirPrint â€” no driver install needed.</li>
+                                <li>On the SELPHY, enable <strong>Wi-Fi</strong> (menu → Wi-Fi settings → Infrastructure mode).</li>
+                                <li>The printer will appear automatically in iOS AirPrint — no driver install needed.</li>
                                 <li>Use <strong>System Print Dialog</strong> mode above. When a guest takes a photo, an AirPrint sheet appears briefly and prints silently.</li>
                                 <li>For fully silent printing (no sheet), switch to <strong>Local Print Server</strong> mode with a Raspberry Pi.</li>
                             </ol>
@@ -1159,7 +1160,7 @@
                         <div class="info-box" style="margin-top:0.5rem; flex-direction:column; align-items:flex-start; gap:0.25rem; font-size:0.82rem;">
                             <ol style="padding-left:1.25rem; line-height:1.9;">
                                 <li>Install <strong>Canon PRINT Inkjet/SELPHY</strong> from the Google Play Store.</li>
-                                <li>Open the Canon app once and add the SELPHY printer â€” this registers it with Android's print subsystem.</li>
+                                <li>Open the Canon app once and add the SELPHY printer — this registers it with Android's print subsystem.</li>
                                 <li>Connect the SELPHY to the same WiFi as the tablet.</li>
                                 <li>Use <strong>System Print Dialog</strong> mode. When a guest takes a photo, the Android print sheet appears with the SELPHY listed.</li>
                                 <li>For a completely dialog-free experience, use <strong>Local Print Server</strong> mode.</li>
@@ -1173,21 +1174,21 @@
             <!-- PANEL: VIDEO OVERLAY -->
             <div id="panel-video-overlay" class="admin-panel" style="display: none;">
                 <div class="content-header">
-                    <h1>Video Overlay</h1>
+                    <h1>🎞️ Video Overlay</h1>
                 </div>
 
                 <div class="settings-section">
                     <h3 class="section-title">Overlay Image</h3>
                     <p style="color:#6b7280; font-size:0.9rem; margin-bottom:1rem;">
                         Upload a PNG image that will be composited on top of every Video Guestbook recording.<br>
-                        <strong>Required:</strong> PNG format &middot; Exactly <strong>1920 Ã— 1080 px</strong> (use transparency for areas the camera should show through).
+                        <strong>Required:</strong> PNG format &middot; Exactly <strong>1920 × 1080 px</strong> (use transparency for areas the camera should show through).
                     </p>
 
                     <div id="vg-overlay-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer;">
                         <div class="upload-empty-state" id="vg-overlay-empty">
-                            <span style="font-size:2rem;">ðŸŽžï¸</span>
+                            <span style="font-size:2rem;">🎞️</span>
                             <p style="font-weight:600; margin:0; color:#374151;">Click or drag a PNG overlay here</p>
-                            <p style="margin:0; color:#9ca3af; font-size:0.8rem;">PNG only &middot; 1920 Ã— 1080 px</p>
+                            <p style="margin:0; color:#9ca3af; font-size:0.8rem;">PNG only &middot; 1920 × 1080 px</p>
                             <label class="btn-outline btn-upload" id="btn-pick-vg-overlay" style="position:relative; overflow:hidden; display:inline-block; cursor:pointer;">Choose File<input type="file" id="vg-overlay-input" accept=".png,image/png"></label>
                         </div>
                         <div id="vg-overlay-filled" style="display:none; padding:0.75rem;">
@@ -1204,7 +1205,7 @@
             <!-- PANEL: STITCH VIDEOS -->
             <div id="panel-stitch" class="admin-panel" style="display: none;">
                 <div class="content-header flex-between">
-                    <h1>Stitch Videos</h1>
+                    <h1>🎬 Stitch Videos</h1>
                 </div>
 
                 <div class="settings-section">
@@ -1215,7 +1216,7 @@
 
                     <!-- Empty state -->
                     <div id="stitch-empty" class="settings-card" style="text-align:center; padding:2rem; color:#9ca3af;">
-                        <p style="font-size:2rem; margin:0 0 0.5rem;">ðŸŽ¬</p>
+                        <p style="font-size:2rem; margin:0 0 0.5rem;">🎬</p>
                         <p style="margin:0; font-weight:600;">No recordings yet</p>
                         <p style="margin:0.25rem 0 0; font-size:0.85rem;">Switch to Video Guestbook mode and record some clips first.</p>
                     </div>
@@ -1226,13 +1227,13 @@
                     <!-- Controls -->
                     <div id="stitch-controls" style="display:none; margin-top:1.25rem; display:none;">
                         <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
-                            <button id="btn-stitch-select-all" class="btn-outline">â˜‘ Select All</button>
-                            <button id="btn-stitch-clear" class="btn-outline">âœ• Clear Selection</button>
+                            <button id="btn-stitch-select-all" class="btn-outline">☑ Select All</button>
+                            <button id="btn-stitch-clear" class="btn-outline">✕ Clear Selection</button>
                             <span id="stitch-selected-count" style="color:#6b7280; font-size:0.88rem;"></span>
                         </div>
                         <div style="margin-top:1rem;">
                             <button id="btn-stitch-run" class="btn-primary" style="padding:0.85rem 2.5rem; font-size:1rem;" disabled>
-                                ðŸŽ¬ Stitch Selected Clips
+                                🎬 Stitch Selected Clips
                             </button>
                         </div>
                     </div>
@@ -1243,7 +1244,7 @@
                     <div style="display:flex; align-items:center; gap:1rem;">
                         <div class="spinner" style="width:24px; height:24px; border-width:3px;"></div>
                         <div style="flex:1;">
-                            <div style="font-weight:600; color:#374151;" id="stitch-status-text">Stitching clipsâ€¦</div>
+                            <div style="font-weight:600; color:#374151;" id="stitch-status-text">Stitching clips…</div>
                             <div style="margin-top:0.35rem; background:#f3f4f6; border-radius:999px; height:6px; overflow:hidden;">
                                 <div id="stitch-progress-bar" style="height:100%; width:0%; background:#be185d; border-radius:999px; transition:width 0.3s;"></div>
                             </div>
@@ -1254,12 +1255,12 @@
                 <!-- Result -->
                 <div id="stitch-result" class="settings-card" style="display:none; border-color:#10b981; margin-top:0;">
                     <div style="display:flex; align-items:center; gap:0.75rem;">
-                        <span style="font-size:1.5rem;">âœ…</span>
+                        <span style="font-size:1.5rem;">✅</span>
                         <div>
                             <div style="font-weight:700; color:#065f46;">Stitch complete!</div>
                             <div id="stitch-result-filename" style="font-size:0.82rem; color:#374151; margin-top:0.2rem;"></div>
                         </div>
-                        <button id="btn-stitch-download" class="btn-outline" style="margin-left:auto;">â¬‡ Download</button>
+                        <button id="btn-stitch-download" class="btn-outline" style="margin-left:auto;">⬇ Download</button>
                     </div>
                 </div>
             </div>
@@ -1268,15 +1269,15 @@
             <!-- ========== LIVE VIEWER PANEL (admin) ========== -->
             <div id="panel-live-viewer" class="admin-panel" style="display:none;">
                 <div class="content-header">
-                    <h1>Live Gallery Viewer</h1>
-                    <p style="color:#6b7280; font-size:0.9rem; margin:0.25rem 0 0;">Let a second device â€” a TV, tablet, or phone â€” display every capture in real-time over your local Wi-Fi network.</p>
+                    <h1>📹 Live Gallery Viewer</h1>
+                    <p style="color:#6b7280; font-size:0.9rem; margin:0.25rem 0 0;">Let a second device — a TV, tablet, or phone — display every capture in real-time over your local Wi-Fi network.</p>
                 </div>
 
                 <div class="settings-section">
                     <h3 class="section-title">How it works</h3>
                     <div class="info-box" style="flex-direction:column; gap:0.5rem; font-size:0.88rem; line-height:1.7;">
                         <p style="margin:0;"><strong>1.</strong> Click <strong>Start Hosting</strong> below. A unique QR code appears.</p>
-                        <p style="margin:0;"><strong>2.</strong> On the viewer device, open the camera app and scan the QR code â€” it opens a full-screen gallery page.</p>
+                        <p style="margin:0;"><strong>2.</strong> On the viewer device, open the camera app and scan the QR code — it opens a full-screen gallery page.</p>
                         <p style="margin:0;"><strong>3.</strong> Every new photo or video captured on this device appears on the viewer instantly over your local Wi-Fi.</p>
                         <p style="margin:0; color:#d97706;"><strong>Note:</strong> An internet connection is needed for the first few seconds to establish the peer-to-peer link. After that, all data flows directly over your local network.</p>
                     </div>
@@ -1288,7 +1289,7 @@
                         <p style="margin:0 0 0.75rem; font-size:0.88rem; color:#374151;">The QR code only works on other devices when it points to this device's <strong>local network IP</strong>, not <code>localhost</code>. Enter the address mobile devices can reach this page at.</p>
                         <label style="display:block; font-size:0.82rem; font-weight:600; color:#374151; margin-bottom:0.35rem;">Network address of this device</label>
                         <input type="text" id="lv-network-addr" class="text-input" placeholder="e.g. http://192.168.1.100" style="width:100%; max-width:360px;">
-                        <p style="margin:0.5rem 0 0; font-size:0.78rem; color:#9ca3af;">Find it in: Wi-Fi settings â†’ your connected network â†’ IP address. Then enter <code>http://&lt;IP&gt;</code> here.</p>
+                        <p style="margin:0.5rem 0 0; font-size:0.78rem; color:#9ca3af;">Find it in: Wi-Fi settings → your connected network → IP address. Then enter <code>http://&lt;IP&gt;</code> here.</p>
                     </div>
                 </div>
 
@@ -1296,12 +1297,12 @@
                     <h3 class="section-title">Session</h3>
                     <div class="settings-card" style="padding:1.5rem;">
                         <div id="lv-idle-state">
-                            <button id="btn-lv-start" class="btn-primary" style="padding:0.85rem 2.5rem; font-size:1rem;">ðŸ“¹ Start Hosting</button>
+                            <button id="btn-lv-start" class="btn-primary" style="padding:0.85rem 2.5rem; font-size:1rem;">📹 Start Hosting</button>
                         </div>
                         <div id="lv-active-state" style="display:none;">
                             <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1.25rem;">
                                 <div class="lv-status-dot" id="lv-status-dot"></div>
-                                <span id="lv-status-text" style="font-weight:600; color:#374151; font-size:0.95rem;">Waiting for viewerâ€¦</span>
+                                <span id="lv-status-text" style="font-weight:600; color:#374151; font-size:0.95rem;">Waiting for viewer…</span>
                                 <button id="btn-lv-stop" class="btn-outline" style="margin-left:auto; padding:0.45rem 1.1rem; font-size:0.85rem;">Stop</button>
                             </div>
                             <div style="display:flex; gap:2rem; flex-wrap:wrap; align-items:flex-start;">
@@ -1330,7 +1331,7 @@
             <!-- PANEL: VG THANK YOU SCREEN -->
             <div id="panel-vg-thankyou" class="admin-panel" style="display:none;">
                 <div class="content-header">
-                    <h1>Thank You Screen</h1>
+                    <h1>🎉 Thank You Screen</h1>
                     <p style="color:#6b7280; font-size:0.9rem; margin:0.25rem 0 0;">Shown to guests after they close the video preview. Upload a custom image and set how long it displays before returning to the Welcome Screen.</p>
                 </div>
 
@@ -1338,7 +1339,7 @@
                 <div class="settings-section">
                     <div class="settings-card feature-toggle-row">
                         <div class="feature-toggle-left">
-                            <div class="feature-icon">ðŸŽ‰</div>
+                            <div class="feature-icon">🎉</div>
                             <div>
                                 <div class="feature-title">Enable Thank You Screen</div>
                                 <div class="feature-subtitle">Display a branded thank-you card after each Video Guestbook recording</div>
@@ -1360,7 +1361,7 @@
                         <h3 class="section-title">Background Image</h3>
                         <div id="ty-media-drop" class="template-upload-card settings-card" style="margin-bottom:0; cursor:pointer;">
                             <div class="upload-empty-state" id="ty-media-empty">
-                                <span style="font-size:2rem;">ðŸ–¼ï¸</span>
+                                <span style="font-size:2rem;">🖼️</span>
                                 <p style="font-weight:600; margin:0; color:#374151;">Click or drag an image</p>
                                 <p style="margin:0; color:#9ca3af; font-size:0.8rem;">JPG, PNG &middot; Recommended: 1080 &times; 1920 px (portrait) or 1920 &times; 1080 px (landscape)</p>
                                 <label class="btn-outline btn-upload" id="btn-pick-ty-media" style="position:relative; overflow:hidden; display:inline-block; cursor:pointer;">Choose File<input type="file" id="ty-media-input" accept="image/*"></label>
@@ -1395,7 +1396,7 @@
                             <div id="ty-preview-frame" class="ty-preview-frame">
                                 <img id="ty-preview-bg" src="" alt="" style="display:none;">
                                 <div class="ty-preview-content">
-                                    <p class="ty-preview-emoji">ðŸŽ‰</p>
+                                    <p class="ty-preview-emoji">🎉</p>
                                     <h2 class="ty-preview-title">Thank You!</h2>
                                     <button class="ty-done-btn ty-done-btn-preview" disabled>Done</button>
                                 </div>
@@ -1409,14 +1410,14 @@
             <!-- PANEL: PRE-RECORDING PROMPTS (VG only) -->
             <div id="panel-vg-prompts" class="admin-panel" style="display:none;">
                 <div class="content-header">
-                    <h1>Pre-Recording Prompts</h1>
+                    <h1>💬 Pre-Recording Prompts</h1>
                 </div>
 
                 <div class="settings-section">
                     <!-- Enable/Disable toggle -->
                     <div class="settings-card feature-toggle-row">
                         <div class="feature-toggle-left">
-                            <div class="feature-icon">ðŸ’¬</div>
+                            <div class="feature-icon">💬</div>
                             <div>
                                 <div class="feature-title">Enable Prompts</div>
                                 <div class="feature-subtitle">Show a random question to guests before each recording starts</div>
@@ -1436,9 +1437,9 @@
                         <div class="settings-card">
                             <label style="display:block; font-weight:600; font-size:0.88rem; color:#374151; margin-bottom:0.6rem;">Event Template</label>
                             <div class="prompt-category-tabs">
-                                <button class="prompt-cat-btn active" data-cat="wedding">ðŸ’ Wedding</button>
-                                <button class="prompt-cat-btn" data-cat="birthday">ðŸŽ‚ Birthday</button>
-                                <button class="prompt-cat-btn" data-cat="teambuilding">ðŸ¤ Team Building</button>
+                                <button class="prompt-cat-btn active" data-cat="wedding">💍 Wedding</button>
+                                <button class="prompt-cat-btn" data-cat="birthday">🎂 Birthday</button>
+                                <button class="prompt-cat-btn" data-cat="teambuilding">🤝 Team Building</button>
                             </div>
                             <p style="margin:0.45rem 0 0; font-size:0.78rem; color:#9ca3af;">Choose a template to load its built-in questions. Your custom questions always appear alongside the template.</p>
                         </div>
@@ -1450,7 +1451,7 @@
                             </div>
                             <ul id="vg-prompts-list" style="list-style:none; padding:0; margin:0; max-height:300px; overflow-y:auto;"></ul>
                             <div style="padding:0.7rem 1rem; border-top:1px solid #f3f4f6; display:flex; gap:0.5rem; align-items:center;">
-                                <input type="text" id="vg-custom-prompt-input" class="text-input" placeholder="Type your own question and press Enterâ€¦" style="flex:1; min-width:0;">
+                                <input type="text" id="vg-custom-prompt-input" class="text-input" placeholder="Type your own question and press Enter…" style="flex:1; min-width:0;">
                                 <button id="btn-add-vg-prompt" class="btn-outline" style="white-space:nowrap; flex-shrink:0;">+ Add</button>
                             </div>
                         </div>
@@ -1462,7 +1463,7 @@
             <!-- PANEL: DISCLAIMER -->
             <div id="panel-disclaimer" class="admin-panel" style="display:none;">
                 <div class="content-header">
-                    <h1>Disclaimer</h1>
+                    <h1>📋 Disclaimer</h1>
                 </div>
 
                 <div class="settings-section">
@@ -1512,11 +1513,11 @@
         <div id="viewer-header" style="flex-shrink:0; padding:1rem 1.5rem; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:1rem;">
             <div style="flex:1;">
                 <h2 style="margin:0; font-size:1.15rem; font-weight:700; color:#f9fafb;">Live Gallery</h2>
-                <p id="viewer-event-name" style="margin:0; font-size:0.8rem; color:#9ca3af;">Waiting for the first captureâ€¦</p>
+                <p id="viewer-event-name" style="margin:0; font-size:0.8rem; color:#9ca3af;">Waiting for the first capture…</p>
             </div>
             <div style="display:flex; align-items:center; gap:0.5rem;">
                 <div class="lv-status-dot" id="viewer-status-dot" style="background:#ef4444;"></div>
-                <span id="viewer-status-text" style="font-size:0.82rem; color:#9ca3af;">Connectingâ€¦</span>
+                <span id="viewer-status-text" style="font-size:0.82rem; color:#9ca3af;">Connecting…</span>
             </div>
         </div>
         <div id="viewer-gallery" style="flex:1; overflow-y:auto; padding:1rem; display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:0.75rem; align-content:start;"></div>
@@ -1578,7 +1579,7 @@
         <div id="recent-captures-modal" style="display:none; position:absolute; inset:0; z-index:55; background:rgba(0,0,0,0.92); flex-direction:column;">
             <div style="flex-shrink:0; display:flex; align-items:center; justify-content:space-between; padding:1.25rem 1.5rem; border-bottom:1px solid rgba(255,255,255,0.1);">
                 <h2 id="rcm-title" style="margin:0; font-size:1.3rem; font-weight:700; color:#f9fafb;">Recent Captures</h2>
-                <button id="btn-close-rcm" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:8px; padding:0.5rem 1rem; font-size:0.9rem; cursor:pointer;">âœ• Close</button>
+                <button id="btn-close-rcm" style="background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:8px; padding:0.5rem 1rem; font-size:0.9rem; cursor:pointer;">✕ Close</button>
             </div>
             <div id="rcm-grid" style="flex:1; overflow-y:auto; padding:1rem; display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:0.75rem; align-content:start;"></div>
             <div id="rcm-empty" style="display:none; flex:1; align-items:center; justify-content:center; flex-direction:column; gap:0.75rem; color:#6b7280;">
@@ -1587,9 +1588,9 @@
             </div>
             <!-- Lightbox inside modal -->
             <div id="rcm-lightbox" style="display:none; position:absolute; inset:0; z-index:10; background:rgba(0,0,0,0.97); flex-direction:column; align-items:center; justify-content:center; padding:1rem;">
-                <button id="btn-rcm-lb-close" style="position:absolute; top:1rem; right:1rem; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:8px; padding:0.5rem 1rem; font-size:0.9rem; cursor:pointer;">âœ•</button>
-                <button id="btn-rcm-lb-prev" style="position:absolute; left:1rem; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:50%; width:48px; height:48px; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">â€¹</button>
-                <button id="btn-rcm-lb-next" style="position:absolute; right:1rem; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:50%; width:48px; height:48px; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">â€º</button>
+                <button id="btn-rcm-lb-close" style="position:absolute; top:1rem; right:1rem; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:8px; padding:0.5rem 1rem; font-size:0.9rem; cursor:pointer;">✕</button>
+                <button id="btn-rcm-lb-prev" style="position:absolute; left:1rem; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:50%; width:48px; height:48px; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">‹</button>
+                <button id="btn-rcm-lb-next" style="position:absolute; right:1rem; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.2); color:#fff; border-radius:50%; width:48px; height:48px; font-size:1.4rem; cursor:pointer; display:flex; align-items:center; justify-content:center;">›</button>
                 <img id="rcm-lb-img" src="" alt="" style="display:none; max-width:90vw; max-height:80vh; border-radius:10px; object-fit:contain;">
                 <video id="rcm-lb-video" src="" controls playsinline style="display:none; max-width:90vw; max-height:80vh; border-radius:10px;"></video>
                 <p id="rcm-lb-counter" style="margin-top:0.75rem; color:rgba(255,255,255,0.5); font-size:0.88rem;"></p>
@@ -1626,7 +1627,7 @@
 
                 <!-- Pre-recording question prompt -->
                 <div id="vg-question-overlay" style="display:none; flex-direction:column; align-items:center; justify-content:center; position:absolute; inset:0; z-index:30;">
-                    <div class="vg-question-badge">ðŸ’¬ Your Prompt</div>
+                    <div class="vg-question-badge">💬 Your Prompt</div>
                     <p id="vg-question-text" class="vg-question-text"></p>
                     <div class="vg-question-timer-wrap">
                         <div id="vg-question-timer-bar" class="vg-question-timer-bar"></div>
@@ -1635,7 +1636,7 @@
 
                 <!-- Prompt reminder sidebar shown during countdown -->
                 <div id="vg-prompt-sidebar" style="display:none;">
-                    <div class="vg-prompt-sidebar-label">ðŸ’¬ Remember to answer</div>
+                    <div class="vg-prompt-sidebar-label">💬 Remember to answer</div>
                     <p id="vg-prompt-sidebar-text" class="vg-prompt-sidebar-text"></p>
                 </div>
 
@@ -1660,7 +1661,7 @@
                 <!-- Processing overlay (shared style) -->
                 <div id="vg-processing-overlay" style="display:none;">
                     <div class="spinner"></div>
-                    <h2>Saving videoâ€¦</h2>
+                    <h2>Saving video…</h2>
                 </div>
             </div>
         </div>
@@ -1668,18 +1669,18 @@
         <!-- ========== VIDEO GUESTBOOK PREVIEW OVERLAY ========== -->
         <div id="vg-preview-overlay" style="display:none; position:absolute; inset:0; z-index:50; background:rgba(0,0,0,0.97); flex-direction:column; align-items:center; justify-content:center; padding:1.5rem;">
             <video id="vg-preview-video" playsinline style="max-width:100%; max-height:65vh; display:block; border-radius:10px; box-shadow:0 0 40px rgba(0,0,0,0.6);"></video>
-            <p id="vg-preview-msg" style="color:#9ca3af; margin-top:0.75rem; font-size:1rem; font-weight:500; letter-spacing:0.01em;">Playing back your messageâ€¦</p>
+            <p id="vg-preview-msg" style="color:#9ca3af; margin-top:0.75rem; font-size:1rem; font-weight:500; letter-spacing:0.01em;">Playing back your message…</p>
             <!-- Video Control Bar -->
             <div id="vg-control-bar">
                 <input type="range" id="vg-seek-bar" value="0" min="0" max="100" step="0.1">
                 <div id="vg-controls-row">
-                    <button id="btn-vg-play-pause" title="Play / Pause">â¸</button>
+                    <button id="btn-vg-play-pause" title="Play / Pause">⏸</button>
                     <span id="vg-time-display">0:00 / 0:00</span>
-                    <button id="btn-vg-mute" title="Mute / Unmute">ðŸ”Š</button>
+                    <button id="btn-vg-mute" title="Mute / Unmute">🔊</button>
                 </div>
             </div>
             <button id="btn-vg-preview-close" style="margin-top:1.25rem; padding:0.9rem 2.75rem; background:#be185d; color:#fff; border:none; border-radius:999px; font-size:1.1rem; font-weight:700; cursor:pointer; letter-spacing:0.03em; box-shadow:0 4px 18px rgba(190,24,93,0.45);">
-                âœ“ Close Preview
+                ✓ Close Preview
             </button>
             <button id="btn-vg-qr" style="display:none; margin-top:0.75rem; padding:0.75rem 2rem; background:rgba(255,255,255,0.12); color:#fff; border:2px solid rgba(255,255,255,0.35); border-radius:999px; font-size:1rem; font-weight:600; cursor:pointer; letter-spacing:0.02em;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:6px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="5" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="16" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="5" y="16" width="3" height="3" fill="currentColor" stroke="none"/></svg>
@@ -1739,7 +1740,7 @@
         <div style="background:#fff; border-radius:16px; padding:2rem; width:300px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.4);">
             <h2 style="margin:0 0 0.4rem; font-size:1.2rem; font-weight:700; color:#111827;">Admin Access</h2>
             <p style="margin:0 0 1.25rem; font-size:0.85rem; color:#6b7280;">Enter PIN to exit Kiosk Mode</p>
-            <div id="pin-display" style="letter-spacing:0.5rem; font-size:1.8rem; font-weight:700; color:#111827; height:2.5rem; margin-bottom:1.25rem;">â€“â€“â€“â€“</div>
+            <div id="pin-display" style="letter-spacing:0.5rem; font-size:1.8rem; font-weight:700; color:#111827; height:2.5rem; margin-bottom:1.25rem;">––––</div>
             <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:0.5rem; margin-bottom:0.5rem;">
                 <button class="pin-key" data-k="1">1</button>
                 <button class="pin-key" data-k="2">2</button>
@@ -1752,7 +1753,7 @@
                 <button class="pin-key" data-k="9">9</button>
                 <button class="pin-key pin-key-cancel" id="btn-pin-cancel">Cancel</button>
                 <button class="pin-key" data-k="0">0</button>
-                <button class="pin-key pin-key-del" id="btn-pin-del">âŒ«</button>
+                <button class="pin-key pin-key-del" id="btn-pin-del">⌫</button>
             </div>
             <div id="pin-error" style="display:none; margin-top:0.75rem; font-size:0.82rem; color:#dc2626; font-weight:600;">Incorrect PIN. Try again.</div>
         </div>
@@ -1777,7 +1778,7 @@
             <p class="qr-modal-sub">Point your phone camera at the QR code to open &amp; download your file from Google Drive.</p>
             <div id="qr-code-container"></div>
             <p class="qr-modal-url" id="qr-modal-url"></p>
-            <button id="btn-qr-close" class="qr-close-btn">âœ• Close</button>
+            <button id="btn-qr-close" class="qr-close-btn">✕ Close</button>
         </div>
     </div>
     <!-- ======================================= -->
