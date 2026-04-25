@@ -2685,7 +2685,12 @@ $(document).ready(function() {
                     playPauseBtn.textContent = '▶';
                 });
             };
-            if (appConfig.vgSelectedSpeakerId && typeof video.setSinkId === 'function') {
+            // Prefer AudioContext routing (already wired at kiosk launch via _setupSinkBeep —
+            // no extra audiooutput permission required). Fall back to setSinkId for cases where
+            // the speaker was configured but AudioContext routing failed.
+            if (_previewVideoSourceNode) {
+                _startPreviewPlay();
+            } else if (appConfig.vgSelectedSpeakerId && typeof video.setSinkId === 'function') {
                 video.setSinkId(appConfig.vgSelectedSpeakerId).then(_startPreviewPlay).catch(_startPreviewPlay);
             } else {
                 _startPreviewPlay();
@@ -3051,6 +3056,7 @@ $(document).ready(function() {
     let _sinkBeepCtx  = null;  // separate AudioContext whose output feeds _sinkBeepEl
     let _sinkBeepDest = null;  // MediaStreamDestination connected to _sinkBeepEl
     let _sinkBeepEl   = null;  // hidden Audio element with setSinkId applied to the BT speaker
+    let _previewVideoSourceNode = null; // MediaElementSource for #vg-preview-video, wired to _sinkBeepDest
 
     function _getAudioCtx() {
         if (!_audioCtx || _audioCtx.state === 'closed') {
@@ -3075,11 +3081,26 @@ $(document).ready(function() {
             _sinkBeepEl   = new Audio();
             _sinkBeepEl.srcObject = _sinkBeepDest.stream;
             _sinkBeepEl.setSinkId(sinkId)
-                .then(() => _sinkBeepEl.play().catch(() => {}))
+                .then(() => {
+                    _sinkBeepEl.play().catch(() => {});
+                    // Route the capture-review video through the same BT sink.
+                    // createMediaElementSource silences the element's native output and
+                    // sends audio through _sinkBeepDest → _sinkBeepEl → JBL speaker,
+                    // bypassing the OS default output (which may be the USB mic device).
+                    const previewVid = document.getElementById('vg-preview-video');
+                    if (previewVid && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
+                        try {
+                            _previewVideoSourceNode = _sinkBeepCtx.createMediaElementSource(previewVid);
+                            _previewVideoSourceNode.connect(_sinkBeepDest);
+                        } catch (e) {
+                            console.warn('[VG] Preview video audio routing error:', e.message);
+                        }
+                    }
+                })
                 .catch(() => {
                     // Permission not granted for this deviceId — fall back to default output
                     _sinkBeepCtx.close().catch(() => {});
-                    _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
+                    _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null; _previewVideoSourceNode = null;
                 });
         } catch (e) {
             _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
@@ -3087,6 +3108,8 @@ $(document).ready(function() {
     }
 
     function _teardownSinkBeep() {
+        if (_previewVideoSourceNode) { try { _previewVideoSourceNode.disconnect(); } catch (_) {} }
+        _previewVideoSourceNode = null;
         if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') _sinkBeepCtx.close().catch(() => {});
         _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
     }
