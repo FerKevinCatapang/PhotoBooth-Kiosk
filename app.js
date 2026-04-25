@@ -1720,6 +1720,7 @@ $(document).ready(function() {
             $('#admin-dashboard').hide();
             $('#kiosk-mode').fadeIn(400);
             _requestFullscreen();
+            _setupSinkBeep(appConfig.vgSelectedSpeakerId);
             resetToWelcomeScreen();
             
         } catch (err) {
@@ -1799,6 +1800,7 @@ $(document).ready(function() {
     function _doExitKiosk() {
         stopVgRecordingIfActive();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
+        _teardownSinkBeep();
         _exitFullscreen();
         $('#kiosk-mode').hide();
         $('#vg-booth').hide();
@@ -3023,7 +3025,11 @@ $(document).ready(function() {
     }
 
     // ==================== AUDIO BEEPS ====================
-    let _audioCtx = null;
+    let _audioCtx    = null;
+    let _sinkBeepCtx  = null;  // separate AudioContext whose output feeds _sinkBeepEl
+    let _sinkBeepDest = null;  // MediaStreamDestination connected to _sinkBeepEl
+    let _sinkBeepEl   = null;  // hidden Audio element with setSinkId applied to the BT speaker
+
     function _getAudioCtx() {
         if (!_audioCtx || _audioCtx.state === 'closed') {
             _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -3031,13 +3037,47 @@ $(document).ready(function() {
         if (_audioCtx.state === 'suspended') _audioCtx.resume();
         return _audioCtx;
     }
+
+    // Call once from a user-gesture context (kiosk launch) to pre-wire beep audio to the
+    // selected Bluetooth speaker. Keeps the Audio element playing silence so that subsequent
+    // oscillator connections route instantly without needing another gesture.
+    function _setupSinkBeep(sinkId) {
+        if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
+            _sinkBeepCtx.close().catch(() => {});
+        }
+        _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
+        if (!sinkId || typeof Audio === 'undefined' || typeof Audio.prototype.setSinkId === 'undefined') return;
+        try {
+            _sinkBeepCtx  = new (window.AudioContext || window.webkitAudioContext)();
+            _sinkBeepDest = _sinkBeepCtx.createMediaStreamDestination();
+            _sinkBeepEl   = new Audio();
+            _sinkBeepEl.srcObject = _sinkBeepDest.stream;
+            _sinkBeepEl.setSinkId(sinkId)
+                .then(() => _sinkBeepEl.play().catch(() => {}))
+                .catch(() => {
+                    // Permission not granted for this deviceId — fall back to default output
+                    _sinkBeepCtx.close().catch(() => {});
+                    _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
+                });
+        } catch (e) {
+            _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
+        }
+    }
+
+    function _teardownSinkBeep() {
+        if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') _sinkBeepCtx.close().catch(() => {});
+        _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
+    }
+
     function _playBeep(freq, duration, volume) {
         try {
-            const ctx = _getAudioCtx();
-            const osc = ctx.createOscillator();
+            // Route through the pre-wired Bluetooth sink when available; otherwise default output.
+            const ctx  = (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') ? _sinkBeepCtx  : _getAudioCtx();
+            const dest = (ctx === _sinkBeepCtx && _sinkBeepDest)           ? _sinkBeepDest : ctx.destination;
+            const osc  = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
-            gain.connect(ctx.destination);
+            gain.connect(dest);
             osc.type = 'sine';
             osc.frequency.value = freq;
             gain.gain.setValueAtTime(volume || 0.45, ctx.currentTime);
