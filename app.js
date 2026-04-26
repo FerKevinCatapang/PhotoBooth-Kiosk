@@ -475,6 +475,22 @@ $(document).ready(function() {
         });
     })();
 
+    // --- Photo Booth offer toggle — Video Guestbook ---
+    (function initVgOfferPb() {
+        function _syncToggle() {
+            const on = appConfig.vgOfferPb;
+            $('#toggle-vg-offer-pb').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
+            $('#toggle-vg-offer-pb-label').text(on ? 'ON' : 'OFF');
+        }
+        _syncToggle();
+        $('#toggle-vg-offer-pb').on('change', function() {
+            appConfig.vgOfferPb = this.checked;
+            $('#toggle-vg-offer-pb-label').text(this.checked ? 'ON' : 'OFF');
+            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
+            _scheduleSave();
+        });
+    })();
+
     // Opens the disclaimer modal; resolves true (accepted) or false (rejected)
     function showDisclaimerDialog(header, text, org) {
         return new Promise(resolve => {
@@ -2610,11 +2626,58 @@ $(document).ready(function() {
         if (appConfig.vgCaptureReviewEnabled) {
             await showVgPreview(galleryBlobUrl);
         }
+
+        // Offer the guest a photo strip if the feature is enabled
+        if (appConfig.vgOfferPb) {
+            const wantsPb = await showVgPbOffer();
+            if (wantsPb) {
+                $('#vg-booth').hide();
+                await triggerCaptureSequence();
+                return; // triggerCaptureSequence handles its own thank-you and resetToWelcomeScreen
+            }
+        }
+
+        // "No thanks" / countdown expired (or PB offer disabled) — show VG thank-you then reset
         if (appConfig.vgThankYouEnabled) {
             await showVgThankYou();
         }
+
         $('#vg-booth').hide();
         resetToWelcomeScreen();
+    }
+
+    function showVgPbOffer() {
+        return new Promise(function(resolve) {
+            const overlay     = document.getElementById('vg-pb-offer');
+            const countdownEl = document.getElementById('vg-pbo-countdown');
+            const yesBtn      = document.getElementById('btn-vg-pbo-yes');
+            const noBtn       = document.getElementById('btn-vg-pbo-no');
+            const SECS        = 15;
+            let remaining     = SECS;
+
+            countdownEl.textContent = '(' + remaining + ')';
+            overlay.style.display = 'flex';
+
+            const timer = setInterval(function() {
+                remaining--;
+                countdownEl.textContent = '(' + remaining + ')';
+                if (remaining <= 0) finish(false);
+            }, 1000);
+
+            function finish(accepted) {
+                clearInterval(timer);
+                overlay.style.display = 'none';
+                yesBtn.removeEventListener('click', onYes);
+                noBtn.removeEventListener('click', onNo);
+                resolve(accepted);
+            }
+
+            function onYes() { finish(true);  }
+            function onNo()  { finish(false); }
+
+            yesBtn.addEventListener('click', onYes);
+            noBtn.addEventListener('click', onNo);
+        });
     }
     function showVgThankYou() {
         return new Promise(resolve => {

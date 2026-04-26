@@ -569,6 +569,24 @@
                         </div>
                     </div>
 
+                    <!-- Offer Photo Booth after recording -->
+                    <div class="settings-section">
+                        <div class="settings-card feature-toggle-row">
+                            <div class="feature-toggle-left">
+                                <div class="feature-icon"><i class="fa-solid fa-camera"></i></div>
+                                <div>
+                                    <div class="feature-title">Offer Photo Booth After Recording</div>
+                                    <div class="feature-subtitle">After guests finish their video, prompt them to take a photo strip too</div>
+                                </div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-vg-offer-pb">
+                                <span class="toggle-slider"></span>
+                                <span class="toggle-label" id="toggle-vg-offer-pb-label">OFF</span>
+                            </label>
+                        </div>
+                    </div>
+
                 </div><!-- /cap-tab-videoguestbook -->
 
             </div>
@@ -1698,6 +1716,21 @@
             <img id="vg-ty-bg-img" src="" alt="" style="display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0;">
             <div class="vg-ty-gradient" id="vg-ty-gradient"></div>
             <button id="btn-vg-ty-done" class="ty-done-btn">Done</button>
+        </div>
+
+        <!-- ========== VG → PB OFFER OVERLAY ========== -->
+        <div id="vg-pb-offer" style="display:none; position:absolute; inset:0; z-index:65; background:rgba(0,0,0,0.93); flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:1rem; padding:2rem;">
+            <i class="fa-solid fa-camera" style="font-size:3.5rem; color:#fff; opacity:0.8;"></i>
+            <div class="vg-pbo-title">Want to take a photo too?</div>
+            <div class="vg-pbo-subtitle">Strike a pose for a quick photo strip!</div>
+            <div class="vg-pbo-buttons">
+                <button id="btn-vg-pbo-yes" class="vg-pbo-btn vg-pbo-btn-yes">
+                    <i class="fa-solid fa-camera"></i> Sure!
+                </button>
+                <button id="btn-vg-pbo-no" class="vg-pbo-btn vg-pbo-btn-no">
+                    No thanks <span id="vg-pbo-countdown"></span>
+                </button>
+            </div>
         </div>
 
         <!-- ========== SOCIAL SHARE OVERLAY ========== -->

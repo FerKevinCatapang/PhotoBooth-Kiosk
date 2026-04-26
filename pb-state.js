@@ -114,7 +114,7 @@ const PERSISTED_KEYS = [
     'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
     'driveFolderName', 'vgDriveFolderName', 'vgDriveClientId',
     'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts', 'vgDisabledTemplatePrompts',
-    'vgThankYouEnabled', 'vgThankYouDuration', 'vgCaptureReviewEnabled',
+    'vgThankYouEnabled', 'vgThankYouDuration', 'vgCaptureReviewEnabled', 'vgOfferPb',
     'kioskPin', 'kioskPinLen', 'lvNetworkAddr'
 ];
 

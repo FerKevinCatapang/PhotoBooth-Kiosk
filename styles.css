@@ -432,6 +432,17 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
 .vg-stop-btn:active { transform: scale(0.96); }
 /* VG processing overlay */
 #vg-processing-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.82); z-index: 40; display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; gap: 1rem; }
+/* VG → PB offer overlay */
+.vg-pbo-title { font-size: 2.4rem; font-weight: 800; color: #fff; letter-spacing: -0.01em; line-height: 1.2; }
+.vg-pbo-subtitle { font-size: 1.1rem; color: #9ca3af; margin-top: 0.25rem; }
+.vg-pbo-buttons { display: flex; gap: 1.25rem; margin-top: 2rem; flex-wrap: wrap; justify-content: center; }
+.vg-pbo-btn { padding: 1rem 2.5rem; border-radius: 999px; font-size: 1.15rem; font-weight: 700; cursor: pointer; border: none; transition: transform 0.15s, background 0.15s; letter-spacing: 0.01em; }
+.vg-pbo-btn:hover { transform: scale(1.04); }
+.vg-pbo-btn:active { transform: scale(0.96); }
+.vg-pbo-btn-yes { background: #006ebd; color: #fff; box-shadow: 0 4px 20px rgba(0,110,189,0.45); }
+.vg-pbo-btn-yes:hover { background: #0058a3; }
+.vg-pbo-btn-no { background: rgba(255,255,255,0.08); color: #d1d5db; border: 2px solid rgba(255,255,255,0.2) !important; }
+.vg-pbo-btn-no:hover { background: rgba(255,255,255,0.16); }
 
 /* VG Preview Control Bar */
 #vg-control-bar { width: 100%; max-width: 680px; margin-top: 0.6rem; padding: 0.5rem 0.75rem 0.6rem; background: rgba(255,255,255,0.07); border-radius: 10px; }
