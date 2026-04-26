@@ -2632,6 +2632,12 @@ $(document).ready(function() {
             const wantsPb = await showVgPbOffer();
             if (wantsPb) {
                 $('#vg-booth').hide();
+                // In VG mode, #camera-feed never got a stream — wire it up now
+                const pbFeed = $('#camera-feed')[0];
+                if (!pbFeed.srcObject && currentStream) {
+                    pbFeed.srcObject = new MediaStream(currentStream.getVideoTracks());
+                    applyKioskViewfinderSize();
+                }
                 await triggerCaptureSequence();
                 return; // triggerCaptureSequence handles its own thank-you and resetToWelcomeScreen
             }
