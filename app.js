@@ -378,9 +378,8 @@ $(document).ready(function() {
             $('#toggle-vg-thankyou').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
             $('#toggle-vg-thankyou-label').text(on ? 'ON' : 'OFF');
             $('#vg-thankyou-config').toggle(on);
-            // Show/hide nav item (only relevant in VG mode)
-            const isVg = appConfig.captureMode === 'videoguestbook';
-            $('#nav-vg-thankyou').toggle(isVg);
+            // Keep this panel accessible regardless of current capture mode.
+            $('#nav-vg-thankyou').show();
         }
 
         function _applyTyImage(file) {
@@ -454,10 +453,6 @@ $(document).ready(function() {
             _clearTyImage();
         });
 
-        // Keep nav item visibility in sync when capture mode changes
-        $(document).on('capturemode:change', function() {
-            $('#nav-vg-thankyou').toggle(appConfig.captureMode === 'videoguestbook' && appConfig.vgThankYouEnabled);
-        });
     })();
 
     // --- Capture Review toggle — Video Guestbook ---
@@ -481,12 +476,14 @@ $(document).ready(function() {
             const on = appConfig.vgOfferPb;
             $('#toggle-vg-offer-pb').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
             $('#toggle-vg-offer-pb-label').text(on ? 'ON' : 'OFF');
+            $('#photo-offer-config').toggle(on);
         }
         _syncToggle();
         $('#toggle-vg-offer-pb').on('change', function() {
             appConfig.vgOfferPb = this.checked;
             $('#toggle-vg-offer-pb-label').text(this.checked ? 'ON' : 'OFF');
             $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
+            $('#photo-offer-config').toggle(this.checked);
             _scheduleSave();
         });
     })();
@@ -532,85 +529,10 @@ $(document).ready(function() {
         }
     });
 
-    // --- Printer Setup ---
-    $('input[name="paper-size"]').on('change', function() {
-        appConfig.paperSizeOverride = $(this).val();
-        updatePaperMappingInfo();
-    });
-
-    $('#btn-copies-up').on('click', function() {
-        appConfig.printCopies = Math.min(10, appConfig.printCopies + 1);
-        $('#print-copies-display').text(appConfig.printCopies);
-        _scheduleSave();
-    });
-
-    $('#btn-copies-down').on('click', function() {
-        appConfig.printCopies = Math.max(1, appConfig.printCopies - 1);
-        $('#print-copies-display').text(appConfig.printCopies);
-        _scheduleSave();
-    });
-
-    $('input[name="color-mode"]').on('change', function() {
-        appConfig.colorMode = $(this).val();
-    });
-
-    $('input[name="print-quality"]').on('change', function() {
-        appConfig.printQuality = $(this).val();
-    });
-
-    $('#toggle-borderless').on('change', function() {
-        appConfig.borderless = $(this).is(':checked');
-        $('#toggle-borderless-label').text(appConfig.borderless ? 'ON' : 'OFF');
-        $(this).closest('.toggle-switch').toggleClass('is-on', appConfig.borderless);
-    });
-
-    $('#btn-test-print').on('click', async function() {
-        $(this).prop('disabled', true).text('Printing…');
-        await printTestPage();
-        $(this).prop('disabled', false).text('Test Print');
-    });
-
-    // --- Print Mode (dialog vs server) ---
-    $('input[name="print-mode"]').on('change', function() {
-        appConfig.printMode = this.value;
-        const serverMode = this.value === 'server';
-        $('#print-server-config').toggle(serverMode);
-        // Update the radio label borders
-        $('input[name="print-mode"]').each(function() {
-            $(this).closest('label').css('border-color', this.checked ? '#be185d' : '#e5e7eb')
-                                    .css('background', this.checked ? '#fdf2f8' : '');
-        });
-    });
-
-    $('#print-server-url').on('input', function() {
-        appConfig.printServer = this.value.trim();
-    });
-
-    $('#btn-test-server').on('click', async function() {
-        const btn = $(this);
-        const msg = $('#server-status-msg');
-        if (!appConfig.printServer) {
-            msg.html('<i class="fa-solid fa-triangle-exclamation"></i> Enter a server URL first.').css('color', '#d97706').show();
-            return;
-        }
-        btn.prop('disabled', true).text('Testing…');
-        msg.hide();
-        try {
-            const data = await checkPrintServer();
-            msg.html('<i class="fa-solid fa-circle-check"></i> Connected — ' + (data.printer || data.server || 'server ready')).css('color', '#16a34a').show();
-        } catch (e) {
-            msg.html('<i class="fa-solid fa-circle-xmark"></i> Could not reach server: ' + e.message).css('color', '#dc2626').show();
-        } finally {
-            btn.prop('disabled', false).text('Test Connection');
-        }
-    });
-
-    // Keep paper info synced when layout changes
+    // Keep template preview synced when layout changes
     $('input[name="layout"]').on('change', function() {
-        updatePaperMappingInfo();
         updateTemplateSizeHint();
     });
-    updatePaperMappingInfo();
     updateTemplateSizeHint();
 
     // --- Photo Template Image Upload ---
@@ -1016,6 +938,8 @@ $(document).ready(function() {
     async function populateCameraList() {
         const diag = document.getElementById('camera-diag');
         const setDiag = (html) => { if (diag) diag.innerHTML = html; };
+        const sel = document.getElementById('camera-select');
+        if (!sel) return;
         setDiag('<span style="color:#9ca3af;">Scanning for cameras…</span>');
 
         try {
@@ -1039,7 +963,6 @@ $(document).ready(function() {
 
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoInputs = devices.filter(d => d.kind === 'videoinput');
-            const sel = document.getElementById('camera-select');
             const prevValue = appConfig.selectedCameraId || sel.value;
 
             sel.innerHTML = '';
@@ -1133,22 +1056,6 @@ $(document).ready(function() {
     });
 
     $('#btn-stop-camera-test').on('click', function() { _stopCameraTest(); });
-
-    // --- Capture Settings Tabs ---
-    document.querySelectorAll('.capture-tab-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const target = this.dataset.capTab;
-            document.querySelectorAll('.capture-tab-btn').forEach(function(b) { b.classList.remove('active'); });
-            document.querySelectorAll('.cap-tab-content').forEach(function(c) { c.style.display = 'none'; });
-            this.classList.add('active');
-            const tabEl = document.getElementById(target);
-            if (tabEl) tabEl.style.display = '';
-            // Set capture mode based on active tab
-            appConfig.captureMode = (target === 'cap-tab-videoguestbook') ? 'videoguestbook' : 'photobooth';
-            updateAdvancedNavForMode(appConfig.captureMode);
-            _scheduleSave();
-        });
-    });
 
     // --- Video Guestbook Settings ---
     $('#setting-vg-duration').on('input', function() {
@@ -1428,27 +1335,9 @@ $(document).ready(function() {
     populateVgCameraList();
     populateVgAudioDeviceList();
 
-    // --- Advanced nav visibility based on capture mode ---
+    // --- Advanced nav visibility ---
     function updateAdvancedNavForMode(mode) {
-        const isVg = mode === 'videoguestbook';
-        $('#nav-photo-layout, #nav-template, #nav-printer').toggle(!isVg);
-        $('#nav-video-overlay, #nav-stitch').toggle(isVg);
-        $('#nav-vg-thankyou').toggle(isVg);
-        $('#nav-vg-prompts').toggle(isVg);
-        // If a photo-only panel is active while switching to VG, go to dashboard
-        if (isVg) {
-            const active = $('.nav-item.active').data('target');
-            if (active === 'panel-photo-layout' || active === 'panel-template' || active === 'panel-printer') {
-                $('[data-target="panel-dashboard"]').trigger('click');
-            }
-        }
-        // If VG-only panels are active while switching to PhotoBooth, go to dashboard
-        if (!isVg) {
-            const active = $('.nav-item.active').data('target');
-            if (active === 'panel-video-overlay' || active === 'panel-stitch' || active === 'panel-vg-thankyou' || active === 'panel-vg-prompts') {
-                $('[data-target="panel-dashboard"]').trigger('click');
-            }
-        }
+        $('#nav-photo-layout, #nav-template, #nav-video-overlay, #nav-stitch, #nav-vg-thankyou, #nav-vg-prompts').show();
     }
 
     // --- Video Overlay upload ---
@@ -1728,7 +1617,7 @@ $(document).ready(function() {
             const videoConstraints = isVgMode
                 ? { width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 30, max: 30 } }
                 // 1920×1080 for the live preview stream; ImageCapture.takePhoto() still uses the
-                // camera's full sensor resolution for actual captures, so print quality is unaffected.
+                // camera's full sensor resolution for actual captures, so capture quality is unaffected.
                 : { width: { ideal: 1920 }, height: { ideal: 1080 } };
             if (appConfig.selectedCameraId && appConfig.facingMode === '') {
                 videoConstraints.deviceId = { exact: appConfig.selectedCameraId };
@@ -2204,12 +2093,18 @@ $(document).ready(function() {
         }, 1000);
     }
 
-    function hideShareOverlay() {
+    async function hideShareOverlay() {
         clearInterval(_shareCountdownTimer);
-        $('#share-overlay').fadeOut(200, () => {
-            $('#share-preview-img').attr('src', '');
-            if (_shareObjectUrl) { URL.revokeObjectURL(_shareObjectUrl); _shareObjectUrl = null; }
+        await new Promise(resolve => {
+            $('#share-overlay').fadeOut(200, () => {
+                $('#share-preview-img').attr('src', '');
+                if (_shareObjectUrl) { URL.revokeObjectURL(_shareObjectUrl); _shareObjectUrl = null; }
+                resolve();
+            });
         });
+        if (appConfig.vgThankYouEnabled) {
+            await showVgThankYou();
+        }
         $('#processing-overlay h2').text('Processing...');
         $('.spinner').show();
         resetToWelcomeScreen();
@@ -2632,6 +2527,17 @@ $(document).ready(function() {
             const wantsPb = await showVgPbOffer();
             if (wantsPb) {
                 $('#vg-booth').hide();
+                if (currentStream) {
+                    // VG may include microphone audio; disable it before PB capture.
+                    const videoTracks = currentStream.getVideoTracks().filter(t => t.readyState === 'live');
+                    const audioTracks = currentStream.getAudioTracks();
+                    audioTracks.forEach(track => {
+                        try { track.stop(); } catch (e) {}
+                    });
+                    if (videoTracks.length > 0) {
+                        currentStream = new MediaStream(videoTracks);
+                    }
+                }
                 const pbFeedEl = $('#camera-feed')[0];
                 if (pbFeedEl && currentStream) {
                     pbFeedEl.srcObject = currentStream;
@@ -2929,13 +2835,6 @@ $(document).ready(function() {
             } catch (err) { console.error('Save error:', err); }
         }
 
-        // Print BEFORE showing preview
-        if (appConfig.photoMode) {
-            $('#processing-overlay h2').text('Sending to printer…');
-            await printCanvas(canvas);
-            $('#processing-overlay h2').text('Processing...');
-        }
-
         // SAVE IMAGE TO ADMIN DASHBOARD GALLERY
         const photoDataUrl = canvas.toDataURL('image/png', 0.8);
         capturedPhotos.unshift(photoDataUrl);
@@ -2980,138 +2879,15 @@ $(document).ready(function() {
             showShareOverlay(canvas, photoDataUrl);
         } else {
             const previewMs = Math.max(appConfig.reviewTime * 1000, 1000);
-            setTimeout(() => {
+            setTimeout(async () => {
+                if (appConfig.vgThankYouEnabled) {
+                    await showVgThankYou();
+                }
                 $('#processing-overlay h2').text('Processing...');
                 $('.spinner').show();
                 resetToWelcomeScreen();
             }, previewMs);
         }
-    }
-
-    async function printCanvas(sourceCanvas) {
-        const paperKey = appConfig.paperSizeOverride !== 'auto'
-            ? appConfig.paperSizeOverride
-            : (LAYOUT_DEFS[appConfig.layout]?.paper || '4x6');
-        const paper = PAPER_SIZES[paperKey];
-
-        // Create a print canvas at the physical Selphy paper dimensions
-        const printC = document.createElement('canvas');
-        printC.width  = paper.pWpx;
-        printC.height = paper.pHpx;
-        const pCtx = printC.getContext('2d');
-        pCtx.fillStyle = '#ffffff';
-        pCtx.fillRect(0, 0, paper.pWpx, paper.pHpx);
-        if (appConfig.colorMode === 'grayscale') {
-            pCtx.filter = 'grayscale(100%)';
-        }
-
-        if (paper.twoUp) {
-            // 2-up: draw two strips side-by-side on Wide paper — user cuts in half
-            const vMargin = Math.round((paper.pHpx - paper.hPx) / 2);
-            pCtx.drawImage(sourceCanvas, 0,          vMargin, paper.wPx, paper.hPx);
-            pCtx.drawImage(sourceCanvas, paper.wPx,  vMargin, paper.wPx, paper.hPx);
-        } else {
-            // Contain-fit: scale source to fill physical paper, centred
-            const scale = Math.min(paper.pWpx / sourceCanvas.width, paper.pHpx / sourceCanvas.height);
-            const dW = Math.round(sourceCanvas.width  * scale);
-            const dH = Math.round(sourceCanvas.height * scale);
-            const dX = Math.round((paper.pWpx - dW) / 2);
-            const dY = Math.round((paper.pHpx - dH) / 2);
-            pCtx.drawImage(sourceCanvas, dX, dY, dW, dH);
-        }
-        pCtx.filter = 'none';
-
-        const margin = appConfig.borderless ? '0' : '3mm';
-        const blob = await new Promise(r => printC.toBlob(r, 'image/jpeg', 0.95));
-        const url  = URL.createObjectURL(blob);
-
-        for (let copy = 0; copy < appConfig.printCopies; copy++) {
-            if (appConfig.printMode === 'server' && appConfig.printServer) {
-                await postToPrintServer(blob, paper);
-            } else {
-                await triggerPrintJob(url, paper, margin);
-            }
-            if (copy < appConfig.printCopies - 1) await new Promise(r => setTimeout(r, 1500));
-        }
-        URL.revokeObjectURL(url);
-    }
-
-    // POST the photo blob to a local WiFi print server
-    async function postToPrintServer(blob, paper) {
-        const form = new FormData();
-        form.append('photo', blob, 'photo.jpg');
-        form.append('paperW', paper.cssW);
-        form.append('paperH', paper.cssH);
-        form.append('colorMode', appConfig.colorMode);
-        form.append('borderless', appConfig.borderless ? '1' : '0');
-        const url = appConfig.printServer.replace(/\/$/, '') + '/print';
-        const resp = await fetch(url, { method: 'POST', body: form });
-        if (!resp.ok) {
-            const msg = await resp.text().catch(() => resp.status);
-            throw new Error('Print server error: ' + msg);
-        }
-        return resp.json();
-    }
-
-    // Check if the print server is reachable; returns { ok, version? } or throws
-    async function checkPrintServer() {
-        const url = appConfig.printServer.replace(/\/$/, '') + '/status';
-        const resp = await fetch(url, { signal: AbortSignal.timeout(4000) });
-        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-        return resp.json();
-    }
-
-    async function triggerPrintJob(url, paper, margin) {
-        const iframe = document.createElement('iframe');
-        iframe.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;border:0;';
-        document.body.appendChild(iframe);
-        const doc = iframe.contentDocument || iframe.contentWindow.document;
-        doc.open();
-        doc.write(`<!DOCTYPE html><html><head><style>
-            @page { size: ${paper.cssW} ${paper.cssH}; margin: ${margin}; }
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { width: ${paper.cssW}; height: ${paper.cssH}; overflow: hidden; background: #fff; }
-            img { width: 100%; height: 100%; display: block; object-fit: fill; }
-        </style></head><body><img src="${url}"></body></html>`);
-        doc.close();
-        await new Promise(r => { iframe.onload = r; setTimeout(r, 800); });
-        iframe.contentWindow.print();
-        setTimeout(() => { if (iframe.parentNode) document.body.removeChild(iframe); }, 10000);
-    }
-
-    async function printTestPage() {
-        const paperKey = appConfig.paperSizeOverride !== 'auto'
-            ? appConfig.paperSizeOverride
-            : (LAYOUT_DEFS[appConfig.layout]?.paper || '4x6');
-        const paper = PAPER_SIZES[paperKey];
-        const tc = document.createElement('canvas');
-        tc.width = paper.pWpx; tc.height = paper.pHpx;
-        const ctx = tc.getContext('2d');
-        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, tc.width, tc.height);
-        ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 6;
-        ctx.strokeRect(20, 20, tc.width - 40, tc.height - 40);
-        const fs1 = Math.round(paper.pWpx * 0.08);
-        const fs2 = Math.round(paper.pWpx * 0.045);
-        ctx.fillStyle = '#1f2937'; ctx.textAlign = 'center'; ctx.font = `bold ${fs1}px Inter,sans-serif`;
-        ctx.fillText('Test Print', tc.width / 2, tc.height * 0.35);
-        ctx.fillStyle = '#6b7280'; ctx.font = `${fs2}px Inter,sans-serif`;
-        ctx.fillText(paper.label, tc.width / 2, tc.height * 0.48);
-        ctx.fillText(appConfig.colorMode === 'grayscale' ? 'B&W' : 'Color', tc.width / 2, tc.height * 0.56);
-        ctx.fillText(new Date().toLocaleString(), tc.width / 2, tc.height * 0.64);
-        await printCanvas(tc);
-    }
-
-    function updatePaperMappingInfo() {
-        const layout = $('input[name="layout"]:checked').val() || appConfig.layout;
-        const override = appConfig.paperSizeOverride;
-        const autoKey = LAYOUT_DEFS[layout]?.paper || '4x6';
-        const activeKey = override !== 'auto' ? override : autoKey;
-        const paper = PAPER_SIZES[activeKey];
-        if (!paper) return;
-        const source = override !== 'auto' ? 'manual override' : 'layout default';
-        $('#paper-mapping-info').html(
-            `<span class="info-tag">Active paper:</span> <strong>${paper.label}</strong> &mdash; <span style="color:#6b7280;">${paper.selphy} &middot; ${source}</span>`
-        );
     }
 
     function updateTemplateSizeHint() {
@@ -4005,17 +3781,10 @@ $(document).ready(function() {
 
         // Layout radio
         $('input[name="layout"][value="' + appConfig.layout + '"]').prop('checked', true);
-        updatePaperMappingInfo();
         updateTemplateSizeHint();
 
-        // Capture mode tabs
-        const isVg = appConfig.captureMode === 'videoguestbook';
-        const capTarget = isVg ? 'cap-tab-videoguestbook' : 'cap-tab-photobooth';
-        document.querySelectorAll('.capture-tab-btn').forEach(function(b) {
-            b.classList.toggle('active', b.dataset.capTab === capTarget);
-        });
-        document.querySelectorAll('.cap-tab-content').forEach(function(c) { c.style.display = 'none'; });
-        const capEl = document.getElementById(capTarget);
+        // Capture settings are Video Guestbook-only.
+        const capEl = document.getElementById('cap-tab-videoguestbook');
         if (capEl) capEl.style.display = '';
         updateAdvancedNavForMode(appConfig.captureMode);
 
@@ -4065,23 +3834,6 @@ $(document).ready(function() {
         $('#chk-save-drive').prop('checked', appConfig.saveDrive);
         $('#pb-drive-config').toggle(appConfig.saveDrive);
         $('#drive-folder-name').val(appConfig.driveFolderName);
-
-        // Printer settings
-        $('input[name="paper-size"][value="' + appConfig.paperSizeOverride + '"]').prop('checked', true);
-        $('input[name="color-mode"][value="' + appConfig.colorMode + '"]').prop('checked', true);
-        $('input[name="print-quality"][value="' + appConfig.printQuality + '"]').prop('checked', true);
-        $('#print-copies-display').text(appConfig.printCopies);
-        $('#toggle-borderless').prop('checked', appConfig.borderless)
-            .closest('.toggle-switch').toggleClass('is-on', appConfig.borderless);
-        $('#toggle-borderless-label').text(appConfig.borderless ? 'ON' : 'OFF');
-        $('input[name="print-mode"][value="' + appConfig.printMode + '"]').prop('checked', true);
-        $('#print-server-config').toggle(appConfig.printMode === 'server');
-        $('#print-server-url').val(appConfig.printServer);
-        $('input[name="print-mode"]').each(function() {
-            $(this).closest('label')
-                .css('border-color', this.checked ? '#be185d' : '#e5e7eb')
-                .css('background',   this.checked ? '#fdf2f8' : '');
-        });
 
         // Camera — Photo Booth
         const fmVal = appConfig.facingMode || 'user';

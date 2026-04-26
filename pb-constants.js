@@ -42,7 +42,7 @@ const PROMPT_TEMPLATES = {
 // --- Canon Selphy CP1500 compatible paper sizes ---
 // wPx/hPx  = source composition canvas at 300 DPI
 // pWpx/pHpx = physical Selphy paper canvas at 300 DPI
-// twoUp     = print 2 strips side-by-side on Wide paper (2×6 only)
+// twoUp     = output 2 strips side-by-side on Wide paper (2×6 only)
 const PAPER_SIZES = {
     '2x6':  { wPx: 600,  hPx: 1800, pWpx: 1200, pHpx: 2400, cssW: '4in', cssH: '8in',  label: '2×6 in Strip',      twoUp: true,  selphy: 'Wide paper (KW-24IP) · 2 strips per sheet, cut in half'  },
     '4x6':  { wPx: 1200, hPx: 1800, pWpx: 1200, pHpx: 1800, cssW: '4in', cssH: '6in',  label: '4×6 in Portrait',    twoUp: false, selphy: 'Postcard paper (KP-108IN) · Selphy CP1500 native ✓'       },

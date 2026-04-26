@@ -21,8 +21,8 @@ let appConfig = {
     welcomeSubtitle: '',
     welcomeMedia: null,   // { type: 'image'|'video', objectUrl: string } or null
     photoMode: false,
-    // Capture mode: 'photobooth' | 'videoguestbook'
-    captureMode: 'photobooth',
+    // Capture mode default is Video Guestbook.
+    captureMode: 'videoguestbook',
     // Video Guestbook settings
     vgMaxDuration: 60,        // max recording seconds
     vgPromptText: '',
@@ -34,12 +34,6 @@ let appConfig = {
     vgSaveLocal: true,        // VG: save to local folder
     vgSaveDrive: false,       // VG: upload to Google Drive (uses VG-specific Drive config below)
     vgOverlay: null,          // { objectUrl, img } or null — PNG overlay burned into recordings
-    // Printer settings
-    printCopies: 1,
-    printQuality: 'high',
-    paperSizeOverride: 'auto',
-    colorMode: 'color',
-    borderless: true,
     // Template image (set by admin in Photo Template panel)
     templateBg: null,
     // Video Guestbook frame/background image (overlaid on the recording)
@@ -48,11 +42,6 @@ let appConfig = {
     socialShare: true,
     // Event name used as filename prefix (e.g. "Smiths_Wedding")
     eventName: '',
-    // Printing mode:
-    //   'dialog'  – system print dialog (window.print)  — works on desktop, iPad AirPrint, Android Chrome
-    //   'server'  – POST image to a local WiFi print server (best for tablets/silent kiosk)
-    printMode: 'dialog',
-    printServer: '',     // e.g. "http://192.168.1.50:3000"
     selectedCameraId: '', // deviceId chosen in Capture Settings
     facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
 
@@ -108,9 +97,8 @@ const PERSISTED_KEYS = [
     'reviewTime', 'welcomeBg', 'welcomeTitle', 'welcomeSubtitle', 'photoMode',
     'captureMode', 'vgMaxDuration', 'vgPromptText', 'vgCountdown',
     'vgSelectedCameraId', 'vgFacingMode', 'vgSelectedMicId', 'vgSelectedSpeakerId',
-    'vgSaveLocal', 'vgSaveDrive', 'printCopies', 'printQuality',
-    'paperSizeOverride', 'colorMode', 'borderless', 'socialShare', 'eventName',
-    'printMode', 'printServer', 'selectedCameraId', 'facingMode',
+    'vgSaveLocal', 'vgSaveDrive', 'socialShare', 'eventName',
+    'selectedCameraId', 'facingMode',
     'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
     'driveFolderName', 'vgDriveFolderName', 'vgDriveClientId',
     'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts', 'vgDisabledTemplatePrompts',
@@ -128,6 +116,8 @@ const PERSISTED_KEYS = [
         PERSISTED_KEYS.forEach(function(k) {
             if (parsed[k] !== undefined) appConfig[k] = parsed[k];
         });
+        // Capture Settings is VG-only now; normalize legacy saved values.
+        appConfig.captureMode = 'videoguestbook';
         // Migrate legacy custom prompts (string[]) to object format
         appConfig.vgCustomPrompts = appConfig.vgCustomPrompts.map(function(p) {
             return (typeof p === 'string') ? { text: p, enabled: true } : p;
