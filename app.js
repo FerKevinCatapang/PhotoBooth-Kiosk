@@ -481,12 +481,14 @@ $(document).ready(function() {
             const on = appConfig.vgOfferPb;
             $('#toggle-vg-offer-pb').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
             $('#toggle-vg-offer-pb-label').text(on ? 'ON' : 'OFF');
+            $('#pb-addon-settings').toggle(on);
         }
         _syncToggle();
         $('#toggle-vg-offer-pb').on('change', function() {
             appConfig.vgOfferPb = this.checked;
             $('#toggle-vg-offer-pb-label').text(this.checked ? 'ON' : 'OFF');
             $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
+            $('#pb-addon-settings').toggle(this.checked);
             _scheduleSave();
         });
     })();
@@ -1134,21 +1136,7 @@ $(document).ready(function() {
 
     $('#btn-stop-camera-test').on('click', function() { _stopCameraTest(); });
 
-    // --- Capture Settings Tabs ---
-    document.querySelectorAll('.capture-tab-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const target = this.dataset.capTab;
-            document.querySelectorAll('.capture-tab-btn').forEach(function(b) { b.classList.remove('active'); });
-            document.querySelectorAll('.cap-tab-content').forEach(function(c) { c.style.display = 'none'; });
-            this.classList.add('active');
-            const tabEl = document.getElementById(target);
-            if (tabEl) tabEl.style.display = '';
-            // Set capture mode based on active tab
-            appConfig.captureMode = (target === 'cap-tab-videoguestbook') ? 'videoguestbook' : 'photobooth';
-            updateAdvancedNavForMode(appConfig.captureMode);
-            _scheduleSave();
-        });
-    });
+    // Capture mode is always videoguestbook; tabs removed.
 
     // --- Video Guestbook Settings ---
     $('#setting-vg-duration').on('input', function() {
@@ -1431,21 +1419,21 @@ $(document).ready(function() {
     // --- Advanced nav visibility based on capture mode ---
     function updateAdvancedNavForMode(mode) {
         const isVg = mode === 'videoguestbook';
-        $('#nav-photo-layout, #nav-template, #nav-printer').toggle(!isVg);
-        $('#nav-video-overlay, #nav-stitch').toggle(isVg);
+        $('#nav-photo-layout, #nav-printer').toggle(!isVg);
+        $('#nav-video-overlay, #nav-stitch, #nav-photobooth').toggle(isVg);
         $('#nav-vg-thankyou').toggle(isVg);
         $('#nav-vg-prompts').toggle(isVg);
         // If a photo-only panel is active while switching to VG, go to dashboard
         if (isVg) {
             const active = $('.nav-item.active').data('target');
-            if (active === 'panel-photo-layout' || active === 'panel-template' || active === 'panel-printer') {
+            if (active === 'panel-photo-layout' || active === 'panel-printer') {
                 $('[data-target="panel-dashboard"]').trigger('click');
             }
         }
         // If VG-only panels are active while switching to PhotoBooth, go to dashboard
         if (!isVg) {
             const active = $('.nav-item.active').data('target');
-            if (active === 'panel-video-overlay' || active === 'panel-stitch' || active === 'panel-vg-thankyou' || active === 'panel-vg-prompts') {
+            if (active === 'panel-video-overlay' || active === 'panel-stitch' || active === 'panel-vg-thankyou' || active === 'panel-vg-prompts' || active === 'panel-photobooth') {
                 $('[data-target="panel-dashboard"]').trigger('click');
             }
         }
@@ -4002,15 +3990,6 @@ $(document).ready(function() {
         updatePaperMappingInfo();
         updateTemplateSizeHint();
 
-        // Capture mode tabs
-        const isVg = appConfig.captureMode === 'videoguestbook';
-        const capTarget = isVg ? 'cap-tab-videoguestbook' : 'cap-tab-photobooth';
-        document.querySelectorAll('.capture-tab-btn').forEach(function(b) {
-            b.classList.toggle('active', b.dataset.capTab === capTarget);
-        });
-        document.querySelectorAll('.cap-tab-content').forEach(function(c) { c.style.display = 'none'; });
-        const capEl = document.getElementById(capTarget);
-        if (capEl) capEl.style.display = '';
         updateAdvancedNavForMode(appConfig.captureMode);
 
         // Event name
