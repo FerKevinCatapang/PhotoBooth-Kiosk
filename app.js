@@ -54,6 +54,40 @@ $(document).ready(function() {
         appConfig.reviewTime = parseInt(val);
     });
 
+    // --- Storage (Photo Booth) — checkbox toggles (both local + drive can be active) ---
+    $('#chk-save-local').on('change', function() {
+        appConfig.saveLocal = this.checked;
+        if (this.checked) {
+            $('#local-folder-config').slideDown();
+        } else {
+            $('#local-folder-config').slideUp();
+        }
+    });
+
+    $('#chk-save-drive').on('change', function() {
+        appConfig.saveDrive = this.checked;
+        if (this.checked) {
+            $('#pb-drive-config').slideDown();
+        } else {
+            $('#pb-drive-config').slideUp();
+        }
+        _updateEventNameWarnings();
+    });
+
+    $('#btn-select-dir').on('click', async function() {
+        try {
+            if (!window.showDirectoryPicker) {
+                alert("Your browser does not support seamless folder saving. Photos will be saved via standard downloads.");
+                return;
+            }
+            directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            const label = `Saving to: /${directoryHandle.name}`;
+            $('#dir-status').text(label);
+        } catch (err) {
+            console.log("Directory picker cancelled or failed.", err);
+        }
+    });
+
     // --- Welcome Screen Designer ---
     $('#edit-bg-color').on('input', function() {
         let col = $(this).val();
@@ -447,14 +481,12 @@ $(document).ready(function() {
             const on = appConfig.vgOfferPb;
             $('#toggle-vg-offer-pb').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
             $('#toggle-vg-offer-pb-label').text(on ? 'ON' : 'OFF');
-            $('#pb-addon-settings').toggle(on);
         }
         _syncToggle();
         $('#toggle-vg-offer-pb').on('change', function() {
             appConfig.vgOfferPb = this.checked;
             $('#toggle-vg-offer-pb-label').text(this.checked ? 'ON' : 'OFF');
             $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-            $('#pb-addon-settings').toggle(this.checked);
             _scheduleSave();
         });
     })();
@@ -1102,7 +1134,21 @@ $(document).ready(function() {
 
     $('#btn-stop-camera-test').on('click', function() { _stopCameraTest(); });
 
-    // Capture mode is always videoguestbook; tabs removed.
+    // --- Capture Settings Tabs ---
+    document.querySelectorAll('.capture-tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const target = this.dataset.capTab;
+            document.querySelectorAll('.capture-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+            document.querySelectorAll('.cap-tab-content').forEach(function(c) { c.style.display = 'none'; });
+            this.classList.add('active');
+            const tabEl = document.getElementById(target);
+            if (tabEl) tabEl.style.display = '';
+            // Set capture mode based on active tab
+            appConfig.captureMode = (target === 'cap-tab-videoguestbook') ? 'videoguestbook' : 'photobooth';
+            updateAdvancedNavForMode(appConfig.captureMode);
+            _scheduleSave();
+        });
+    });
 
     // --- Video Guestbook Settings ---
     $('#setting-vg-duration').on('input', function() {
@@ -1385,21 +1431,21 @@ $(document).ready(function() {
     // --- Advanced nav visibility based on capture mode ---
     function updateAdvancedNavForMode(mode) {
         const isVg = mode === 'videoguestbook';
-        $('#nav-photo-layout, #nav-printer').toggle(!isVg);
-        $('#nav-video-overlay, #nav-stitch, #nav-photobooth').toggle(isVg);
+        $('#nav-photo-layout, #nav-template, #nav-printer').toggle(!isVg);
+        $('#nav-video-overlay, #nav-stitch').toggle(isVg);
         $('#nav-vg-thankyou').toggle(isVg);
         $('#nav-vg-prompts').toggle(isVg);
         // If a photo-only panel is active while switching to VG, go to dashboard
         if (isVg) {
             const active = $('.nav-item.active').data('target');
-            if (active === 'panel-photo-layout' || active === 'panel-printer') {
+            if (active === 'panel-photo-layout' || active === 'panel-template' || active === 'panel-printer') {
                 $('[data-target="panel-dashboard"]').trigger('click');
             }
         }
         // If VG-only panels are active while switching to PhotoBooth, go to dashboard
         if (!isVg) {
             const active = $('.nav-item.active').data('target');
-            if (active === 'panel-video-overlay' || active === 'panel-stitch' || active === 'panel-vg-thankyou' || active === 'panel-vg-prompts' || active === 'panel-photobooth') {
+            if (active === 'panel-video-overlay' || active === 'panel-stitch' || active === 'panel-vg-thankyou' || active === 'panel-vg-prompts') {
                 $('[data-target="panel-dashboard"]').trigger('click');
             }
         }
@@ -1916,9 +1962,6 @@ $(document).ready(function() {
 
     // If fullscreen is exited while kiosk is active (e.g. Escape key), treat it as Exit button press
     document.addEventListener('fullscreenchange', function() {
-        if (document.fullscreenElement && appConfig.captureMode !== 'videoguestbook') {
-            applyKioskViewfinderSize();
-        }
         if (!document.fullscreenElement && $('#kiosk-mode').is(':visible')) {
             if (appConfig.kioskPin && appConfig.kioskPinLen > 0) {
                 _showPinModal();
@@ -2161,20 +2204,14 @@ $(document).ready(function() {
         }, 1000);
     }
 
-    async function hideShareOverlay() {
+    function hideShareOverlay() {
         clearInterval(_shareCountdownTimer);
-        await new Promise(resolve => {
-            $('#share-overlay').fadeOut(200, () => {
-                $('#share-preview-img').attr('src', '');
-                if (_shareObjectUrl) { URL.revokeObjectURL(_shareObjectUrl); _shareObjectUrl = null; }
-                resolve();
-            });
+        $('#share-overlay').fadeOut(200, () => {
+            $('#share-preview-img').attr('src', '');
+            if (_shareObjectUrl) { URL.revokeObjectURL(_shareObjectUrl); _shareObjectUrl = null; }
         });
         $('#processing-overlay h2').text('Processing...');
         $('.spinner').show();
-        if (appConfig.vgThankYouEnabled) {
-            await showVgThankYou();
-        }
         resetToWelcomeScreen();
     }
     // =========================================================
@@ -2182,7 +2219,6 @@ $(document).ready(function() {
     async function triggerCaptureSequence() {
         try {
             $('#live-booth').show();
-            applyKioskViewfinderSize();
             const video = $('#camera-feed')[0];
             const previewCanvas = $('#photo-canvas')[0];
             const previewCtx = previewCanvas.getContext('2d');
@@ -2596,12 +2632,6 @@ $(document).ready(function() {
             const wantsPb = await showVgPbOffer();
             if (wantsPb) {
                 $('#vg-booth').hide();
-                // In VG mode, #camera-feed never got a stream — wire it up now
-                const pbFeed = $('#camera-feed')[0];
-                if (!pbFeed.srcObject && currentStream) {
-                    pbFeed.srcObject = new MediaStream(currentStream.getVideoTracks());
-                    applyKioskViewfinderSize();
-                }
                 await triggerCaptureSequence();
                 return; // triggerCaptureSequence handles its own thank-you and resetToWelcomeScreen
             }
@@ -2866,12 +2896,12 @@ $(document).ready(function() {
 
         const filename = makeFilename();
 
-        // --- Save to local folder (shares the VG save destination) ---
-        if (appConfig.vgSaveLocal) {
+        // --- Save to local folder (or browser download as fallback) ---
+        if (appConfig.saveLocal) {
             try {
-                if (vgDirectoryHandle) {
+                if (directoryHandle) {
                     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
-                    const fileHandle = await vgDirectoryHandle.getFileHandle(filename, { create: true });
+                    const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
                     const writable = await fileHandle.createWritable();
                     await writable.write(blob);
                     await writable.close();
@@ -2903,26 +2933,31 @@ $(document).ready(function() {
         // Broadcast to Live Viewer peers (fire-and-forget)
         lvBroadcastPhoto(photoDataUrl, filename);
 
-        // --- Upload to Google Drive via VG credentials (fire-and-forget, non-blocking) ---
+        // --- Upload to Google Drive (fire-and-forget, non-blocking) ---
+        // Store the Drive link so QR button can use it when upload completes
         let _pbDriveLink = null;
-        if (appConfig.vgSaveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
+        if (appConfig.saveDrive && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
-                    const result = await uploadVgToDrive(blob, filename);
-                    console.log('[Drive] PB uploaded:', filename);
+                    const result = await uploadToDrive(blob, filename);
+                    console.log('[Drive] Uploaded:', filename);
                     if (result && result.id) {
-                        await _driveSetPublic(appConfig._vgDriveAccessToken, result.id);
+                        // Make the file publicly readable so guests can download via QR
+                        await _driveSetPublic(appConfig._driveAccessToken, result.id);
                         _pbDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
+                        // Store link in gallery parallel array and show QR button in thumbnail
                         capturedPhotoDriveLinks[0] = _pbDriveLink;
                         _appendGalleryQrBtn(0, 'photo', _pbDriveLink);
+                        // Notify live viewer peers
                         lvBroadcastDriveUpdate(filename, _pbDriveLink);
+                        // Show QR button in share overlay (if it's still open)
                         if ($('#share-overlay').is(':visible') && _pbDriveLink) {
                             _currentPbDriveLink = _pbDriveLink;
                             $('#btn-share-qr').fadeIn(200);
                         }
                     }
                 } catch (e) {
-                    console.warn('[Drive] PB upload failed:', e.message);
+                    console.warn('[Drive] Upload failed:', e.message);
                 }
             }, 'image/jpeg', 0.92);
         }
@@ -3545,7 +3580,7 @@ $(document).ready(function() {
 
     // Show/hide inline warning below the event name field when Drive is on but name is empty
     function _updateEventNameWarnings() {
-        const needsName = appConfig.vgSaveDrive && !appConfig.eventName;
+        const needsName = (appConfig.saveDrive || appConfig.vgSaveDrive) && !appConfig.eventName;
         $('#event-name-drive-warning').toggle(needsName);
         $('#event-name-input').toggleClass('input-required-highlight', needsName);
     }
@@ -3961,6 +3996,15 @@ $(document).ready(function() {
         updatePaperMappingInfo();
         updateTemplateSizeHint();
 
+        // Capture mode tabs
+        const isVg = appConfig.captureMode === 'videoguestbook';
+        const capTarget = isVg ? 'cap-tab-videoguestbook' : 'cap-tab-photobooth';
+        document.querySelectorAll('.capture-tab-btn').forEach(function(b) {
+            b.classList.toggle('active', b.dataset.capTab === capTarget);
+        });
+        document.querySelectorAll('.cap-tab-content').forEach(function(c) { c.style.display = 'none'; });
+        const capEl = document.getElementById(capTarget);
+        if (capEl) capEl.style.display = '';
         updateAdvancedNavForMode(appConfig.captureMode);
 
         // Event name
@@ -4002,6 +4046,13 @@ $(document).ready(function() {
         $('#toggle-social-share').prop('checked', appConfig.socialShare)
             .closest('.toggle-switch').toggleClass('is-on', appConfig.socialShare);
         $('#toggle-social-label').text(appConfig.socialShare ? 'ON' : 'OFF');
+
+        // Storage — Photo Booth
+        $('#chk-save-local').prop('checked', appConfig.saveLocal);
+        $('#local-folder-config').toggle(appConfig.saveLocal);
+        $('#chk-save-drive').prop('checked', appConfig.saveDrive);
+        $('#pb-drive-config').toggle(appConfig.saveDrive);
+        $('#drive-folder-name').val(appConfig.driveFolderName);
 
         // Printer settings
         $('input[name="paper-size"][value="' + appConfig.paperSizeOverride + '"]').prop('checked', true);
