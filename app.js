@@ -2632,6 +2632,18 @@ $(document).ready(function() {
             const wantsPb = await showVgPbOffer();
             if (wantsPb) {
                 $('#vg-booth').hide();
+                const pbFeedEl = $('#camera-feed')[0];
+                if (pbFeedEl && currentStream) {
+                    pbFeedEl.srcObject = currentStream;
+                    try {
+                        await pbFeedEl.play();
+                    } catch (e) {
+                        // Playback can be momentarily blocked while transitioning overlays.
+                    }
+                }
+                $('#photo-canvas').hide();
+                $('#camera-feed').show();
+                applyKioskViewfinderSize();
                 await triggerCaptureSequence();
                 return; // triggerCaptureSequence handles its own thank-you and resetToWelcomeScreen
             }
