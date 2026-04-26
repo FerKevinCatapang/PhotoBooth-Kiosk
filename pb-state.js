@@ -77,7 +77,8 @@ let appConfig = {
     // Prompts — Video Guestbook
     vgPromptsEnabled: false,
     vgPromptCategory: 'wedding', // 'wedding' | 'birthday' | 'teambuilding'
-    vgCustomPrompts: [],          // admin-added prompts appended to the active template pool
+    vgCustomPrompts: [],          // admin-added prompts: [{text: string, enabled: boolean}]
+    vgDisabledTemplatePrompts: [], // template prompt strings the admin has disabled
 
     // Thank You screen — Video Guestbook
     vgThankYouEnabled: false,
@@ -86,6 +87,9 @@ let appConfig = {
 
     // Capture Review — Video Guestbook
     vgCaptureReviewEnabled: true, // play back the recording for guest review after capture
+
+    // Photo Booth offer — shown after VG recording completes
+    vgOfferPb: false, // prompt guest to take a photo strip after their video message
 
     // Kiosk exit PIN — stored as SHA-256 hex hash, '' = no PIN required
     kioskPin: '',
@@ -109,7 +113,7 @@ const PERSISTED_KEYS = [
     'printMode', 'printServer', 'selectedCameraId', 'facingMode',
     'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
     'driveFolderName', 'vgDriveFolderName', 'vgDriveClientId',
-    'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts',
+    'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts', 'vgDisabledTemplatePrompts',
     'vgThankYouEnabled', 'vgThankYouDuration', 'vgCaptureReviewEnabled',
     'kioskPin', 'kioskPinLen', 'lvNetworkAddr'
 ];
@@ -123,6 +127,10 @@ const PERSISTED_KEYS = [
         const parsed = JSON.parse(saved);
         PERSISTED_KEYS.forEach(function(k) {
             if (parsed[k] !== undefined) appConfig[k] = parsed[k];
+        });
+        // Migrate legacy custom prompts (string[]) to object format
+        appConfig.vgCustomPrompts = appConfig.vgCustomPrompts.map(function(p) {
+            return (typeof p === 'string') ? { text: p, enabled: true } : p;
         });
     } catch (e) {
         console.warn('[Config] Could not restore saved settings:', e);

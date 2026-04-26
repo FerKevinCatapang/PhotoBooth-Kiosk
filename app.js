@@ -263,30 +263,67 @@ $(document).ready(function() {
 
     // --- Prompts — Video Guestbook admin settings ---
     (function initVgPrompts() {
+        function _enabledCount() {
+            const builtIn  = PROMPT_TEMPLATES[appConfig.vgPromptCategory] || [];
+            const disabled = appConfig.vgDisabledTemplatePrompts;
+            const tplEnabled = builtIn.filter(function(q) { return disabled.indexOf(q) === -1; }).length;
+            const cusEnabled = appConfig.vgCustomPrompts.filter(function(p) { return p.enabled; }).length;
+            return tplEnabled + cusEnabled;
+        }
+
+        function _toggle(checked) {
+            return '<label class="vg-prompt-toggle-wrap">' +
+                '<input type="checkbox" class="vg-prompt-toggle"' + (checked ? ' checked' : '') + '>' +
+                '<span class="vg-prompt-toggle-pill"></span>' +
+                '</label>';
+        }
+
         function _renderPromptList() {
-            const builtIn = PROMPT_TEMPLATES[appConfig.vgPromptCategory] || [];
-            const custom  = appConfig.vgCustomPrompts;
-            $('#vg-prompts-count').text('(' + (builtIn.length + custom.length) + ')');
+            const builtIn  = PROMPT_TEMPLATES[appConfig.vgPromptCategory] || [];
+            const custom   = appConfig.vgCustomPrompts;
+            const disabled = appConfig.vgDisabledTemplatePrompts;
+
+            $('#vg-prompts-count').text('(' + _enabledCount() + ' enabled)');
 
             const $list = $('#vg-prompts-list').empty();
             builtIn.forEach(function(q) {
+                const isEnabled = disabled.indexOf(q) === -1;
                 $list.append(
-                    '<li class="vg-prompt-item">' +
+                    '<li class="vg-prompt-item' + (isEnabled ? '' : ' is-disabled') + '" data-type="template" data-key="' + encodeURIComponent(q) + '">' +
+                    _toggle(isEnabled) +
                     '<span class="vg-prompt-badge">Template</span>' +
                     '<span class="vg-prompt-text">' + $('<span>').text(q).html() + '</span>' +
                     '</li>'
                 );
             });
-            custom.forEach(function(q, i) {
+            custom.forEach(function(p, i) {
                 $list.append(
-                    '<li class="vg-prompt-item">' +
+                    '<li class="vg-prompt-item' + (p.enabled ? '' : ' is-disabled') + '" data-type="custom" data-idx="' + i + '">' +
+                    _toggle(p.enabled) +
                     '<span class="vg-prompt-badge vg-prompt-badge-custom">Custom</span>' +
-                    '<span class="vg-prompt-text">' + $('<span>').text(q).html() + '</span>' +
+                    '<span class="vg-prompt-text">' + $('<span>').text(p.text).html() + '</span>' +
                     '<button class="vg-prompt-del" data-idx="' + i + '" title="Remove">\u2715</button>' +
                     '</li>'
                 );
             });
-            $('#vg-prompts-list').find('.vg-prompt-del').on('click', function() {
+
+            $list.find('.vg-prompt-toggle').on('change', function() {
+                const $li = $(this).closest('.vg-prompt-item');
+                const on  = this.checked;
+                $li.toggleClass('is-disabled', !on);
+                if ($li.data('type') === 'template') {
+                    const q   = decodeURIComponent($li.data('key'));
+                    const idx = appConfig.vgDisabledTemplatePrompts.indexOf(q);
+                    if (on  && idx !== -1) appConfig.vgDisabledTemplatePrompts.splice(idx, 1);
+                    if (!on && idx === -1) appConfig.vgDisabledTemplatePrompts.push(q);
+                } else {
+                    appConfig.vgCustomPrompts[parseInt($li.data('idx'), 10)].enabled = on;
+                }
+                $('#vg-prompts-count').text('(' + _enabledCount() + ' enabled)');
+                _scheduleSave();
+            });
+
+            $list.find('.vg-prompt-del').on('click', function() {
                 appConfig.vgCustomPrompts.splice(parseInt($(this).data('idx'), 10), 1);
                 _renderPromptList();
                 _scheduleSave();
@@ -322,7 +359,7 @@ $(document).ready(function() {
         function _addCustomPrompt() {
             const val = $('#vg-custom-prompt-input').val().trim();
             if (!val) return;
-            appConfig.vgCustomPrompts.push(val);
+            appConfig.vgCustomPrompts.push({ text: val, enabled: true });
             $('#vg-custom-prompt-input').val('');
             _renderPromptList();
             _scheduleSave();
@@ -2297,9 +2334,10 @@ $(document).ready(function() {
         // Show question prompt if enabled
         let _activePromptText = null;
         if (appConfig.vgPromptsEnabled) {
+            const _disabled = appConfig.vgDisabledTemplatePrompts;
             const _prompts = [
-                ...(PROMPT_TEMPLATES[appConfig.vgPromptCategory] || []),
-                ...appConfig.vgCustomPrompts
+                ...(PROMPT_TEMPLATES[appConfig.vgPromptCategory] || []).filter(function(q) { return _disabled.indexOf(q) === -1; }),
+                ...appConfig.vgCustomPrompts.filter(function(p) { return p.enabled; }).map(function(p) { return p.text; })
             ];
             if (_prompts.length > 0) {
                 _activePromptText = _prompts[Math.floor(Math.random() * _prompts.length)];
@@ -2461,6 +2499,36 @@ $(document).ready(function() {
 
     $('#btn-vg-stop').on('click', function() {
         stopVgRecordingIfActive();
+    });
+
+    $('#btn-vg-redo').on('click', function() {
+        // Discard the current recording without saving
+        const recorder = _vgMediaRecorder;
+        _vgMediaRecorder = null;
+        if (recorder && recorder.state !== 'inactive') {
+            recorder.onstop = null; // prevent the save handler from firing
+            try { recorder.stop(); } catch(e) {}
+        }
+        clearInterval(_vgTimerInterval);
+        clearTimeout(_vgMaxTimer);
+        if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
+
+        // Reset recording state
+        _vgChunks = [];
+        _vgElapsed = 0;
+        _vgSaving = false;
+
+        // Reset UI back to pre-recording state
+        $('#vg-hud').hide();
+        $('#vg-controls').hide();
+        $('#vg-timer').text('0:00');
+        $('#vg-time-left').text('').css('color', '#fff');
+        $('#vg-prompt-sidebar').hide();
+        const ol = document.getElementById('vg-overlay-live');
+        if (ol) ol.style.display = 'none';
+
+        // Restart the full sequence (question prompt → countdown → record)
+        triggerVgSequence();
     });
 
     async function saveVgVideo(blob, ext) {
