@@ -8,6 +8,11 @@ let capturedPhotoDriveLinks = [];  // parallel: Drive share URL for each photo, 
 let capturedVideos = [];           // In-memory database of captured video guestbook blob URLs
 let capturedVideoDriveLinks = [];  // parallel: Drive share URL for each video, or null
 
+// Session ID for the current guest turn (reset on each new turn)
+let currentSessionId = null;
+let currentSessionFolderId = null;     // Cached Google Drive folder ID for current session
+let currentSessionFolderLink = null;   // Cached webViewLink for QR code display
+
 // ─── Application config ───────────────────────────────────────────────────────
 let appConfig = {
     layout: '4x6-1',
@@ -147,4 +152,24 @@ let _saveTimer = null;
 function _scheduleSave() {
     clearTimeout(_saveTimer);
     _saveTimer = setTimeout(saveConfig, 800);
+}
+
+// ─── Session ID Management ────────────────────────────────────────────────────
+// Generate a unique session ID for the current guest turn
+function generateSessionId() {
+    const now = new Date();
+    const timestamp = now.getTime();
+    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+    const timeStr = now.toTimeString().slice(0, 8).replace(/:/g, '');
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    return `${dateStr}_${timeStr}_${random}`;
+}
+
+// Start a new guest session (called when guest begins their turn)
+function startNewSession() {
+    currentSessionId = generateSessionId();
+    currentSessionFolderId = null;
+    currentSessionFolderLink = null;
+    console.log('[Session] Started new session:', currentSessionId);
+    return currentSessionId;
 }
