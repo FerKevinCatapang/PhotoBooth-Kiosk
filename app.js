@@ -715,12 +715,50 @@ $(document).ready(function() {
         return sub.id;
     }
 
-    // Upload a Blob to Drive inside the event sub-folder
+    // Create a session-specific sub-folder inside the event folder; returns folder object with id and webViewLink
+    async function _driveEnsureSessionFolder(token) {
+        // If session folder already created for this session, return cached values
+        if (currentSessionFolderId && currentSessionFolderLink) {
+            return { id: currentSessionFolderId, webViewLink: currentSessionFolderLink };
+        }
+
+        // Ensure we have a session ID
+        if (!currentSessionId) {
+            startNewSession();
+        }
+
+        const eventFolderId = await _driveEnsureEventFolder(token);
+        const sessionFolderName = currentSessionId;
+
+        // Create the session folder (don't search, always create new)
+        const createResp = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: sessionFolderName,
+                mimeType: 'application/vnd.google-apps.folder',
+                parents: [eventFolderId]
+            })
+        });
+        const sessionFolder = await createResp.json();
+
+        // Set public permissions on the session folder
+        await _driveSetPublic(token, sessionFolder.id);
+
+        // Cache the session folder ID and link
+        currentSessionFolderId = sessionFolder.id;
+        currentSessionFolderLink = sessionFolder.webViewLink;
+
+        console.log('[Drive] Created session folder:', sessionFolderName, sessionFolder.webViewLink);
+        return sessionFolder;
+    }
+
+    // Upload a Blob to Drive inside the session sub-folder
     async function uploadToDrive(blob, filename) {
         try {
             const token = await _driveEnsureToken();
-            const folderId = await _driveEnsureEventFolder(token);
-            const meta = JSON.stringify({ name: filename, parents: [folderId] });
+            const sessionFolder = await _driveEnsureSessionFolder(token);
+            const meta = JSON.stringify({ name: filename, parents: [sessionFolder.id] });
             const form = new FormData();
             form.append('metadata', new Blob([meta], { type: 'application/json' }));
             form.append('file', blob, filename);
@@ -755,13 +793,13 @@ $(document).ready(function() {
         }
     }
 
-    // Upload a video blob using the VG-specific Drive credentials into the event sub-folder
+    // Upload a video blob using the VG-specific Drive credentials into the session sub-folder
     async function uploadVgToDrive(blob, filename) {
         try {
             const token = await _vgDriveEnsureToken();
-            const folderId = await _vgDriveEnsureEventFolder(token);
+            const sessionFolder = await _vgDriveEnsureSessionFolder(token);
             const mimeType = blob.type || 'video/webm';
-            const meta = JSON.stringify({ name: filename, parents: [folderId] });
+            const meta = JSON.stringify({ name: filename, parents: [sessionFolder.id] });
             const form = new FormData();
             form.append('metadata', new Blob([meta], { type: 'application/json' }));
             form.append('file', blob, filename);
@@ -915,6 +953,44 @@ $(document).ready(function() {
         const sub = await createResp.json();
         appConfig._vgDriveEventFolderId = sub.id;
         return sub.id;
+    }
+
+    // Create a session-specific sub-folder for VG inside the event folder; returns folder object with id and webViewLink
+    async function _vgDriveEnsureSessionFolder(token) {
+        // If session folder already created for this session, return cached values
+        if (currentSessionFolderId && currentSessionFolderLink) {
+            return { id: currentSessionFolderId, webViewLink: currentSessionFolderLink };
+        }
+
+        // Ensure we have a session ID
+        if (!currentSessionId) {
+            startNewSession();
+        }
+
+        const eventFolderId = await _vgDriveEnsureEventFolder(token);
+        const sessionFolderName = currentSessionId;
+
+        // Create the session folder (don't search, always create new)
+        const createResp = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: sessionFolderName,
+                mimeType: 'application/vnd.google-apps.folder',
+                parents: [eventFolderId]
+            })
+        });
+        const sessionFolder = await createResp.json();
+
+        // Set public permissions on the session folder
+        await _driveSetPublic(token, sessionFolder.id);
+
+        // Cache the session folder ID and link
+        currentSessionFolderId = sessionFolder.id;
+        currentSessionFolderLink = sessionFolder.webViewLink;
+
+        console.log('[Drive VG] Created session folder:', sessionFolderName, sessionFolder.webViewLink);
+        return sessionFolder;
     }
 
     // UI: VG Drive folder name input
