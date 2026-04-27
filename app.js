@@ -340,6 +340,14 @@ $(document).ready(function() {
         _syncToggle();
         _renderPromptList();
 
+        // Splash screen duration slider
+        $('#setting-vg-splash-duration').val(appConfig.vgSplashDuration).on('input', function() {
+            appConfig.vgSplashDuration = parseInt(this.value, 10);
+            $('#val-vg-splash-duration').text(this.value);
+            _scheduleSave();
+        });
+        $('#val-vg-splash-duration').text(appConfig.vgSplashDuration);
+
         $('#toggle-vg-prompts').on('change', function() {
             appConfig.vgPromptsEnabled = this.checked;
             $('#toggle-vg-prompts-label').text(this.checked ? 'ON' : 'OFF');
@@ -2227,7 +2235,6 @@ $(document).ready(function() {
         if (ol) { ol.style.display = 'none'; }
     }
 
-    const SPLASH_SCREEN_DURATION_MS  = 2500; // how long the "Get Ready" splash is shown
     const SPLASH_FADE_OUT_DURATION_MS = 400;  // must match CSS @keyframes splash-fade-out duration
 
     async function triggerVgSequence() {
@@ -2260,7 +2267,7 @@ $(document).ready(function() {
                 const _splashEl = document.getElementById('vg-prompt-splash');
                 _splashEl.classList.remove('splash-fade-out');
                 _splashEl.style.display = 'flex';
-                await new Promise(r => setTimeout(r, SPLASH_SCREEN_DURATION_MS));
+                await new Promise(r => setTimeout(r, appConfig.vgSplashDuration * 1000));
                 _splashEl.classList.add('splash-fade-out');
                 await new Promise(r => setTimeout(r, SPLASH_FADE_OUT_DURATION_MS)); // match fade-out duration
                 _splashEl.style.display = 'none';
@@ -3877,6 +3884,10 @@ $(document).ready(function() {
         // VG prompts — category button (toggle/list handled by initVgPrompts above)
         $('.prompt-cat-btn').removeClass('active');
         $('.prompt-cat-btn[data-cat="' + appConfig.vgPromptCategory + '"]').addClass('active');
+
+        // VG prompts — splash screen duration
+        $('#setting-vg-splash-duration').val(appConfig.vgSplashDuration);
+        $('#val-vg-splash-duration').text(appConfig.vgSplashDuration);
 
         // VG thank you duration (toggle handled by initVgThankYou above)
         $('#setting-ty-duration').val(appConfig.vgThankYouDuration);

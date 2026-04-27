@@ -68,6 +68,7 @@ let appConfig = {
     vgPromptCategory: 'wedding', // 'wedding' | 'birthday' | 'teambuilding'
     vgCustomPrompts: [],          // admin-added prompts: [{text: string, enabled: boolean}]
     vgDisabledTemplatePrompts: [], // template prompt strings the admin has disabled
+    vgSplashDuration: 3,          // seconds to show the "Get Ready" splash screen
 
     // Thank You screen — Video Guestbook
     vgThankYouEnabled: false,
@@ -101,7 +102,7 @@ const PERSISTED_KEYS = [
     'selectedCameraId', 'facingMode',
     'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
     'driveFolderName', 'vgDriveFolderName', 'vgDriveClientId',
-    'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts', 'vgDisabledTemplatePrompts',
+    'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts', 'vgDisabledTemplatePrompts', 'vgSplashDuration',
     'vgThankYouEnabled', 'vgThankYouDuration', 'vgCaptureReviewEnabled', 'vgOfferPb',
     'kioskPin', 'kioskPinLen', 'lvNetworkAddr'
 ];
