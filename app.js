@@ -2161,14 +2161,14 @@ $(document).ready(function() {
     // PB share overlay — QR button
     $('#btn-share-qr').on('click', function() {
         if (_currentPbDriveLink) {
-            showQrOverlay(_currentPbDriveLink, 'Scan to download your photo');
+            showQrOverlay(_currentPbDriveLink, 'Scan to view your photos');
         }
     });
 
     // VG preview overlay — QR button
     $('#btn-vg-qr').on('click', function() {
         if (_currentVgDriveLink) {
-            showQrOverlay(_currentVgDriveLink, 'Scan to download your video');
+            showQrOverlay(_currentVgDriveLink, 'Scan to view your captures');
         }
     });
     // ===============================================================
@@ -2638,18 +2638,17 @@ $(document).ready(function() {
         }
 
         // Upload to Google Drive using VG-specific credentials if enabled
-        let _vgDriveLink = null;
+        // Show QR for session folder (not individual file)
         if (appConfig.vgSaveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
             uploadVgToDrive(blob, filename).then(async result => {
-                if (result && result.id) {
-                    await _driveSetPublic(appConfig._vgDriveAccessToken, result.id);
-                    _vgDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
-                    _currentVgDriveLink = _vgDriveLink;
-                    // Store link in gallery parallel array and show QR button in thumbnail
-                    capturedVideoDriveLinks[0] = _vgDriveLink;
-                    _appendGalleryQrBtn(0, 'video', _vgDriveLink);
+                // The session folder link is already set after creating the folder
+                if (currentSessionFolderLink) {
+                    _currentVgDriveLink = currentSessionFolderLink;
+                    // Store session folder link in gallery for admin view
+                    capturedVideoDriveLinks[0] = currentSessionFolderLink;
+                    _appendGalleryQrBtn(0, 'video', currentSessionFolderLink);
                     // Notify live viewer peers
-                    lvBroadcastDriveUpdate(filename, _vgDriveLink);
+                    lvBroadcastDriveUpdate(filename, currentSessionFolderLink);
                     // Show QR button if preview is still open
                     if ($('#vg-preview-overlay').is(':visible')) {
                         $('#btn-vg-qr').fadeIn(200);
@@ -2991,27 +2990,23 @@ $(document).ready(function() {
         lvBroadcastPhoto(photoDataUrl, filename);
 
         // --- Upload to Google Drive (fire-and-forget, non-blocking) ---
-        // Store the Drive link so QR button can use it when upload completes
-        let _pbDriveLink = null;
+        // Upload file to session folder and show QR for the folder (not individual file)
         if (appConfig.saveDrive && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
                     const result = await uploadToDrive(blob, filename);
                     console.log('[Drive] Uploaded:', filename);
-                    if (result && result.id) {
-                        // Make the file publicly readable so guests can download via QR
-                        await _driveSetPublic(appConfig._driveAccessToken, result.id);
-                        _pbDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
-                        // Store link in gallery parallel array and show QR button in thumbnail
-                        capturedPhotoDriveLinks[0] = _pbDriveLink;
-                        _appendGalleryQrBtn(0, 'photo', _pbDriveLink);
-                        // Notify live viewer peers
-                        lvBroadcastDriveUpdate(filename, _pbDriveLink);
-                        // Show QR button in share overlay (if it's still open)
-                        if ($('#share-overlay').is(':visible') && _pbDriveLink) {
-                            _currentPbDriveLink = _pbDriveLink;
-                            $('#btn-share-qr').fadeIn(200);
-                        }
+                    // The session folder link is already set after creating the folder
+                    // Show QR button in share overlay with the session folder link (if it's still open)
+                    if ($('#share-overlay').is(':visible') && currentSessionFolderLink) {
+                        _currentPbDriveLink = currentSessionFolderLink;
+                        $('#btn-share-qr').fadeIn(200);
+                    }
+                    // Store session folder link in gallery for admin view
+                    if (currentSessionFolderLink) {
+                        capturedPhotoDriveLinks[0] = currentSessionFolderLink;
+                        _appendGalleryQrBtn(0, 'photo', currentSessionFolderLink);
+                        lvBroadcastDriveUpdate(filename, currentSessionFolderLink);
                     }
                 } catch (e) {
                     console.warn('[Drive] Upload failed:', e.message);
