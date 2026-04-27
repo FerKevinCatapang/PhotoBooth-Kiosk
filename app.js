@@ -2156,10 +2156,10 @@ $(document).ready(function() {
     }
     // =========================================================
 
-    async function triggerCaptureSequence() {
+    async function triggerCaptureSequence(opts = {}) {
         try {
-            // Start a new guest session
-            startNewSession();
+            // Start a new guest session (skip when continuing from a VG session to share the folder)
+            if (!opts.continueSession) startNewSession();
 
             $('#live-booth').show();
 
@@ -2269,8 +2269,9 @@ $(document).ready(function() {
     let _vgMaxTimer = null;
     let _vgElapsed = 0;
 
-    let _vgFrameAnimId = null; // rAF id for canvas compositing loop
-    let _vgSaving = false;     // guard: prevents saveVgVideo from running twice per session
+    let _vgFrameAnimId = null;    // rAF id for canvas compositing loop
+    let _vgSaving = false;        // guard: prevents saveVgVideo from running twice per session
+    let _vgActivePromptText = null; // prompt from current/last recording, preserved for redo
 
     function stopVgRecordingIfActive() {
         // Null out immediately so a second call (e.g. max-timer + user tap race)
@@ -2296,10 +2297,10 @@ $(document).ready(function() {
 
     const SPLASH_FADE_OUT_DURATION_MS = 400;  // must match CSS @keyframes splash-fade-out duration
 
-    async function triggerVgSequence() {
+    async function triggerVgSequence(opts = {}) {
       try {
-        // Start a new guest session
-        startNewSession();
+        // Start a new guest session (skip on redo to preserve session folder and prompt)
+        if (!opts.continueSession) startNewSession();
 
         $('#vg-booth').show();
         const videoEl = $('#vg-camera-feed')[0];
@@ -2323,7 +2324,9 @@ $(document).ready(function() {
                 ...appConfig.vgCustomPrompts.filter(function(p) { return p.enabled; }).map(function(p) { return p.text; })
             ];
             if (_prompts.length > 0) {
-                _activePromptText = _prompts[Math.floor(Math.random() * _prompts.length)];
+                // On redo reuse the same prompt; otherwise pick randomly
+                _activePromptText = opts.promptText || _prompts[Math.floor(Math.random() * _prompts.length)];
+                _vgActivePromptText = _activePromptText;
 
                 // Show splash screen first
                 const _splashEl = document.getElementById('vg-prompt-splash');
@@ -2521,8 +2524,8 @@ $(document).ready(function() {
         const ol = document.getElementById('vg-overlay-live');
         if (ol) ol.style.display = 'none';
 
-        // Restart the full sequence (question prompt → countdown → record)
-        triggerVgSequence();
+        // Restart with the same session and same prompt so the guest doesn't get a new question
+        triggerVgSequence({ continueSession: true, promptText: _vgActivePromptText });
     });
 
     async function saveVgVideo(blob, ext) {
@@ -2633,12 +2636,17 @@ $(document).ready(function() {
                 $('#photo-canvas').hide();
                 $('#camera-feed').show();
                 applyKioskViewfinderSize();
-                await triggerCaptureSequence();
+                await triggerCaptureSequence({ continueSession: true }); // reuse same session folder so photo lands alongside the video
                 return; // triggerCaptureSequence handles its own thank-you and resetToWelcomeScreen
             }
         }
 
-        // "No thanks" / countdown expired (or PB offer disabled) — show VG thank-you then reset
+        // Show QR screen so guest can scan to get their video
+        if (appConfig.vgSaveDrive && currentSessionFolderLink) {
+            await showVgQrScreen('Scan to get your video!');
+        }
+
+        // Show VG thank-you then reset
         if (appConfig.vgThankYouEnabled) {
             await showVgThankYou();
         }
@@ -2680,6 +2688,48 @@ $(document).ready(function() {
             noBtn.addEventListener('click', onNo);
         });
     }
+
+    function showVgQrScreen(label) {
+        return new Promise(resolve => {
+            if (!currentSessionFolderLink) { resolve(); return; }
+            const overlay     = document.getElementById('vg-qr-screen');
+            const container   = document.getElementById('vg-qr-screen-container');
+            const countdownEl = document.getElementById('vg-qr-screen-countdown');
+            const doneBtn     = document.getElementById('btn-vg-qr-screen-done');
+            const labelEl     = document.getElementById('vg-qr-screen-label');
+
+            if (labelEl) labelEl.textContent = label || 'Scan to get your copy!';
+
+            container.innerHTML = '';
+            new QRCode(container, {
+                text: currentSessionFolderLink,
+                width: 260,
+                height: 260,
+                colorDark: '#111827',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+
+            overlay.style.display = 'flex';
+            const SECS = 25;
+            let remaining = SECS;
+            countdownEl.textContent = remaining;
+            const timer = setInterval(function() {
+                remaining--;
+                countdownEl.textContent = remaining;
+                if (remaining <= 0) finish();
+            }, 1000);
+
+            function finish() {
+                clearInterval(timer);
+                overlay.style.display = 'none';
+                doneBtn.removeEventListener('click', finish);
+                resolve();
+            }
+            doneBtn.addEventListener('click', finish);
+        });
+    }
+
     function showVgThankYou() {
         return new Promise(resolve => {
             const overlay  = document.getElementById('vg-thankyou-overlay');
