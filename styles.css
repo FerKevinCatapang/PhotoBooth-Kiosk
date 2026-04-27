@@ -1134,6 +1134,79 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
 .vg-prompt-del:hover { color: #dc2626; background: #fee2e2; }
 
 /* ==============================================
+   VG PROMPT SPLASH SCREEN
+   ============================================== */
+#vg-prompt-splash {
+    position: absolute;
+    inset: 0;
+    z-index: 31;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+    background: rgba(0, 0, 0, 0.88);
+    text-align: center;
+    padding: 2rem;
+    animation: splash-fade-in 0.45s ease forwards;
+}
+@keyframes splash-fade-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+}
+#vg-prompt-splash.splash-fade-out {
+    animation: splash-fade-out 0.4s ease forwards;
+}
+@keyframes splash-fade-out {
+    from { opacity: 1; transform: scale(1); }
+    to   { opacity: 0; transform: scale(1.03); }
+}
+.vg-splash-icon {
+    font-size: clamp(2.8rem, 8vw, 4.5rem);
+    color: #38bdf8;
+    filter: drop-shadow(0 0 18px rgba(56, 189, 248, 0.55));
+    animation: splash-pulse 1.6s ease-in-out infinite;
+}
+@keyframes splash-pulse {
+    0%, 100% { transform: scale(1);    opacity: 1; }
+    50%       { transform: scale(1.12); opacity: 0.8; }
+}
+.vg-splash-heading {
+    font-size: clamp(2rem, 6vw, 3.4rem);
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.01em;
+    margin: 0;
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
+}
+.vg-splash-sub {
+    font-size: clamp(1rem, 2.6vw, 1.45rem);
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.55;
+    max-width: 640px;
+    margin: 0;
+}
+.vg-splash-dots {
+    display: flex;
+    gap: 0.55rem;
+    margin-top: 0.4rem;
+}
+.vg-splash-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #38bdf8;
+    animation: splash-dot-bounce 1.2s ease-in-out infinite;
+}
+.vg-splash-dots span:nth-child(2) { animation-delay: 0.2s; }
+.vg-splash-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes splash-dot-bounce {
+    0%, 80%, 100% { transform: translateY(0);    opacity: 0.4; }
+    40%           { transform: translateY(-8px); opacity: 1; }
+}
+
+/* ==============================================
    VG PRE-RECORDING PROMPTS — KIOSK OVERLAY
    ============================================== */
 #vg-question-overlay {

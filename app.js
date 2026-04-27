@@ -2227,6 +2227,9 @@ $(document).ready(function() {
         if (ol) { ol.style.display = 'none'; }
     }
 
+    const SPLASH_SCREEN_DURATION_MS  = 2500; // how long the "Get Ready" splash is shown
+    const SPLASH_FADE_OUT_DURATION_MS = 400;  // must match CSS @keyframes splash-fade-out duration
+
     async function triggerVgSequence() {
       try {
         $('#vg-booth').show();
@@ -2252,6 +2255,17 @@ $(document).ready(function() {
             ];
             if (_prompts.length > 0) {
                 _activePromptText = _prompts[Math.floor(Math.random() * _prompts.length)];
+
+                // Show splash screen first
+                const _splashEl = document.getElementById('vg-prompt-splash');
+                _splashEl.classList.remove('splash-fade-out');
+                _splashEl.style.display = 'flex';
+                await new Promise(r => setTimeout(r, SPLASH_SCREEN_DURATION_MS));
+                _splashEl.classList.add('splash-fade-out');
+                await new Promise(r => setTimeout(r, SPLASH_FADE_OUT_DURATION_MS)); // match fade-out duration
+                _splashEl.style.display = 'none';
+                _splashEl.classList.remove('splash-fade-out');
+
                 const _secs = Math.max(3, Math.min(10, Math.round(_activePromptText.trim().split(/\s+/).length / 3.3)));
                 const _qEl  = document.getElementById('vg-question-overlay');
                 const _bar  = document.getElementById('vg-question-timer-bar');
