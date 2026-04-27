@@ -715,12 +715,50 @@ $(document).ready(function() {
         return sub.id;
     }
 
-    // Upload a Blob to Drive inside the event sub-folder
+    // Create a session-specific sub-folder inside the event folder; returns folder object with id and webViewLink
+    async function _driveEnsureSessionFolder(token) {
+        // If session folder already created for this session, return cached values
+        if (currentSessionFolderId && currentSessionFolderLink) {
+            return { id: currentSessionFolderId, webViewLink: currentSessionFolderLink };
+        }
+
+        // Ensure we have a session ID
+        if (!currentSessionId) {
+            startNewSession();
+        }
+
+        const eventFolderId = await _driveEnsureEventFolder(token);
+        const sessionFolderName = currentSessionId;
+
+        // Create the session folder (don't search, always create new)
+        const createResp = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: sessionFolderName,
+                mimeType: 'application/vnd.google-apps.folder',
+                parents: [eventFolderId]
+            })
+        });
+        const sessionFolder = await createResp.json();
+
+        // Set public permissions on the session folder
+        await _driveSetPublic(token, sessionFolder.id);
+
+        // Cache the session folder ID and link
+        currentSessionFolderId = sessionFolder.id;
+        currentSessionFolderLink = sessionFolder.webViewLink;
+
+        console.log('[Drive] Created session folder:', sessionFolderName, sessionFolder.webViewLink);
+        return sessionFolder;
+    }
+
+    // Upload a Blob to Drive inside the session sub-folder
     async function uploadToDrive(blob, filename) {
         try {
             const token = await _driveEnsureToken();
-            const folderId = await _driveEnsureEventFolder(token);
-            const meta = JSON.stringify({ name: filename, parents: [folderId] });
+            const sessionFolder = await _driveEnsureSessionFolder(token);
+            const meta = JSON.stringify({ name: filename, parents: [sessionFolder.id] });
             const form = new FormData();
             form.append('metadata', new Blob([meta], { type: 'application/json' }));
             form.append('file', blob, filename);
@@ -755,13 +793,13 @@ $(document).ready(function() {
         }
     }
 
-    // Upload a video blob using the VG-specific Drive credentials into the event sub-folder
+    // Upload a video blob using the VG-specific Drive credentials into the session sub-folder
     async function uploadVgToDrive(blob, filename) {
         try {
             const token = await _vgDriveEnsureToken();
-            const folderId = await _vgDriveEnsureEventFolder(token);
+            const sessionFolder = await _vgDriveEnsureSessionFolder(token);
             const mimeType = blob.type || 'video/webm';
-            const meta = JSON.stringify({ name: filename, parents: [folderId] });
+            const meta = JSON.stringify({ name: filename, parents: [sessionFolder.id] });
             const form = new FormData();
             form.append('metadata', new Blob([meta], { type: 'application/json' }));
             form.append('file', blob, filename);
@@ -915,6 +953,44 @@ $(document).ready(function() {
         const sub = await createResp.json();
         appConfig._vgDriveEventFolderId = sub.id;
         return sub.id;
+    }
+
+    // Create a session-specific sub-folder for VG inside the event folder; returns folder object with id and webViewLink
+    async function _vgDriveEnsureSessionFolder(token) {
+        // If session folder already created for this session, return cached values
+        if (currentSessionFolderId && currentSessionFolderLink) {
+            return { id: currentSessionFolderId, webViewLink: currentSessionFolderLink };
+        }
+
+        // Ensure we have a session ID
+        if (!currentSessionId) {
+            startNewSession();
+        }
+
+        const eventFolderId = await _vgDriveEnsureEventFolder(token);
+        const sessionFolderName = currentSessionId;
+
+        // Create the session folder (don't search, always create new)
+        const createResp = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: sessionFolderName,
+                mimeType: 'application/vnd.google-apps.folder',
+                parents: [eventFolderId]
+            })
+        });
+        const sessionFolder = await createResp.json();
+
+        // Set public permissions on the session folder
+        await _driveSetPublic(token, sessionFolder.id);
+
+        // Cache the session folder ID and link
+        currentSessionFolderId = sessionFolder.id;
+        currentSessionFolderLink = sessionFolder.webViewLink;
+
+        console.log('[Drive VG] Created session folder:', sessionFolderName, sessionFolder.webViewLink);
+        return sessionFolder;
     }
 
     // UI: VG Drive folder name input
@@ -2085,14 +2161,14 @@ $(document).ready(function() {
     // PB share overlay — QR button
     $('#btn-share-qr').on('click', function() {
         if (_currentPbDriveLink) {
-            showQrOverlay(_currentPbDriveLink, 'Scan to download your photo');
+            showQrOverlay(_currentPbDriveLink, 'Scan to view your photos');
         }
     });
 
     // VG preview overlay — QR button
     $('#btn-vg-qr').on('click', function() {
         if (_currentVgDriveLink) {
-            showQrOverlay(_currentVgDriveLink, 'Scan to download your video');
+            showQrOverlay(_currentVgDriveLink, 'Scan to view your captures');
         }
     });
     // ===============================================================
@@ -2145,6 +2221,9 @@ $(document).ready(function() {
 
     async function triggerCaptureSequence() {
         try {
+            // Start a new guest session
+            startNewSession();
+
             $('#live-booth').show();
 
             // Show photo booth splash screen if enabled
@@ -2282,6 +2361,9 @@ $(document).ready(function() {
 
     async function triggerVgSequence() {
       try {
+        // Start a new guest session
+        startNewSession();
+
         $('#vg-booth').show();
         const videoEl = $('#vg-camera-feed')[0];
 
@@ -2556,18 +2638,17 @@ $(document).ready(function() {
         }
 
         // Upload to Google Drive using VG-specific credentials if enabled
-        let _vgDriveLink = null;
+        // Show QR for session folder (not individual file)
         if (appConfig.vgSaveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
             uploadVgToDrive(blob, filename).then(async result => {
-                if (result && result.id) {
-                    await _driveSetPublic(appConfig._vgDriveAccessToken, result.id);
-                    _vgDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
-                    _currentVgDriveLink = _vgDriveLink;
-                    // Store link in gallery parallel array and show QR button in thumbnail
-                    capturedVideoDriveLinks[0] = _vgDriveLink;
-                    _appendGalleryQrBtn(0, 'video', _vgDriveLink);
+                // The session folder link is already set after creating the folder
+                if (currentSessionFolderLink) {
+                    _currentVgDriveLink = currentSessionFolderLink;
+                    // Store session folder link in gallery for admin view
+                    capturedVideoDriveLinks[0] = currentSessionFolderLink;
+                    _appendGalleryQrBtn(0, 'video', currentSessionFolderLink);
                     // Notify live viewer peers
-                    lvBroadcastDriveUpdate(filename, _vgDriveLink);
+                    lvBroadcastDriveUpdate(filename, currentSessionFolderLink);
                     // Show QR button if preview is still open
                     if ($('#vg-preview-overlay').is(':visible')) {
                         $('#btn-vg-qr').fadeIn(200);
@@ -2909,27 +2990,23 @@ $(document).ready(function() {
         lvBroadcastPhoto(photoDataUrl, filename);
 
         // --- Upload to Google Drive (fire-and-forget, non-blocking) ---
-        // Store the Drive link so QR button can use it when upload completes
-        let _pbDriveLink = null;
+        // Upload file to session folder and show QR for the folder (not individual file)
         if (appConfig.saveDrive && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
                     const result = await uploadToDrive(blob, filename);
                     console.log('[Drive] Uploaded:', filename);
-                    if (result && result.id) {
-                        // Make the file publicly readable so guests can download via QR
-                        await _driveSetPublic(appConfig._driveAccessToken, result.id);
-                        _pbDriveLink = `https://drive.google.com/file/d/${result.id}/view`;
-                        // Store link in gallery parallel array and show QR button in thumbnail
-                        capturedPhotoDriveLinks[0] = _pbDriveLink;
-                        _appendGalleryQrBtn(0, 'photo', _pbDriveLink);
-                        // Notify live viewer peers
-                        lvBroadcastDriveUpdate(filename, _pbDriveLink);
-                        // Show QR button in share overlay (if it's still open)
-                        if ($('#share-overlay').is(':visible') && _pbDriveLink) {
-                            _currentPbDriveLink = _pbDriveLink;
-                            $('#btn-share-qr').fadeIn(200);
-                        }
+                    // The session folder link is already set after creating the folder
+                    // Show QR button in share overlay with the session folder link (if it's still open)
+                    if ($('#share-overlay').is(':visible') && currentSessionFolderLink) {
+                        _currentPbDriveLink = currentSessionFolderLink;
+                        $('#btn-share-qr').fadeIn(200);
+                    }
+                    // Store session folder link in gallery for admin view
+                    if (currentSessionFolderLink) {
+                        capturedPhotoDriveLinks[0] = currentSessionFolderLink;
+                        _appendGalleryQrBtn(0, 'photo', currentSessionFolderLink);
+                        lvBroadcastDriveUpdate(filename, currentSessionFolderLink);
                     }
                 } catch (e) {
                     console.warn('[Drive] Upload failed:', e.message);
