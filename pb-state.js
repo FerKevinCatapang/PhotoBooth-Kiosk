@@ -70,6 +70,10 @@ let appConfig = {
     vgDisabledTemplatePrompts: [], // template prompt strings the admin has disabled
     vgSplashDuration: 3,          // seconds to show the "Get Ready" splash screen
 
+    // Photo Booth splash screen — shown before the capture countdown begins
+    pbSplashEnabled: false,
+    pbSplashDuration: 3,          // seconds to show the "Show Your Best Pose!" splash screen
+
     // Thank You screen — Video Guestbook
     vgThankYouEnabled: false,
     vgThankYouImage: null,        // { objectUrl: string } or null — custom background image
@@ -103,6 +107,7 @@ const PERSISTED_KEYS = [
     'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
     'driveFolderName', 'vgDriveFolderName', 'vgDriveClientId',
     'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts', 'vgDisabledTemplatePrompts', 'vgSplashDuration',
+    'pbSplashEnabled', 'pbSplashDuration',
     'vgThankYouEnabled', 'vgThankYouDuration', 'vgCaptureReviewEnabled', 'vgOfferPb',
     'kioskPin', 'kioskPinLen', 'lvNetworkAddr'
 ];

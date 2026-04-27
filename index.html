@@ -405,6 +405,37 @@
                     </div>
                 </div>
 
+                <!-- Photo Booth Splash Screen -->
+                <div class="settings-section">
+                    <h3 class="section-title">Splash Screen</h3>
+                    <div class="settings-card feature-toggle-row">
+                        <div class="feature-toggle-left">
+                            <div class="feature-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+                            <div>
+                                <div class="feature-title">Photo Booth Splash Screen</div>
+                                <div class="feature-subtitle">Show a fun &ldquo;get ready&rdquo; screen before each photo session begins</div>
+                            </div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="toggle-pb-splash">
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label" id="toggle-pb-splash-label">OFF</span>
+                        </label>
+                    </div>
+                    <div id="pb-splash-config" style="display:none; margin-top:0.75rem;">
+                        <div class="settings-card">
+                            <div class="slider-group">
+                                <div class="slider-header">
+                                    <label>Splash Screen Duration</label>
+                                    <div class="slider-value"><span id="val-pb-splash-duration">3</span> sec</div>
+                                </div>
+                                <input type="range" id="setting-pb-splash-duration" min="1" max="10" step="1" value="3" class="custom-range">
+                            </div>
+                            <p style="margin:0.6rem 0 0; font-size:0.78rem; color:#9ca3af;">How long the &ldquo;Show Your Best Pose!&rdquo; screen is shown before the countdown begins.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="settings-section">
                     <h3 class="section-title">Countdown</h3>
                     <div class="settings-card">
@@ -1289,7 +1320,17 @@
                 
                 <div id="countdown-overlay" style="display:none;"></div>
                 <div id="flash-overlay" style="display:none;"></div>
-                
+
+                <!-- Splash screen shown before the photo session countdown begins -->
+                <div id="pb-splash" style="display:none;">
+                    <div class="pb-splash-icon"><i class="fa-solid fa-camera-retro"></i></div>
+                    <p class="pb-splash-heading">Show Your Best Pose!</p>
+                    <p class="pb-splash-sub" id="pb-splash-sub">Get ready &mdash; your photo session is about to begin. Take a deep breath and smile!</p>
+                    <div class="pb-splash-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                </div>
+
                 <div id="processing-overlay" style="display:none;">
                     <div class="spinner"></div>
                     <h2>Processing...</h2>
