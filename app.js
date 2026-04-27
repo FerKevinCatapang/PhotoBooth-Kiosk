@@ -2221,6 +2221,9 @@ $(document).ready(function() {
 
     async function triggerCaptureSequence() {
         try {
+            // Start a new guest session
+            startNewSession();
+
             $('#live-booth').show();
 
             // Show photo booth splash screen if enabled
@@ -2358,6 +2361,9 @@ $(document).ready(function() {
 
     async function triggerVgSequence() {
       try {
+        // Start a new guest session
+        startNewSession();
+
         $('#vg-booth').show();
         const videoEl = $('#vg-camera-feed')[0];
 
