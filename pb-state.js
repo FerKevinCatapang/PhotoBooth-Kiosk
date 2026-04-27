@@ -28,6 +28,8 @@ let appConfig = {
     // Capture mode default is Video Guestbook.
     captureMode: 'videoguestbook',
     // Video Guestbook settings
+    vgPanelTitle: 'Raise a Toast!',  // title shown in the VG right panel on welcome screen
+    vgCoupleName: '',                // couple / guest-of-honor name shown in VG panel subtitle
     vgMaxDuration: 60,        // max recording seconds
     vgPromptText: '',
     vgCountdown: 3,           // countdown before recording starts

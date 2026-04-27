@@ -770,6 +770,23 @@
                             <label>Subtitle Text</label>
                             <input type="text" id="edit-subtitle" class="text-input" placeholder="Tap the camera to begin">
                         </div>
+
+                        <div class="tool-group" style="border-top:1px solid #e5e7eb; padding-top:1.25rem; margin-top:0.5rem;">
+                            <label style="display:flex; align-items:center; gap:0.5rem; font-weight:700; color:#111827;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                Video Guestbook Panel
+                            </label>
+                            <p style="color:#9ca3af; font-size:0.78rem; margin:0.25rem 0 0.75rem;">Shown on the right panel when Video Guestbook mode is active.</p>
+                            <div style="margin-bottom:0.75rem;">
+                                <label style="font-size:0.82rem; font-weight:600; color:#374151; display:block; margin-bottom:0.3rem;">Panel Title</label>
+                                <input type="text" id="edit-vg-panel-title" class="text-input" placeholder="Raise a Toast!">
+                            </div>
+                            <div>
+                                <label style="font-size:0.82rem; font-weight:600; color:#374151; display:block; margin-bottom:0.3rem;">Couple / Guest of Honor Name</label>
+                                <input type="text" id="edit-vg-couple-name" class="text-input" placeholder="e.g. Alice &amp; Dan">
+                                <p style="margin:0.35rem 0 0; font-size:0.78rem; color:#9ca3af;">Shown as: &ldquo;Answer just a few questions on video for <em id="vg-couple-name-preview">Alice &amp; Dan</em>.&rdquo;</p>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="designer-preview-container">
@@ -1238,20 +1255,26 @@
             <img id="ws-image-bg" class="ws-media-bg" style="display:none;" alt="">
             <video id="ws-video-bg" class="ws-media-bg" autoplay loop muted playsinline style="display:none;"></video>
             <button id="btn-exit-kiosk" class="hidden-exit-btn">Exit Kiosk</button>
-            <div class="welcome-content">
+
+            <!-- Photo mode: centered layout -->
+            <div class="welcome-content" id="welcome-photo-content">
                 <h1 id="live-ws-title">Welcome to the Party!</h1>
                 <p id="live-ws-subtitle"></p>
             </div>
-            <div class="welcome-action">
-                <!-- Photo booth start button -->
+            <div class="welcome-action" id="welcome-photo-action">
                 <button id="btn-start-session" class="circle-action-btn" style="display:none;">
                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
                     <span>Photo</span>
                 </button>
-                <!-- Video guestbook start button -->
-                <button id="btn-start-vg-session" class="circle-action-btn vg-action-btn" style="display:none;">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                    <span>Leave a Message</span>
+            </div>
+
+            <!-- VG mode: right side panel -->
+            <div class="welcome-vg-panel" id="welcome-vg-panel" style="display:none;">
+                <h1 class="vg-panel-title" id="live-ws-title-vg"></h1>
+                <p class="vg-panel-subtitle" id="live-ws-subtitle-vg"></p>
+                <button id="btn-start-vg-session" class="vg-ok-btn">Leave a message</button>
+                <button id="btn-show-prompts-preview" class="prompts-preview-link" style="display:none;">
+                    What Q's will be asked?
                 </button>
             </div>
 
@@ -1260,6 +1283,16 @@
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                 Recent Captures
             </button>
+        </div>
+
+        <!-- ========== PROMPTS PREVIEW MODAL ========== -->
+        <div id="prompts-preview-modal" style="display:none; position:absolute; inset:0; z-index:65; background:rgba(0,0,0,0.82); flex-direction:column; justify-content:center; align-items:center; padding:2rem;">
+            <div class="prompts-preview-inner">
+                <p class="prompts-preview-intro">We'll ask you just a few questions, interview style. It's like a video guestbook.</p>
+                <p class="prompts-preview-note">Don't worry, you can RE-DO at any time. The Q's include:</p>
+                <div id="prompts-preview-list"></div>
+                <button id="btn-close-prompts-preview" class="prompts-preview-close">Got it!</button>
+            </div>
         </div>
 
         <!-- ========== RECENT CAPTURES KIOSK MODAL ========== -->

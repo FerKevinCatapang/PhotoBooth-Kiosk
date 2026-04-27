@@ -398,6 +398,24 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
 .vg-action-btn:hover { background: rgba(190, 24, 93, 0.45); }
 .hidden-exit-btn { position: absolute; top: 20px; left: 20px; background: rgba(0,0,0,0.1); border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem; opacity: 0.3; transition: opacity 0.2s; }
 .hidden-exit-btn:hover { opacity: 1; background: rgba(0,0,0,0.5); color: white;}
+
+/* VG mode right panel */
+.welcome-vg-panel { position: absolute; right: 0; top: 0; height: 100%; width: 20%; background: #fff; z-index: 2; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 3rem 2.5rem 5rem; text-align: center; }
+.vg-panel-title { font-size: clamp(1.6rem, 4vw, 3rem); font-weight: 800; color: #111827; margin-bottom: 0.75rem; line-height: 1.15; word-break: break-word; }
+.vg-panel-subtitle { font-size: 1rem; color: #374151; margin-bottom: 2rem; line-height: 1.5; max-width: 320px; }
+.vg-ok-btn { width: 120px; height: 120px; border-radius: 50%; background: #3b4b28; border: 2px solid #ffffff; color: #ffffff; font-size: 1.15rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-bottom: 2.5rem; transition: transform 0.2s, box-shadow 0.2s; flex-shrink: 0; }
+.vg-ok-btn:hover { transform: scale(1.06); box-shadow: 0 10px 28px rgba(0,0,0,0.15); }
+.vg-ok-btn:active { transform: scale(0.95); }
+.prompts-preview-link { background: none; border: none; color: #111827; font-size: 0.9rem; text-decoration: underline; cursor: pointer; padding: 0.4rem; position: absolute; bottom: 2rem; font-weight: 500; letter-spacing: 0.01em; }
+.prompts-preview-link:hover { color: #374151; }
+
+/* Prompts preview modal */
+.prompts-preview-inner { background: rgba(38,38,42,0.97); border-radius: 18px; padding: 2rem 2rem 1.5rem; max-width: 540px; width: 90%; max-height: 78vh; overflow-y: auto; display: flex; flex-direction: column; align-items: center; }
+.prompts-preview-intro { color: #f3f4f6; font-size: 1rem; text-align: center; margin-bottom: 0.75rem; line-height: 1.55; }
+.prompts-preview-note { color: #9ca3af; font-size: 0.9rem; text-align: center; margin-bottom: 1.25rem; line-height: 1.4; }
+.prompt-preview-item { background: rgba(60,60,66,0.85); border: 1px solid rgba(120,120,130,0.45); border-radius: 14px; padding: 0.9rem 1.4rem; color: #f9fafb; font-size: 0.95rem; text-align: center; margin-bottom: 0.65rem; line-height: 1.45; width: 100%; }
+.prompts-preview-close { margin-top: 1rem; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25); color: #f9fafb; border-radius: 10px; padding: 0.6rem 2rem; font-size: 0.95rem; cursor: pointer; transition: background 0.15s; flex-shrink: 0; }
+.prompts-preview-close:hover { background: rgba(255,255,255,0.2); }
 .booth-container { width: 100%; height: 100%; position: relative; z-index: 10; display: flex; justify-content: center; align-items: center; }
 .viewfinder { position: relative; background-color: #000; overflow: hidden; flex-shrink: 0; }
 /* Video Guestbook viewfinder — sized by orientation selection */
@@ -764,6 +782,9 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
     #live-ws-title { font-size: clamp(1.1rem, 5vw, 2rem); }
     #live-ws-subtitle { font-size: 1.1rem; margin-bottom: 2rem; }
     .circle-action-btn { width: 120px; height: 120px; }
+    .welcome-vg-panel { width: 55%; padding: 2rem 1.5rem 4.5rem; }
+    .vg-ok-btn { width: 96px; height: 96px; font-size: 1rem; }
+    .vg-panel-title { font-size: clamp(1.3rem, 4vw, 2rem); }
 
     /* ── Radio groups ── */
     .radio-group { flex-direction: column; }

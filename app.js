@@ -90,6 +90,22 @@ $(document).ready(function() {
         $('#live-ws-subtitle').text(txt);
     });
 
+    $('#edit-vg-panel-title').on('input', function() {
+        appConfig.vgPanelTitle = $(this).val();
+        if (appConfig.captureMode === 'videoguestbook') {
+            $('#live-ws-title-vg').text(appConfig.vgPanelTitle || 'Raise a Toast!');
+        }
+    });
+
+    $('#edit-vg-couple-name').on('input', function() {
+        const name = $(this).val();
+        appConfig.vgCoupleName = name;
+        $('#vg-couple-name-preview').text(name || 'Alice & Dan');
+        if (appConfig.captureMode === 'videoguestbook') {
+            $('#live-ws-subtitle-vg').text(_getVgPanelSubtitle());
+        }
+    });
+
     // --- Welcome Screen Media Upload ---
     function applyWelcomeMedia(file) {
         if (appConfig.welcomeMedia) {
@@ -1879,9 +1895,34 @@ $(document).ready(function() {
         setTimeout(triggerVgSequence, 500);
     });
 
+    // Prompts preview modal
+    $('#btn-show-prompts-preview').on('click', function(e) {
+        e.stopPropagation();
+        const disabled = appConfig.vgDisabledTemplatePrompts;
+        const prompts = [
+            ...(PROMPT_TEMPLATES[appConfig.vgPromptCategory] || []).filter(function(q) { return disabled.indexOf(q) === -1; }),
+            ...appConfig.vgCustomPrompts.filter(function(p) { return p.enabled; }).map(function(p) { return p.text; })
+        ];
+        const $list = $('#prompts-preview-list').empty();
+        prompts.forEach(function(q) {
+            $list.append($('<div class="prompt-preview-item">').text(q));
+        });
+        $('#prompts-preview-modal').css('display', 'flex');
+    });
+
+    $('#btn-close-prompts-preview').on('click', function() {
+        $('#prompts-preview-modal').hide();
+    });
+
+    $('#prompts-preview-modal').on('click', function(e) {
+        if ($(e.target).is('#prompts-preview-modal')) {
+            $(this).hide();
+        }
+    });
+
     // Tap anywhere on the welcome screen to start (not just the small button)
     $('#guest-welcome').on('click', function(e) {
-        if ($(e.target).closest('#btn-exit-kiosk, #btn-start-session, #btn-start-vg-session').length) return;
+        if ($(e.target).closest('#btn-exit-kiosk, #btn-start-session, #btn-start-vg-session, #btn-show-prompts-preview, .welcome-vg-panel').length) return;
         if (appConfig.captureMode === 'videoguestbook') {
             $('#btn-start-vg-session').trigger('click');
         } else {
@@ -1929,6 +1970,12 @@ $(document).ready(function() {
         viewfinder.style.height = h + 'px';
     }
 
+    function _getVgPanelSubtitle() {
+        const name = (appConfig.vgCoupleName || '').trim();
+        if (name) return 'Answer just a few questions on video for ' + name + '.';
+        return appConfig.vgPromptText || 'Share a message for the happy couple!';
+    }
+
     function resetToWelcomeScreen() {
         // Hide capture screens
         $('#photo-canvas').hide();
@@ -1938,15 +1985,17 @@ $(document).ready(function() {
         $('#live-booth').hide();
         $('#vg-booth').hide();
 
-        // Show the correct start button for the active mode
+        // Show the correct layout for the active mode
         const isVg = appConfig.captureMode === 'videoguestbook';
+        $('#welcome-photo-content, #welcome-photo-action').toggle(!isVg);
         $('#btn-start-session').toggle(!isVg);
-        $('#btn-start-vg-session').toggle(isVg);
-
-        // Update the subtitle to reflect current mode
         if (isVg) {
-            $('#live-ws-subtitle').text(appConfig.vgPromptText || $('#setting-vg-prompt').val());
+            $('#welcome-vg-panel').css('display', 'flex');
+            $('#live-ws-title-vg').text(appConfig.vgPanelTitle || 'Raise a Toast!');
+            $('#live-ws-subtitle-vg').text(_getVgPanelSubtitle());
+            $('#btn-show-prompts-preview').toggle(!!appConfig.vgPromptsEnabled);
         } else {
+            $('#welcome-vg-panel').hide();
             $('#live-ws-subtitle').text(appConfig.welcomeSubtitle || $('#edit-subtitle').val());
         }
 
@@ -3944,6 +3993,10 @@ $(document).ready(function() {
         $('#edit-subtitle').val(appConfig.welcomeSubtitle);
         $('#prev-title, #live-ws-title').text(appConfig.welcomeTitle);
         $('#prev-subtitle, #live-ws-subtitle').text(appConfig.welcomeSubtitle);
+        $('#edit-vg-panel-title').val(appConfig.vgPanelTitle || 'Raise a Toast!');
+        $('#edit-vg-couple-name').val(appConfig.vgCoupleName || '');
+        $('#vg-couple-name-preview').text(appConfig.vgCoupleName || 'Alice & Dan');
+        $('#live-ws-title-vg').text(appConfig.vgPanelTitle || 'Raise a Toast!');
         if (!appConfig.welcomeMedia) {
             $('#designer-preview, #guest-welcome').css('background-color', appConfig.welcomeBg);
         }
