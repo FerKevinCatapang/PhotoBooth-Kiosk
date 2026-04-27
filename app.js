@@ -496,6 +496,30 @@ $(document).ready(function() {
         });
     })();
 
+    // --- Photo Booth Splash Screen toggle + duration slider ---
+    (function initPbSplash() {
+        function _syncToggle() {
+            const on = appConfig.pbSplashEnabled;
+            $('#toggle-pb-splash').prop('checked', on).closest('.toggle-switch').toggleClass('is-on', on);
+            $('#toggle-pb-splash-label').text(on ? 'ON' : 'OFF');
+            $('#pb-splash-config').toggle(on);
+        }
+        _syncToggle();
+        $('#toggle-pb-splash').on('change', function() {
+            appConfig.pbSplashEnabled = this.checked;
+            $('#toggle-pb-splash-label').text(this.checked ? 'ON' : 'OFF');
+            $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
+            $('#pb-splash-config').toggle(this.checked);
+            _scheduleSave();
+        });
+        $('#setting-pb-splash-duration').val(appConfig.pbSplashDuration).on('input', function() {
+            appConfig.pbSplashDuration = parseInt(this.value, 10);
+            $('#val-pb-splash-duration').text(this.value);
+            _scheduleSave();
+        });
+        $('#val-pb-splash-duration').text(appConfig.pbSplashDuration);
+    })();
+
     // Opens the disclaimer modal; resolves true (accepted) or false (rejected)
     function showDisclaimerDialog(header, text, org) {
         return new Promise(resolve => {
@@ -2122,6 +2146,25 @@ $(document).ready(function() {
     async function triggerCaptureSequence() {
         try {
             $('#live-booth').show();
+
+            // Show photo booth splash screen if enabled
+            if (appConfig.pbSplashEnabled) {
+                const def = LAYOUT_DEFS[appConfig.layout] || LAYOUT_DEFS['4x6-1'];
+                const photoCount = def.cols * def.rows;
+                const subMsg = photoCount === 1
+                    ? 'You\'ve got <strong>1 shot</strong> — make it amazing! Strike your best pose and have fun! 🤩'
+                    : 'You\'ll take <strong>' + photoCount + ' photos</strong> — warm up, get creative, and show us your best side! ✨';
+                document.getElementById('pb-splash-sub').innerHTML = subMsg;
+                const pbSplashEl = document.getElementById('pb-splash');
+                pbSplashEl.classList.remove('splash-fade-out');
+                pbSplashEl.style.display = 'flex';
+                await new Promise(r => setTimeout(r, appConfig.pbSplashDuration * 1000));
+                pbSplashEl.classList.add('splash-fade-out');
+                await new Promise(r => setTimeout(r, SPLASH_FADE_OUT_DURATION_MS));
+                pbSplashEl.style.display = 'none';
+                pbSplashEl.classList.remove('splash-fade-out');
+            }
+
             const video = $('#camera-feed')[0];
             const previewCanvas = $('#photo-canvas')[0];
             const previewCtx = previewCanvas.getContext('2d');
@@ -3888,6 +3931,10 @@ $(document).ready(function() {
         // VG prompts — splash screen duration
         $('#setting-vg-splash-duration').val(appConfig.vgSplashDuration);
         $('#val-vg-splash-duration').text(appConfig.vgSplashDuration);
+
+        // Photo Booth splash screen
+        $('#setting-pb-splash-duration').val(appConfig.pbSplashDuration);
+        $('#val-pb-splash-duration').text(appConfig.pbSplashDuration);
 
         // VG thank you duration (toggle handled by initVgThankYou above)
         $('#setting-ty-duration').val(appConfig.vgThankYouDuration);

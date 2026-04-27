@@ -1207,6 +1207,63 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
 }
 
 /* ==============================================
+   PHOTO BOOTH SPLASH SCREEN
+   ============================================== */
+#pb-splash {
+    position: absolute;
+    inset: 0;
+    z-index: 31;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.2rem;
+    background: rgba(0, 0, 0, 0.88);
+    text-align: center;
+    padding: 2rem;
+    animation: splash-fade-in 0.45s ease forwards;
+}
+#pb-splash.splash-fade-out {
+    animation: splash-fade-out 0.4s ease forwards;
+}
+.pb-splash-icon {
+    font-size: clamp(2.8rem, 8vw, 4.5rem);
+    color: #fb923c;
+    filter: drop-shadow(0 0 18px rgba(251, 146, 60, 0.55));
+    animation: splash-pulse 1.6s ease-in-out infinite;
+}
+.pb-splash-heading {
+    font-size: clamp(2rem, 6vw, 3.4rem);
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.01em;
+    margin: 0;
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
+}
+.pb-splash-sub {
+    font-size: clamp(1rem, 2.6vw, 1.45rem);
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.72);
+    line-height: 1.55;
+    max-width: 640px;
+    margin: 0;
+}
+.pb-splash-dots {
+    display: flex;
+    gap: 0.55rem;
+    margin-top: 0.4rem;
+}
+.pb-splash-dots span {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fb923c;
+    animation: splash-dot-bounce 1.2s ease-in-out infinite;
+}
+.pb-splash-dots span:nth-child(2) { animation-delay: 0.2s; }
+.pb-splash-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* ==============================================
    VG PRE-RECORDING PROMPTS — KIOSK OVERLAY
    ============================================== */
 #vg-question-overlay {
