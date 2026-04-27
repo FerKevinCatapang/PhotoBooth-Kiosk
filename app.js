@@ -57,35 +57,11 @@ $(document).ready(function() {
     // --- Storage (Photo Booth) — checkbox toggles (both local + drive can be active) ---
     $('#chk-save-local').on('change', function() {
         appConfig.saveLocal = this.checked;
-        if (this.checked) {
-            $('#local-folder-config').slideDown();
-        } else {
-            $('#local-folder-config').slideUp();
-        }
     });
 
     $('#chk-save-drive').on('change', function() {
         appConfig.saveDrive = this.checked;
-        if (this.checked) {
-            $('#pb-drive-config').slideDown();
-        } else {
-            $('#pb-drive-config').slideUp();
-        }
         _updateEventNameWarnings();
-    });
-
-    $('#btn-select-dir').on('click', async function() {
-        try {
-            if (!window.showDirectoryPicker) {
-                alert("Your browser does not support seamless folder saving. Photos will be saved via standard downloads.");
-                return;
-            }
-            directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-            const label = `Saving to: /${directoryHandle.name}`;
-            $('#dir-status').text(label);
-        } catch (err) {
-            console.log("Directory picker cancelled or failed.", err);
-        }
     });
 
     // --- Welcome Screen Designer ---
@@ -658,10 +634,9 @@ $(document).ready(function() {
         });
     }
 
-    // Ensure we have a valid token (re-request silently if missing)
+    // Delegate to VG auth — single shared token for both PB and VG
     async function _driveEnsureToken() {
-        if (appConfig._driveAccessToken) return appConfig._driveAccessToken;
-        return _driveRequestToken();
+        return _vgDriveEnsureToken();
     }
 
     // Find or create the root PB folder; returns folderId
@@ -769,9 +744,9 @@ $(document).ready(function() {
             });
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({}));
-                // Token may have expired — clear and retry once
+                // Token may have expired — clear shared VG token and retry once
                 if (resp.status === 401) {
-                    appConfig._driveAccessToken = null;
+                    appConfig._vgDriveAccessToken = null;
                     const token2 = await _driveEnsureToken();
                     const form2 = new FormData();
                     form2.append('metadata', new Blob([meta], { type: 'application/json' }));
@@ -832,45 +807,7 @@ $(document).ready(function() {
         }
     }
 
-    // UI: Folder name input
-    $('#drive-folder-name').on('input', function() {
-        appConfig.driveFolderName = this.value.trim() || 'Photo Booth Captures';
-        appConfig._driveFolderId = null; // reset folder cache
-    });
-
-    // UI: Sign in button
-    $('#btn-drive-signin').on('click', async function() {
-        const btn = $(this);
-        const clientId = _getDriveClientId();
-        if (!clientId || clientId.startsWith('YOUR_CLIENT')) {
-            _driveSetStatus('Enter your Client ID above first.', true);
-            return;
-        }
-        btn.prop('disabled', true).text('Signing in…');
-        _driveSetStatus('');
-        try {
-            await _driveRequestToken();
-            _driveSetStatus('<i class="fa-solid fa-check"></i> Connected — photos will upload automatically', false);
-            btn.hide();
-            $('#btn-drive-signout').show();
-        } catch (e) {
-            _driveSetStatus('Sign-in failed: ' + e.message, true);
-        } finally {
-            btn.prop('disabled', false).text('Sign in with Google');
-        }
-    });
-
-    // UI: Sign out button
-    $('#btn-drive-signout').on('click', function() {
-        if (appConfig._driveAccessToken) {
-            google.accounts.oauth2.revoke(appConfig._driveAccessToken, () => {});
-        }
-        appConfig._driveAccessToken = null;
-        appConfig._driveFolderId = null;
-        $(this).hide();
-        $('#btn-drive-signin').show();
-        _driveSetStatus('Signed out', false);
-    });
+    // PB Drive auth is shared with VG — sign-in handled in Capture Settings
 
     // ─── VIDEO GUESTBOOK — INDEPENDENT GOOGLE DRIVE AUTH ──────────────────────
 
@@ -1429,11 +1366,11 @@ $(document).ready(function() {
     $('#btn-vg-select-dir').on('click', async function() {
         try {
             if (!window.showDirectoryPicker) {
-                alert("Your browser does not support seamless folder saving. Videos will be saved via standard downloads.");
+                alert("Your browser does not support seamless folder saving. Files will be saved via standard downloads.");
                 return;
             }
-            vgDirectoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-            $('#vg-dir-status').text(`Saving to: /${vgDirectoryHandle.name}`);
+            directoryHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            $('#vg-dir-status').text(`Saving to: /${directoryHandle.name}`);
         } catch (err) {
             console.log("Directory picker cancelled or failed.", err);
         }
@@ -1648,10 +1585,10 @@ $(document).ready(function() {
                 : 'guestbook';
             const filename = `${prefix}_${ts}_Final.${stitchExt}`;
 
-            // Save to VG folder or trigger download
+            // Save to shared folder or trigger download
             try {
-                if (vgDirectoryHandle) {
-                    const fh = await vgDirectoryHandle.getFileHandle(filename, { create: true });
+                if (directoryHandle) {
+                    const fh = await directoryHandle.getFileHandle(filename, { create: true });
                     const wr = await fh.createWritable();
                     await wr.write(blob);
                     await wr.close();
@@ -2617,8 +2554,9 @@ $(document).ready(function() {
         // Save locally (folder or download)
         if (appConfig.vgSaveLocal) {
             try {
-                if (vgDirectoryHandle) {
-                    const fileHandle = await vgDirectoryHandle.getFileHandle(filename, { create: true });
+                if (directoryHandle) {
+                    const sessionDir = await directoryHandle.getDirectoryHandle(currentSessionId || 'session', { create: true });
+                    const fileHandle = await sessionDir.getFileHandle(filename, { create: true });
                     const writable = await fileHandle.createWritable();
                     await writable.write(blob);
                     await writable.close();
@@ -2964,7 +2902,8 @@ $(document).ready(function() {
             try {
                 if (directoryHandle) {
                     const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 1.0));
-                    const fileHandle = await directoryHandle.getFileHandle(filename, { create: true });
+                    const sessionDir = await directoryHandle.getDirectoryHandle(currentSessionId || 'session', { create: true });
+                    const fileHandle = await sessionDir.getFileHandle(filename, { create: true });
                     const writable = await fileHandle.createWritable();
                     await writable.write(blob);
                     await writable.close();
@@ -2991,7 +2930,7 @@ $(document).ready(function() {
 
         // --- Upload to Google Drive (fire-and-forget, non-blocking) ---
         // Upload file to session folder and show QR for the folder (not individual file)
-        if (appConfig.saveDrive && _getDriveClientId() && !_getDriveClientId().startsWith('YOUR_CLIENT')) {
+        if (appConfig.saveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
                     const result = await uploadToDrive(blob, filename);
@@ -3971,10 +3910,7 @@ $(document).ready(function() {
 
         // Storage — Photo Booth
         $('#chk-save-local').prop('checked', appConfig.saveLocal);
-        $('#local-folder-config').toggle(appConfig.saveLocal);
         $('#chk-save-drive').prop('checked', appConfig.saveDrive);
-        $('#pb-drive-config').toggle(appConfig.saveDrive);
-        $('#drive-folder-name').val(appConfig.driveFolderName);
 
         // Camera — Photo Booth
         const fmVal = appConfig.facingMode || 'user';

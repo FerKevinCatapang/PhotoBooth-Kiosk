@@ -1,7 +1,6 @@
 // ─── Global runtime state ─────────────────────────────────────────────────────
 let currentStream = null;
-let directoryHandle = null;
-let vgDirectoryHandle = null;
+let directoryHandle = null;  // shared save folder for both photos and videos
 
 let capturedPhotos = [];           // In-memory database of captured session photos
 let capturedPhotoDriveLinks = [];  // parallel: Drive share URL for each photo, or null
