@@ -44,6 +44,8 @@ let appConfig = {
     templateBg: null,
     // Video Guestbook frame/background image (overlaid on the recording)
     vgFrameBg: null,
+    // Show social sharing overlay after each capture
+    socialShare: true,
     // Event name used as filename prefix (e.g. "Smiths_Wedding")
     eventName: '',
     selectedCameraId: '', // deviceId chosen in Capture Settings
@@ -54,6 +56,12 @@ let appConfig = {
     disclaimerHeader: 'Media Release Agreement',
     disclaimerOrg: 'Name of Organization',
     disclaimerText: 'By proceeding, I grant {Name of Organization} the right to use my photos or videos from this event for promotional and publication purposes without compensation. I understand these files become the property of the organization, and I waive the right to review the final media or claim royalties. I also release {Name of Organization} from any legal claims or liability related to the use of my likeness.',
+    // Google Drive — Photo Booth (Method A - browser OAuth)
+    driveFolderName: 'Photo Booth Captures',
+    _driveAccessToken: null,
+    _driveFolderId: null,       // cached ID of the root PB folder
+    _driveEventFolderId: null,  // cached ID of the event sub-folder (reset on eventName change)
+
     // Google Drive — Video Guestbook (independent credentials)
     vgDriveFolderName: 'Video Guestbook Captures',
     vgDriveClientId: '',
@@ -100,10 +108,10 @@ const PERSISTED_KEYS = [
     'reviewTime', 'welcomeBg', 'welcomeTitle', 'welcomeSubtitle', 'photoMode',
     'captureMode', 'vgMaxDuration', 'vgPromptText', 'vgCountdown',
     'vgSelectedCameraId', 'vgFacingMode', 'vgSelectedMicId', 'vgSelectedSpeakerId',
-    'vgSaveLocal', 'vgSaveDrive', 'eventName',
+    'vgSaveLocal', 'vgSaveDrive', 'socialShare', 'eventName',
     'selectedCameraId', 'facingMode',
     'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
-    'vgDriveFolderName', 'vgDriveClientId',
+    'driveFolderName', 'vgDriveFolderName', 'vgDriveClientId',
     'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts', 'vgDisabledTemplatePrompts', 'vgSplashDuration',
     'pbSplashEnabled', 'pbSplashDuration',
     'vgThankYouEnabled', 'vgThankYouDuration', 'vgCaptureReviewEnabled', 'vgOfferPb',
