@@ -2343,6 +2343,13 @@ $(document).ready(function() {
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
         const ol = document.getElementById('vg-overlay-live');
         if (ol) { ol.style.display = 'none'; }
+        // Give immediate visual feedback — onstop fires asynchronously after the
+        // browser flushes remaining chunks, so the viewfinder would otherwise stay
+        // visible for a noticeable moment after the user taps "Stop Recording".
+        $('#vg-hud').hide();
+        $('#vg-controls').hide();
+        $('#vg-prompt-sidebar').hide();
+        $('#vg-processing-overlay').fadeIn(200);
     }
 
     const SPLASH_FADE_OUT_DURATION_MS = 400;  // must match CSS @keyframes splash-fade-out duration
