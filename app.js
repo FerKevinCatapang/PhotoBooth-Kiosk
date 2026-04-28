@@ -1744,7 +1744,8 @@ $(document).ready(function() {
             $('#admin-dashboard').hide();
             $('#kiosk-mode').fadeIn(400);
             _requestFullscreen();
-            _setupSinkBeep(appConfig.vgSelectedSpeakerId);
+            const _effectiveSpeakerId = await _resolveOutputSinkId();
+            _setupSinkBeep(_effectiveSpeakerId);
             resetToWelcomeScreen();
             
         } catch (err) {
@@ -2410,6 +2411,34 @@ $(document).ready(function() {
             _sidebarEl.style.display = 'flex';
         }
 
+        // On iOS/Safari, setSinkId is unsupported so the AudioContext routing chain can't be
+        // used. Instead, temporarily stop the audio input track to release the Bluetooth HFP
+        // session — this lets the OS route beeps and review video to the device speaker.
+        // The track is restarted via _iosRestoreMic() before recording begins.
+        const _hasSinkId = typeof Audio !== 'undefined' && typeof Audio.prototype.setSinkId !== 'undefined';
+        const _iosMicConstraint = appConfig.vgSelectedMicId
+            ? { deviceId: { exact: appConfig.vgSelectedMicId } }
+            : true;
+        const _iosRestoreMic = async () => {
+            if (_hasSinkId || !currentStream || currentStream.getAudioTracks().length > 0) return;
+            try {
+                const s = await navigator.mediaDevices.getUserMedia({ audio: _iosMicConstraint });
+                s.getAudioTracks().forEach(t => currentStream.addTrack(t));
+            } catch (_) {
+                try {
+                    const s2 = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    s2.getAudioTracks().forEach(t => currentStream.addTrack(t));
+                } catch (_2) {}
+            }
+        };
+        if (!_hasSinkId && currentStream) {
+            const _bt = currentStream.getAudioTracks();
+            if (_bt.length > 0) {
+                _bt.forEach(t => { t.stop(); currentStream.removeTrack(t); });
+                await new Promise(r => setTimeout(r, 200));
+            }
+        }
+
         // Pre-record countdown
         const cdEl = document.getElementById('vg-countdown-overlay');
         cdEl.style.display = 'flex';
@@ -2423,6 +2452,8 @@ $(document).ready(function() {
         }
         cdEl.style.display = 'none';
         // Sidebar stays visible during recording (it's an HTML overlay — not burned into the video stream)
+
+        await _iosRestoreMic();
 
         // Build the stream to record.
         // If an overlay is configured, composite camera + overlay on a canvas
@@ -2654,7 +2685,15 @@ $(document).ready(function() {
 
         // Show preview with autoplay × 3, then close button
         if (appConfig.vgCaptureReviewEnabled) {
+            if (!_hasSinkId && currentStream) {
+                const _bta = currentStream.getAudioTracks();
+                if (_bta.length > 0) {
+                    _bta.forEach(t => { t.stop(); currentStream.removeTrack(t); });
+                    await new Promise(r => setTimeout(r, 200));
+                }
+            }
             await showVgPreview(galleryBlobUrl);
+            await _iosRestoreMic();
         }
 
         // Offer the guest a photo strip if the feature is enabled
@@ -3209,6 +3248,28 @@ $(document).ready(function() {
         _previewVideoSourceNode = null;
         if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') _sinkBeepCtx.close().catch(() => {});
         _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
+    }
+
+    // After getUserMedia grants permission, device labels are visible. Enumerate audiooutput
+    // devices and return the best built-in speaker ID so _setupSinkBeep can always wire the
+    // audio chain even when the user hasn't explicitly picked a speaker in settings.
+    // Returns '' when setSinkId is unsupported (iOS) or no suitable device is found.
+    async function _resolveOutputSinkId() {
+        if (typeof Audio === 'undefined' || typeof Audio.prototype.setSinkId === 'undefined') return '';
+        if (appConfig.vgSelectedSpeakerId) return appConfig.vgSelectedSpeakerId;
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const outputs = devices.filter(d => d.kind === 'audiooutput' && d.deviceId && d.deviceId !== 'default');
+            const builtIn = outputs.find(d =>
+                /speaker|built.?in|internal/i.test(d.label) &&
+                !/bluetooth|wireless|usb|dji/i.test(d.label)
+            );
+            if (builtIn) return builtIn.deviceId;
+            const nonBt = outputs.find(d => !/bluetooth|wireless|dji/i.test(d.label));
+            return nonBt ? nonBt.deviceId : '';
+        } catch (e) {
+            return '';
+        }
     }
 
     function _playBeep(freq, duration, volume) {
