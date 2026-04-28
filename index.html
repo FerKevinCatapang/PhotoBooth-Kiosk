@@ -382,29 +382,6 @@
 
                 <div id="photo-offer-config" style="display:none;">
 
-                <div class="settings-section">
-                    <div class="settings-card feature-toggle-row">
-                        <div class="feature-toggle-left">
-                            <div class="feature-icon">
-                                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <div class="feature-title">Social media sharing</div>
-                                <div class="feature-subtitle">Show share buttons after each session (WhatsApp, Facebook, X, Email&hellip;)</div>
-                            </div>
-                        </div>
-                        <label class="toggle-switch is-on">
-                            <input type="checkbox" id="toggle-social-share" checked>
-                            <span class="toggle-slider"></span>
-                            <span class="toggle-label" id="toggle-social-label">ON</span>
-                        </label>
-                    </div>
-                </div>
-
                 <!-- Photo Booth Splash Screen -->
                 <div class="settings-section">
                     <h3 class="section-title">Splash Screen</h3>
@@ -1467,44 +1444,6 @@
         </div>
         <!-- ============================================ -->
 
-        <!-- ========== SOCIAL SHARE OVERLAY ========== -->
-        <div id="share-overlay" style="display:none;">
-            <div class="share-inner">
-                <!-- Photo preview -->
-                <div class="share-photo-wrap">
-                    <img id="share-preview-img" src="" alt="Your photo">
-                </div>
-                <!-- Actions panel -->
-                <div class="share-panel">
-                    <div class="share-heading">
-                        <h2 class="share-title">Your photo is ready!</h2>
-                        <p class="share-sub">Share it with the world</p>
-                    </div>
-                    <div class="share-btn-grid">
-                        <!-- Native OS share sheet (tablets / phones) -->
-                        <button id="btn-share-native" class="share-btn share-btn-native">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                            <span>Share</span>
-                        </button>
-                        <!-- Download -->
-                        <button id="btn-share-download" class="share-btn share-btn-download">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            <span>Save Photo</span>
-                        </button>
-                        <!-- QR Code (only shown when Drive is enabled) -->
-                        <button id="btn-share-qr" class="share-btn share-btn-qr" style="display:none;">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="5" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="16" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="5" y="16" width="3" height="3" fill="currentColor" stroke="none"/></svg>
-                            <span>Get QR Code</span>
-                        </button>
-                    </div>
-                    <button id="btn-share-done" class="share-done-btn">
-                        Done
-                        <span id="share-countdown" class="share-countdown-badge">8</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-        <!-- ============================================ -->
     </div>
 
     <!-- ========== PIN DIALOG ========== -->
