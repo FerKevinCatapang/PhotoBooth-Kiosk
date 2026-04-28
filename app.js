@@ -3166,11 +3166,15 @@ $(document).ready(function() {
     // Call once from a user-gesture context (kiosk launch) to pre-wire beep audio to the
     // selected Bluetooth speaker. Keeps the Audio element playing silence so that subsequent
     // oscillator connections route instantly without needing another gesture.
+    // When sinkId is empty (default speaker), skip special routing to allow the browser to use
+    // its native audio output (fixes Android Chrome routing to BT when internal speaker is desired).
     function _setupSinkBeep(sinkId) {
         if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
             _sinkBeepCtx.close().catch(() => {});
         }
         _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
+        // Only set up special audio routing when a specific speaker is explicitly selected.
+        // An empty sinkId means "default speaker" — let the browser handle native routing.
         if (!sinkId || typeof Audio === 'undefined' || typeof Audio.prototype.setSinkId === 'undefined') return;
         try {
             _sinkBeepCtx  = new (window.AudioContext || window.webkitAudioContext)();
@@ -3182,7 +3186,7 @@ $(document).ready(function() {
                     _sinkBeepEl.play().catch(() => {});
                     // Route the capture-review video through the same BT sink.
                     // createMediaElementSource silences the element's native output and
-                    // sends audio through _sinkBeepDest → _sinkBeepEl → JBL speaker,
+                    // sends audio through _sinkBeepDest → _sinkBeepEl → selected speaker,
                     // bypassing the OS default output (which may be the USB mic device).
                     const previewVid = document.getElementById('vg-preview-video');
                     if (previewVid && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
