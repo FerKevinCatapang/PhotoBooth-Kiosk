@@ -2545,7 +2545,11 @@ $(document).ready(function() {
             $('#vg-processing-overlay').fadeIn(200);
             const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
             const blob = new Blob(_vgChunks, { type: mimeType });
-            saveVgVideo(blob, ext);
+            saveVgVideo(blob, ext).catch(function(err) {
+                console.error('[VG] saveVgVideo failed:', err);
+                $('#vg-booth').hide();
+                resetToWelcomeScreen();
+            });
         };
 
         _vgMediaRecorder.start(500); // collect chunks every 500ms
@@ -2616,138 +2620,150 @@ $(document).ready(function() {
     });
 
     async function saveVgVideo(blob, ext) {
-        // Stop canvas compositing if it was active
-        if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
+        // When the photo-strip offer is accepted, triggerCaptureSequence handles its
+        // own booth hide and resetToWelcomeScreen, so the finally block must not
+        // duplicate those steps.
+        let _earlyReturn = false;
+        try {
+            // Stop canvas compositing if it was active
+            if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
 
-        const now = new Date();
-        const ts = now.getFullYear()
-            + String(now.getMonth() + 1).padStart(2, '0')
-            + String(now.getDate()).padStart(2, '0')
-            + '_'
-            + String(now.getHours()).padStart(2, '0')
-            + String(now.getMinutes()).padStart(2, '0')
-            + String(now.getSeconds()).padStart(2, '0');
-        const prefix = appConfig.eventName
-            ? appConfig.eventName.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '')
-            : 'guestbook';
-        const filename = `${prefix}_${ts}.${ext}`;
+            const now = new Date();
+            const ts = now.getFullYear()
+                + String(now.getMonth() + 1).padStart(2, '0')
+                + String(now.getDate()).padStart(2, '0')
+                + '_'
+                + String(now.getHours()).padStart(2, '0')
+                + String(now.getMinutes()).padStart(2, '0')
+                + String(now.getSeconds()).padStart(2, '0');
+            const prefix = appConfig.eventName
+                ? appConfig.eventName.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '')
+                : 'guestbook';
+            const filename = `${prefix}_${ts}.${ext}`;
 
-        // Keep a blob URL in memory for gallery playback (intentionally not revoked)
-        const galleryBlobUrl = URL.createObjectURL(blob);
-        capturedVideos.unshift(galleryBlobUrl);
-        capturedVideoDriveLinks.unshift(null); // will be updated after Drive upload completes
-        _evictOldCaptures();
-        updateDashboardGallery();
-        // Broadcast thumbnail to Live Viewer peers (fire-and-forget)
-        lvBroadcastVideo(galleryBlobUrl, filename);
+            // Keep a blob URL in memory for gallery playback (intentionally not revoked)
+            const galleryBlobUrl = URL.createObjectURL(blob);
+            capturedVideos.unshift(galleryBlobUrl);
+            capturedVideoDriveLinks.unshift(null); // will be updated after Drive upload completes
+            _evictOldCaptures();
+            updateDashboardGallery();
+            // Broadcast thumbnail to Live Viewer peers (fire-and-forget)
+            lvBroadcastVideo(galleryBlobUrl, filename);
 
-        // Save locally (folder or download)
-        if (appConfig.vgSaveLocal) {
-            try {
-                if (directoryHandle) {
-                    const sessionDir = await directoryHandle.getDirectoryHandle(currentSessionId || 'session', { create: true });
-                    const fileHandle = await sessionDir.getFileHandle(filename, { create: true });
-                    const writable = await fileHandle.createWritable();
-                    await writable.write(blob);
-                    await writable.close();
-                } else {
-                    const dlUrl = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = dlUrl;
-                    a.download = filename;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
+            // Save locally (folder or download)
+            if (appConfig.vgSaveLocal) {
+                try {
+                    if (directoryHandle) {
+                        const sessionDir = await directoryHandle.getDirectoryHandle(currentSessionId || 'session', { create: true });
+                        const fileHandle = await sessionDir.getFileHandle(filename, { create: true });
+                        const writable = await fileHandle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                    } else {
+                        const dlUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = dlUrl;
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
+                    }
+                } catch (err) {
+                    console.error('[VG] Save error:', err);
                 }
-            } catch (err) {
-                console.error('[VG] Save error:', err);
             }
-        }
 
-        // Upload to Google Drive using VG-specific credentials if enabled
-        // Show QR for session folder (not individual file)
-        if (appConfig.vgSaveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
-            uploadVgToDrive(blob, filename).then(async result => {
-                // The session folder link is already set after creating the folder
-                if (currentSessionFolderLink) {
-                    _currentVgDriveLink = currentSessionFolderLink;
-                    // Store session folder link in gallery for admin view
-                    capturedVideoDriveLinks[0] = currentSessionFolderLink;
-                    _appendGalleryQrBtn(0, 'video', currentSessionFolderLink);
-                    // Notify live viewer peers
-                    lvBroadcastDriveUpdate(filename, currentSessionFolderLink);
-                    // Show QR button if preview is still open
-                    if ($('#vg-preview-overlay').is(':visible')) {
-                        $('#btn-vg-qr').fadeIn(200);
+            // Upload to Google Drive using VG-specific credentials if enabled
+            // Show QR for session folder (not individual file)
+            if (appConfig.vgSaveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
+                uploadVgToDrive(blob, filename).then(async result => {
+                    // The session folder link is already set after creating the folder
+                    if (currentSessionFolderLink) {
+                        _currentVgDriveLink = currentSessionFolderLink;
+                        // Store session folder link in gallery for admin view
+                        capturedVideoDriveLinks[0] = currentSessionFolderLink;
+                        _appendGalleryQrBtn(0, 'video', currentSessionFolderLink);
+                        // Notify live viewer peers
+                        lvBroadcastDriveUpdate(filename, currentSessionFolderLink);
+                        // Show QR button if preview is still open
+                        if ($('#vg-preview-overlay').is(':visible')) {
+                            $('#btn-vg-qr').fadeIn(200);
+                        }
+                    }
+                }).catch(e => console.warn('[Drive] VG upload failed:', e.message));
+            }
+
+            // Reset HUD state
+            $('#vg-time-left').hide().text('');
+            $('#vg-timer').text('0:00');
+            $('#vg-processing-overlay').fadeOut(200);
+
+            // Show preview with autoplay × 3, then close button
+            if (appConfig.vgCaptureReviewEnabled) {
+                if (!_hasSinkId && currentStream) {
+                    const _bta = currentStream.getAudioTracks();
+                    if (_bta.length > 0) {
+                        _bta.forEach(t => { t.stop(); currentStream.removeTrack(t); });
+                        await new Promise(r => setTimeout(r, 200));
                     }
                 }
-            }).catch(e => console.warn('[Drive] VG upload failed:', e.message));
-        }
+                await showVgPreview(galleryBlobUrl);
+                await _iosRestoreMic();
+            }
 
-        // Reset HUD state
-        $('#vg-time-left').hide().text('');
-        $('#vg-timer').text('0:00');
-        $('#vg-processing-overlay').fadeOut(200);
-
-        // Show preview with autoplay × 3, then close button
-        if (appConfig.vgCaptureReviewEnabled) {
-            if (!_hasSinkId && currentStream) {
-                const _bta = currentStream.getAudioTracks();
-                if (_bta.length > 0) {
-                    _bta.forEach(t => { t.stop(); currentStream.removeTrack(t); });
-                    await new Promise(r => setTimeout(r, 200));
+            // Offer the guest a photo strip if the feature is enabled
+            if (appConfig.vgOfferPb) {
+                const wantsPb = await showVgPbOffer();
+                if (wantsPb) {
+                    _earlyReturn = true; // triggerCaptureSequence handles its own thank-you and resetToWelcomeScreen
+                    $('#vg-booth').hide();
+                    if (currentStream) {
+                        // VG may include microphone audio; disable it before PB capture.
+                        const videoTracks = currentStream.getVideoTracks().filter(t => t.readyState === 'live');
+                        const audioTracks = currentStream.getAudioTracks();
+                        audioTracks.forEach(track => {
+                            try { track.stop(); } catch (e) {}
+                        });
+                        if (videoTracks.length > 0) {
+                            currentStream = new MediaStream(videoTracks);
+                        }
+                    }
+                    const pbFeedEl = $('#camera-feed')[0];
+                    if (pbFeedEl && currentStream) {
+                        pbFeedEl.srcObject = currentStream;
+                        try {
+                            await pbFeedEl.play();
+                        } catch (e) {
+                            // Playback can be momentarily blocked while transitioning overlays.
+                        }
+                    }
+                    $('#photo-canvas').hide();
+                    $('#camera-feed').show();
+                    applyKioskViewfinderSize();
+                    await triggerCaptureSequence({ continueSession: true }); // reuse same session folder so photo lands alongside the video
+                    return;
                 }
             }
-            await showVgPreview(galleryBlobUrl);
-            await _iosRestoreMic();
-        }
 
-        // Offer the guest a photo strip if the feature is enabled
-        if (appConfig.vgOfferPb) {
-            const wantsPb = await showVgPbOffer();
-            if (wantsPb) {
+            // Show QR screen so guest can scan to get their video
+            if (appConfig.vgSaveDrive && currentSessionFolderLink) {
+                await showVgQrScreen('Scan to get your video!');
+            }
+
+            // Show VG thank-you then reset
+            if (appConfig.vgThankYouEnabled) {
+                await showVgThankYou();
+            }
+        } catch (err) {
+            console.error('[VG] Fatal error in saveVgVideo:', err);
+            throw err;
+        } finally {
+            if (!_earlyReturn) {
                 $('#vg-booth').hide();
-                if (currentStream) {
-                    // VG may include microphone audio; disable it before PB capture.
-                    const videoTracks = currentStream.getVideoTracks().filter(t => t.readyState === 'live');
-                    const audioTracks = currentStream.getAudioTracks();
-                    audioTracks.forEach(track => {
-                        try { track.stop(); } catch (e) {}
-                    });
-                    if (videoTracks.length > 0) {
-                        currentStream = new MediaStream(videoTracks);
-                    }
-                }
-                const pbFeedEl = $('#camera-feed')[0];
-                if (pbFeedEl && currentStream) {
-                    pbFeedEl.srcObject = currentStream;
-                    try {
-                        await pbFeedEl.play();
-                    } catch (e) {
-                        // Playback can be momentarily blocked while transitioning overlays.
-                    }
-                }
-                $('#photo-canvas').hide();
-                $('#camera-feed').show();
-                applyKioskViewfinderSize();
-                await triggerCaptureSequence({ continueSession: true }); // reuse same session folder so photo lands alongside the video
-                return; // triggerCaptureSequence handles its own thank-you and resetToWelcomeScreen
+                resetToWelcomeScreen();
             }
         }
-
-        // Show QR screen so guest can scan to get their video
-        if (appConfig.vgSaveDrive && currentSessionFolderLink) {
-            await showVgQrScreen('Scan to get your video!');
-        }
-
-        // Show VG thank-you then reset
-        if (appConfig.vgThankYouEnabled) {
-            await showVgThankYou();
-        }
-
-        $('#vg-booth').hide();
-        resetToWelcomeScreen();
     }
 
     function showVgPbOffer() {
