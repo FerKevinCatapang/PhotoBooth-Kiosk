@@ -2163,11 +2163,13 @@ $(document).ready(function() {
     // ==================== SOCIAL SHARING ====================
     let _shareObjectUrl = null;
     let _shareCountdownTimer = null;
+    let _shareOverlayOpts = {}; // Store options for use in hideShareOverlay
 
-    function showShareOverlay(canvas, dataUrl) {
+    function showShareOverlay(canvas, dataUrl, opts = {}) {
         // Reset QR state for this new capture
         _currentPbDriveLink = null;
         $('#btn-share-qr').hide();
+        _shareOverlayOpts = opts; // Store the options
         $('#share-preview-img').attr('src', dataUrl);
         // Build a blob URL for the Web Share API (file-level sharing)
         canvas.toBlob(blob => {
@@ -2197,12 +2199,16 @@ $(document).ready(function() {
                 resolve();
             });
         });
-        if (appConfig.vgThankYouEnabled) {
-            await showVgThankYou();
+        // When coming from VG flow, QR and Thank You are handled by saveVgVideo
+        if (!_shareOverlayOpts.fromVgFlow) {
+            if (appConfig.vgThankYouEnabled) {
+                await showVgThankYou();
+            }
+            $('#processing-overlay h2').text('Processing...');
+            $('.spinner').show();
+            resetToWelcomeScreen();
         }
-        $('#processing-overlay h2').text('Processing...');
-        $('.spinner').show();
-        resetToWelcomeScreen();
+        _shareOverlayOpts = {}; // Clear the options
     }
     // =========================================================
 
@@ -2270,7 +2276,7 @@ $(document).ready(function() {
             $(video).hide();
             $(previewCanvas).show();
 
-            await processAndSaveImage(stripCanvas);
+            await processAndSaveImage(stripCanvas, opts);
         } catch (err) {
             console.error('[Capture] Fatal error in capture sequence:', err);
             resetToWelcomeScreen();
@@ -2716,7 +2722,6 @@ $(document).ready(function() {
             if (appConfig.vgOfferPb) {
                 const wantsPb = await showVgPbOffer();
                 if (wantsPb) {
-                    _earlyReturn = true; // triggerCaptureSequence handles its own thank-you and resetToWelcomeScreen
                     $('#vg-booth').hide();
                     if (currentStream) {
                         // VG may include microphone audio; disable it before PB capture.
@@ -2741,7 +2746,18 @@ $(document).ready(function() {
                     $('#photo-canvas').hide();
                     $('#camera-feed').show();
                     applyKioskViewfinderSize();
-                    await triggerCaptureSequence({ continueSession: true }); // reuse same session folder so photo lands alongside the video
+                    await triggerCaptureSequence({ continueSession: true, fromVgFlow: true }); // reuse same session folder so photo lands alongside the video
+                    // After photo booth completes, show QR and Thank You
+                    if (appConfig.vgSaveDrive && currentSessionFolderLink) {
+                        await showVgQrScreen('Scan to get your captures!');
+                    }
+                    if (appConfig.vgThankYouEnabled) {
+                        await showVgThankYou();
+                    }
+                    _earlyReturn = true; // Prevent finally block from executing
+                    $('#vg-booth').hide();
+                    $('#live-booth').hide();
+                    resetToWelcomeScreen();
                     return;
                 }
             }
@@ -3053,7 +3069,7 @@ $(document).ready(function() {
         }
     }
 
-    async function processAndSaveImage(canvas) {
+    async function processAndSaveImage(canvas, opts = {}) {
         $('#processing-overlay').fadeIn(200);
 
         const filename = makeFilename();
@@ -3117,16 +3133,19 @@ $(document).ready(function() {
         $('#processing-overlay').fadeOut(200);
 
         if (appConfig.socialShare) {
-            showShareOverlay(canvas, photoDataUrl);
+            showShareOverlay(canvas, photoDataUrl, opts);
         } else {
             const previewMs = Math.max(appConfig.reviewTime * 1000, 1000);
             setTimeout(async () => {
-                if (appConfig.vgThankYouEnabled) {
-                    await showVgThankYou();
+                // When coming from VG flow, QR and Thank You are handled by saveVgVideo
+                if (!opts.fromVgFlow) {
+                    if (appConfig.vgThankYouEnabled) {
+                        await showVgThankYou();
+                    }
+                    $('#processing-overlay h2').text('Processing...');
+                    $('.spinner').show();
+                    resetToWelcomeScreen();
                 }
-                $('#processing-overlay h2').text('Processing...');
-                $('.spinner').show();
-                resetToWelcomeScreen();
             }, previewMs);
         }
     }
