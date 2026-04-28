@@ -211,16 +211,6 @@ $(document).ready(function() {
         $(this).closest('.toggle-switch').toggleClass('is-on', appConfig.photoMode);
     });
 
-    // --- Social Share Toggle ---
-    $('#toggle-social-share').on('change', function() {
-        appConfig.socialShare = this.checked;
-        $('#toggle-social-label').text(this.checked ? 'ON' : 'OFF');
-        $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-    });
-    // Initialize social share toggle state
-    $('#toggle-social-share').prop('checked', appConfig.socialShare).closest('.toggle-switch').toggleClass('is-on', appConfig.socialShare);
-    $('#toggle-social-label').text(appConfig.socialShare ? 'ON' : 'OFF');
-
     // --- Disclaimer — helpers ---
     const DEFAULT_DISCLAIMER_TEXT = appConfig.disclaimerText;
 
@@ -531,28 +521,6 @@ $(document).ready(function() {
         });
     }
 
-    // --- Share Button Handlers ---
-    $('#btn-share-done').on('click', hideShareOverlay);
-
-    $('#btn-share-download').on('click', function() {
-        const a = document.createElement('a');
-        a.href = $('#share-preview-img').attr('src');
-        a.download = makeFilename();
-        a.click();
-    });
-
-    $('#btn-share-native').on('click', async function() {
-        if (!_shareObjectUrl) return;
-        try {
-            const resp = await fetch(_shareObjectUrl);
-            const blob = await resp.blob();
-            const file = new File([blob], makeFilename(), { type: 'image/png' });
-            await navigator.share({ files: [file], title: 'My Photo Booth Picture' });
-        } catch (err) {
-            if (err.name !== 'AbortError') console.warn('Web Share failed:', err);
-        }
-    });
-
     // Keep template preview synced when layout changes
     $('input[name="layout"]').on('change', function() {
         updateTemplateSizeHint();
@@ -619,7 +587,7 @@ $(document).ready(function() {
     // GOOGLE DRIVE — Method A (Browser OAuth via Google Identity Services)
     // =====================================================================
 
-    const DRIVE_SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
 
     function _driveSetStatus(msg, isError) {
         const el = document.getElementById('drive-auth-status');
@@ -628,127 +596,11 @@ $(document).ready(function() {
         el.style.color = isError ? '#ef4444' : '#16a34a';
     }
 
-    // Request an access token via the GIS token client
-    function _driveRequestToken() {
-        return new Promise((resolve, reject) => {
-            const clientId = _getDriveClientId();
-            if (!clientId || clientId.startsWith('YOUR_CLIENT')) {
-                reject(new Error('No Client ID configured.'));
-                return;
-            }
-            const client = google.accounts.oauth2.initTokenClient({
-                client_id: clientId,
-                scope: DRIVE_SCOPES,
-                callback: (resp) => {
-                    if (resp.error) { reject(new Error(resp.error)); return; }
-                    appConfig._driveAccessToken = resp.access_token;
-                    appConfig._driveFolderId = null; // reset folder cache on new token
-                    resolve(resp.access_token);
-                }
-            });
-            client.requestAccessToken({ prompt: '' });
-        });
-    }
-
-    // Delegate to VG auth — single shared token for both PB and VG
-    async function _driveEnsureToken() {
-        return _vgDriveEnsureToken();
-    }
-
-    // Find or create the root PB folder; returns folderId
-    async function _driveEnsureFolder(token) {
-        if (appConfig._driveFolderId) return appConfig._driveFolderId;
-        const folderName = appConfig.driveFolderName || 'Photo Booth Captures';
-        // Search for existing folder
-        const query = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${folderName.replace(/'/g,"\\'")}' and trashed=false`);
-        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
-            headers: { Authorization: 'Bearer ' + token }
-        });
-        const searchData = await searchResp.json();
-        if (searchData.files && searchData.files.length > 0) {
-            appConfig._driveFolderId = searchData.files[0].id;
-            return appConfig._driveFolderId;
-        }
-        // Create the root folder
-        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder' })
-        });
-        const folder = await createResp.json();
-        appConfig._driveFolderId = folder.id;
-        return folder.id;
-    }
-
-    // Find or create the event sub-folder inside the root PB folder; returns its folderId
-    async function _driveEnsureEventFolder(token) {
-        if (appConfig._driveEventFolderId) return appConfig._driveEventFolderId;
-        const parentId = await _driveEnsureFolder(token);
-        const subName = appConfig.eventName ? appConfig.eventName.trim() : 'Default Event';
-        const query = encodeURIComponent(
-            `mimeType='application/vnd.google-apps.folder' and name='${subName.replace(/'/g,"\\'")}' and '${parentId}' in parents and trashed=false`
-        );
-        const searchResp = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=files(id,name)`, {
-            headers: { Authorization: 'Bearer ' + token }
-        });
-        const searchData = await searchResp.json();
-        if (searchData.files && searchData.files.length > 0) {
-            appConfig._driveEventFolderId = searchData.files[0].id;
-            return appConfig._driveEventFolderId;
-        }
-        const createResp = await fetch('https://www.googleapis.com/drive/v3/files', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: subName, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] })
-        });
-        const sub = await createResp.json();
-        appConfig._driveEventFolderId = sub.id;
-        return sub.id;
-    }
-
-    // Create a session-specific sub-folder inside the event folder; returns folder object with id and webViewLink
-    async function _driveEnsureSessionFolder(token) {
-        // If session folder already created for this session, return cached values
-        if (currentSessionFolderId && currentSessionFolderLink) {
-            return { id: currentSessionFolderId, webViewLink: currentSessionFolderLink };
-        }
-
-        // Ensure we have a session ID
-        if (!currentSessionId) {
-            startNewSession();
-        }
-
-        const eventFolderId = await _driveEnsureEventFolder(token);
-        const sessionFolderName = currentSessionId;
-
-        // Create the session folder (don't search, always create new)
-        const createResp = await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: sessionFolderName,
-                mimeType: 'application/vnd.google-apps.folder',
-                parents: [eventFolderId]
-            })
-        });
-        const sessionFolder = await createResp.json();
-
-        // Set public permissions on the session folder
-        await _driveSetPublic(token, sessionFolder.id);
-
-        // Cache the session folder ID and link
-        currentSessionFolderId = sessionFolder.id;
-        currentSessionFolderLink = sessionFolder.webViewLink;
-
-        console.log('[Drive] Created session folder:', sessionFolderName, sessionFolder.webViewLink);
-        return sessionFolder;
-    }
-
-    // Upload a Blob to Drive inside the session sub-folder
+    // Upload a Blob to Drive inside the shared VG session sub-folder
     async function uploadToDrive(blob, filename) {
         try {
-            const token = await _driveEnsureToken();
-            const sessionFolder = await _driveEnsureSessionFolder(token);
+            const token = await _vgDriveEnsureToken();
+            const sessionFolder = await _vgDriveEnsureSessionFolder(token);
             const meta = JSON.stringify({ name: filename, parents: [sessionFolder.id] });
             const form = new FormData();
             form.append('metadata', new Blob([meta], { type: 'application/json' }));
@@ -763,7 +615,7 @@ $(document).ready(function() {
                 // Token may have expired — clear shared VG token and retry once
                 if (resp.status === 401) {
                     appConfig._vgDriveAccessToken = null;
-                    const token2 = await _driveEnsureToken();
+                    const token2 = await _vgDriveEnsureToken();
                     const form2 = new FormData();
                     form2.append('metadata', new Blob([meta], { type: 'application/json' }));
                     form2.append('file', blob, filename);
@@ -2119,7 +1971,6 @@ $(document).ready(function() {
     // ===============================================================
 
     // ==================== QR CODE OVERLAY ==========================
-    let _currentPbDriveLink = null;  // stores Drive link for current PB capture
     let _currentVgDriveLink = null;  // stores Drive link for current VG capture
     let _qrInstance = null;
 
@@ -2144,13 +1995,6 @@ $(document).ready(function() {
         $('#qr-overlay').hide();
     });
 
-    // PB share overlay — QR button
-    $('#btn-share-qr').on('click', function() {
-        if (_currentPbDriveLink) {
-            showQrOverlay(_currentPbDriveLink, 'Scan to view your photos');
-        }
-    });
-
     // VG preview overlay — QR button
     $('#btn-vg-qr').on('click', function() {
         if (_currentVgDriveLink) {
@@ -2159,50 +2003,6 @@ $(document).ready(function() {
     });
     // ===============================================================
 
-    // ==================== SOCIAL SHARING ====================
-    let _shareObjectUrl = null;
-    let _shareCountdownTimer = null;
-
-    function showShareOverlay(canvas, dataUrl) {
-        // Reset QR state for this new capture
-        _currentPbDriveLink = null;
-        $('#btn-share-qr').hide();
-        $('#share-preview-img').attr('src', dataUrl);
-        // Build a blob URL for the Web Share API (file-level sharing)
-        canvas.toBlob(blob => {
-            if (_shareObjectUrl) URL.revokeObjectURL(_shareObjectUrl);
-            _shareObjectUrl = URL.createObjectURL(blob);
-        }, 'image/png', 1.0);
-        // Only show native share button when the browser supports it
-        $('#btn-share-native').toggle(typeof navigator.share === 'function');
-        $('#share-overlay').fadeIn(300);
-        // Auto-dismiss countdown (at least 8 s so user has time to act)
-        let remaining = Math.max(appConfig.reviewTime, 8);
-        $('#share-countdown').text(remaining);
-        clearInterval(_shareCountdownTimer);
-        _shareCountdownTimer = setInterval(() => {
-            remaining--;
-            $('#share-countdown').text(remaining);
-            if (remaining <= 0) { clearInterval(_shareCountdownTimer); hideShareOverlay(); }
-        }, 1000);
-    }
-
-    async function hideShareOverlay() {
-        clearInterval(_shareCountdownTimer);
-        await new Promise(resolve => {
-            $('#share-overlay').fadeOut(200, () => {
-                $('#share-preview-img').attr('src', '');
-                if (_shareObjectUrl) { URL.revokeObjectURL(_shareObjectUrl); _shareObjectUrl = null; }
-                resolve();
-            });
-        });
-        if (appConfig.vgThankYouEnabled) {
-            await showVgThankYou();
-        }
-        $('#processing-overlay h2').text('Processing...');
-        $('.spinner').show();
-        resetToWelcomeScreen();
-    }
     // =========================================================
 
     async function triggerCaptureSequence(opts = {}) {
@@ -3028,19 +2828,11 @@ $(document).ready(function() {
         lvBroadcastPhoto(photoDataUrl, filename);
 
         // --- Upload to Google Drive (fire-and-forget, non-blocking) ---
-        // Upload file to session folder and show QR for the folder (not individual file)
         if (appConfig.saveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
-                    const result = await uploadToDrive(blob, filename);
+                    await uploadToDrive(blob, filename);
                     console.log('[Drive] Uploaded:', filename);
-                    // The session folder link is already set after creating the folder
-                    // Show QR button in share overlay with the session folder link (if it's still open)
-                    if ($('#share-overlay').is(':visible') && currentSessionFolderLink) {
-                        _currentPbDriveLink = currentSessionFolderLink;
-                        $('#btn-share-qr').fadeIn(200);
-                    }
-                    // Store session folder link in gallery for admin view
                     if (currentSessionFolderLink) {
                         capturedPhotoDriveLinks[0] = currentSessionFolderLink;
                         _appendGalleryQrBtn(0, 'photo', currentSessionFolderLink);
@@ -3054,19 +2846,19 @@ $(document).ready(function() {
 
         $('#processing-overlay').fadeOut(200);
 
-        if (appConfig.socialShare) {
-            showShareOverlay(canvas, photoDataUrl);
+        // Show full-screen QR right before thank you so guests can scan the shared Drive folder
+        if (currentSessionFolderLink) {
+            await showVgQrScreen('Scan to get your photos and video!');
         } else {
             const previewMs = Math.max(appConfig.reviewTime * 1000, 1000);
-            setTimeout(async () => {
-                if (appConfig.vgThankYouEnabled) {
-                    await showVgThankYou();
-                }
-                $('#processing-overlay h2').text('Processing...');
-                $('.spinner').show();
-                resetToWelcomeScreen();
-            }, previewMs);
+            await new Promise(resolve => setTimeout(resolve, previewMs));
         }
+        if (appConfig.vgThankYouEnabled) {
+            await showVgThankYou();
+        }
+        $('#processing-overlay h2').text('Processing...');
+        $('.spinner').show();
+        resetToWelcomeScreen();
     }
 
     function updateTemplateSizeHint() {
@@ -4009,11 +3801,6 @@ $(document).ready(function() {
         $('#toggle-photo-mode').prop('checked', appConfig.photoMode)
             .closest('.toggle-switch').toggleClass('is-on', appConfig.photoMode);
         $('#toggle-photo-label').text(appConfig.photoMode ? 'ON' : 'OFF');
-
-        // Social share toggle
-        $('#toggle-social-share').prop('checked', appConfig.socialShare)
-            .closest('.toggle-switch').toggleClass('is-on', appConfig.socialShare);
-        $('#toggle-social-label').text(appConfig.socialShare ? 'ON' : 'OFF');
 
         // Storage — Photo Booth
         $('#chk-save-local').prop('checked', appConfig.saveLocal);
