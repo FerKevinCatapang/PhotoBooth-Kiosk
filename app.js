@@ -1696,30 +1696,10 @@ $(document).ready(function() {
                 }
             }
             if (isVgMode) {
-                // Two separate getUserMedia calls: Android Chrome ignores audio.deviceId
-                // when paired with a video.deviceId in a single call (the camera's built-in
-                // audio wins). Splitting them forces the browser to honour the mic selection.
+                // Keep VG live preview as video-only during idle/countdown/review.
+                // Mic is acquired only at record start and released right after stop.
                 const videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
-                let audioTracks = [];
-                try {
-                    const audioConstraint = appConfig.vgSelectedMicId
-                        ? { deviceId: { exact: appConfig.vgSelectedMicId } }
-                        : true;
-                    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
-                    audioTracks = audioStream.getAudioTracks();
-                } catch (audioErr) {
-                    console.warn('[VG] Requested mic unavailable, trying default:', audioErr.message);
-                    try {
-                        const fallback = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        audioTracks = fallback.getAudioTracks();
-                    } catch (e2) {
-                        console.warn('[VG] No audio track available:', e2.message);
-                    }
-                }
-                currentStream = new MediaStream([
-                    ...videoStream.getVideoTracks(),
-                    ...audioTracks
-                ]);
+                currentStream = new MediaStream(videoStream.getVideoTracks());
             } else {
                 currentStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
             }
@@ -2340,8 +2320,50 @@ $(document).ready(function() {
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
+        _vgDetachMicTracksFromCurrentStream();
         const ol = document.getElementById('vg-overlay-live');
         if (ol) { ol.style.display = 'none'; }
+    }
+
+    function _vgDetachMicTracksFromCurrentStream() {
+        if (!currentStream) return;
+        const audioTracks = currentStream.getAudioTracks();
+        audioTracks.forEach(track => {
+            try { track.stop(); } catch (_) {}
+            try { currentStream.removeTrack(track); } catch (_) {}
+        });
+    }
+
+    async function _vgEnsureMicTrackForRecording() {
+        if (!currentStream) throw new Error('VG stream is not initialized.');
+        const existingLive = currentStream.getAudioTracks().filter(t => t.readyState === 'live');
+        if (existingLive.length > 0) return;
+
+        let micStream = null;
+        try {
+            const audioConstraint = appConfig.vgSelectedMicId
+                ? { deviceId: { exact: appConfig.vgSelectedMicId } }
+                : true;
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
+        } catch (e) {
+            // Fallback to default mic if the selected device is unavailable.
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (fallbackErr) {
+                const micErr = new Error('No microphone is available.');
+                micErr.code = 'VG_MIC_REQUIRED';
+                micErr.cause = fallbackErr;
+                throw micErr;
+            }
+        }
+
+        const track = micStream.getAudioTracks()[0];
+        if (!track) {
+            const micErr = new Error('No microphone track available.');
+            micErr.code = 'VG_MIC_REQUIRED';
+            throw micErr;
+        }
+        currentStream.addTrack(track);
     }
 
     const SPLASH_FADE_OUT_DURATION_MS = 400;  // must match CSS @keyframes splash-fade-out duration
@@ -2424,10 +2446,8 @@ $(document).ready(function() {
         cdEl.style.display = 'none';
         // Sidebar stays visible during recording (it's an HTML overlay — not burned into the video stream)
 
-        // Build the stream to record.
-        // If an overlay is configured, composite camera + overlay on a canvas
-        // and record the canvas stream (video) + audio from currentStream.
-        let recordStream = currentStream;
+        // Build the video stream first; mic is acquired at the last possible moment below.
+        let recordStream = new MediaStream(currentStream.getVideoTracks());
         if (appConfig.vgOverlay) {
             const canvas = document.getElementById('vg-record-canvas');
             canvas.width  = 1920;
@@ -2449,13 +2469,18 @@ $(document).ready(function() {
             compositeFrame();
 
             const canvasVideoStream = canvas.captureStream(30);
-            const audioTracks = currentStream.getAudioTracks();
-            const combinedStream = new MediaStream([
-                ...canvasVideoStream.getVideoTracks(),
-                ...audioTracks
-            ]);
-            recordStream = combinedStream;
+            recordStream = new MediaStream(canvasVideoStream.getVideoTracks());
         }
+
+        // Acquire mic right before recorder setup so Android stays out of COMMUNICATION
+        // mode during idle/countdown and switches only for active recording.
+        _vgDetachMicTracksFromCurrentStream();
+        await _vgEnsureMicTrackForRecording();
+        currentStream.getAudioTracks().forEach(track => {
+            if (track.readyState === 'live') {
+                try { recordStream.addTrack(track); } catch (_) {}
+            }
+        });
 
         // Start recording
         _vgChunks = [];
@@ -2505,6 +2530,7 @@ $(document).ready(function() {
             $('#vg-hud').hide();
             $('#vg-controls').hide();
             $('#vg-processing-overlay').fadeIn(200);
+            _vgDetachMicTracksFromCurrentStream();
             const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
             const blob = new Blob(_vgChunks, { type: mimeType });
             saveVgVideo(blob, ext);
@@ -2536,11 +2562,15 @@ $(document).ready(function() {
         _vgMaxTimer = setTimeout(function() {
             stopVgRecordingIfActive();
         }, appConfig.vgMaxDuration * 1000);
-      } catch (err) {
-        console.error('[VG] Fatal error in VG sequence:', err);
-        stopVgRecordingIfActive();
-        resetToWelcomeScreen();
-      }
+            } catch (err) {
+                console.error('[VG] Fatal error in VG sequence:', err);
+                if (err && err.code === 'VG_MIC_REQUIRED') {
+                        alert('Microphone is required for Video Guestbook recording. Please reconnect/select the microphone and try again.');
+                }
+                stopVgRecordingIfActive();
+                _vgDetachMicTracksFromCurrentStream();
+                resetToWelcomeScreen();
+            }
     }
 
     $('#btn-vg-stop').on('click', function() {
@@ -2555,6 +2585,7 @@ $(document).ready(function() {
             recorder.onstop = null; // prevent the save handler from firing
             try { recorder.stop(); } catch(e) {}
         }
+        _vgDetachMicTracksFromCurrentStream();
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
@@ -2910,6 +2941,7 @@ $(document).ready(function() {
             closeBtn.addEventListener('click', doClose);
 
             const _startPreviewPlay = () => {
+                _ensureSinkGraphActive();
                 video.play().catch(() => {
                     msg.textContent = 'Tap play to preview your message.';
                     playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
@@ -3155,6 +3187,20 @@ $(document).ready(function() {
     let _sinkBeepEl   = null;  // hidden Audio element with setSinkId applied to the BT speaker
     let _previewVideoSourceNode = null; // MediaElementSource for #vg-preview-video, wired to _sinkBeepDest
 
+    function _ensureSinkGraphActive() {
+        try {
+            if (_sinkBeepCtx && _sinkBeepCtx.state === 'suspended') {
+                _sinkBeepCtx.resume().catch(() => {});
+            }
+            if (_sinkBeepEl && _sinkBeepEl.paused) {
+                _sinkBeepEl.play().catch(() => {});
+            }
+            if (_sinkBeepCtx) {
+                console.log('[VG audio] sink graph state:', _sinkBeepCtx.state, 'sinkElPaused:', !!(_sinkBeepEl && _sinkBeepEl.paused));
+            }
+        } catch (_) {}
+    }
+
     function _getAudioCtx() {
         if (!_audioCtx || _audioCtx.state === 'closed') {
             _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -3223,6 +3269,8 @@ $(document).ready(function() {
             // Route through the pre-wired Bluetooth sink when available; otherwise default output.
             const ctx  = (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') ? _sinkBeepCtx  : _getAudioCtx();
             const dest = (ctx === _sinkBeepCtx && _sinkBeepDest)           ? _sinkBeepDest : ctx.destination;
+            if (ctx === _sinkBeepCtx) _ensureSinkGraphActive();
+            if (ctx.state === 'suspended') ctx.resume().catch(() => {});
             const osc  = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
