@@ -1015,6 +1015,31 @@ $(document).ready(function() {
                 sel.appendChild(opt);
             });
 
+            // ── UVC plugin camera (Android only, DJI/GoPro in Webcam mode via USB-C OTG) ──
+            // If the native UVC plugin is available and sees a connected camera, add it as
+            // a special option.  It is auto-selected when no other camera matched above.
+            const UvcCamera = window.Capacitor?.Plugins?.UvcCamera;
+            if (UvcCamera) {
+                try {
+                    const uvcInfo = await UvcCamera.checkCamera();
+                    if (uvcInfo.connected) {
+                        const uvcOpt = document.createElement('option');
+                        uvcOpt.value = 'uvc:direct';
+                        uvcOpt.textContent = `[USB Direct] ${uvcInfo.deviceName || 'UVC Camera'}`;
+                        sel.appendChild(uvcOpt);
+                        // Auto-select if nothing better was found
+                        if (!appConfig.selectedCameraId ||
+                            [...sel.options].every(o => o.value !== appConfig.selectedCameraId)) {
+                            uvcOpt.selected = true;
+                        }
+                        const diagExtra = `<span style="display:block; color:#22c55e; margin-top:3px;"><i class="fa-solid fa-plug"></i> USB Direct camera detected: <strong>${uvcInfo.deviceName || 'UVC'}</strong> — will bypass Chrome camera API.</span>`;
+                        setDiag((diag?.innerHTML || '') + diagExtra);
+                    }
+                } catch (uvcErr) {
+                    console.warn('[UVC] checkCamera error:', uvcErr);
+                }
+            }
+
             // Restore previously chosen camera if still available
             if (prevValue && [...sel.options].some(o => o.value === prevValue)) {
                 sel.value = prevValue;
@@ -1638,6 +1663,61 @@ $(document).ready(function() {
         _stopVgCameraTest(); // also release VG test preview stream
 
         try {
+        // ── UVC direct path (Android: DJI/GoPro in Webcam mode via USB-C OTG) ─────
+        // Chrome on Android cannot access UVC webcams via getUserMedia — the native
+        // plugin bypasses this by reading frames directly from the USB device.
+        const isUvcSelected = (appConfig.selectedCameraId === 'uvc:direct') &&
+                              !!(window.Capacitor?.Plugins?.UvcCamera);
+        if (isUvcSelected && appConfig.captureMode !== 'videoguestbook') {
+            const UvcCamera = window.Capacitor.Plugins.UvcCamera;
+
+            // Request USB permission if not already granted
+            const permResult = await UvcCamera.requestPermission();
+            if (!permResult.granted) {
+                throw Object.assign(new Error('USB camera permission denied.'), { name: 'UVCPermissionError' });
+            }
+
+            // Start the UVC camera (opens device, begins frame streaming)
+            await UvcCamera.startPreview({ previewWidth: 1920, previewHeight: 1080, fps: 15 });
+
+            // Inject an <img> element into the camera-feed container to show live frames.
+            // The existing <video id="camera-feed"> is hidden and replaced visually.
+            const feedContainer = document.getElementById('camera-feed')?.parentElement
+                               || document.getElementById('kiosk-mode');
+            const existingVideo = document.getElementById('camera-feed');
+            if (existingVideo) existingVideo.style.display = 'none';
+
+            const img = document.createElement('img');
+            img.id = 'uvc-camera-feed';
+            img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
+            if (feedContainer) feedContainer.style.position = 'relative';
+            if (feedContainer) feedContainer.appendChild(img);
+            uvcImgEl = img;
+
+            // Subscribe to frame events — update the <img> on each frame
+            uvcFrameListener = await UvcCamera.addListener('uvcFrame', ({ dataUrl }) => {
+                if (uvcImgEl) uvcImgEl.src = dataUrl;
+            });
+
+            // Subscribe to disconnect events — fall back gracefully
+            uvcStateListener = await UvcCamera.addListener('uvcCameraState', ({ connected }) => {
+                if (!connected) {
+                    console.warn('[UVC] Camera disconnected — stopping preview');
+                    _stopUvcPreview();
+                }
+            });
+
+            uvcActive = true;
+            applyKioskViewfinderSize();
+            $('#admin-dashboard').hide();
+            $('#kiosk-mode').fadeIn(400);
+            _requestFullscreen();
+            _setupSinkBeep(appConfig.vgSelectedSpeakerId);
+            resetToWelcomeScreen();
+            launchBtn.prop('disabled', false).text('Launch Kiosk');
+            return;
+        }
+
         // ── Normal getUserMedia path ─────────────────────────────────────
             // Build video constraints: specific device takes priority, then facingMode.
             // Video Guestbook uses a lower resolution (1080p max) to prevent encoder
@@ -1789,9 +1869,24 @@ $(document).ready(function() {
         if (fn) fn.call(document).catch(() => {});
     }
 
+    // ── UVC cleanup helper ────────────────────────────────────────────────────
+    function _stopUvcPreview() {
+        if (!uvcActive) return;
+        uvcActive = false;
+        try { uvcFrameListener?.remove(); } catch (_) {}
+        try { uvcStateListener?.remove(); } catch (_) {}
+        uvcFrameListener = null;
+        uvcStateListener = null;
+        if (uvcImgEl) { uvcImgEl.remove(); uvcImgEl = null; }
+        const vid = document.getElementById('camera-feed');
+        if (vid) vid.style.display = '';
+        try { window.Capacitor?.Plugins?.UvcCamera?.stopPreview(); } catch (_) {}
+    }
+
     function _doExitKiosk() {
         stopVgRecordingIfActive();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
+        _stopUvcPreview();
         _teardownSinkBeep();
         _exitFullscreen();
         $('#kiosk-mode').hide();
@@ -2846,6 +2941,29 @@ $(document).ready(function() {
     async function drawPhoto(ctx, video, x, y, slotW, slotH) {
         let source = null;
         let usedImageCapture = false;
+
+        // ── UVC direct path: capture a still from the USB camera plugin ──────
+        if (uvcActive && window.Capacitor?.Plugins?.UvcCamera) {
+            try {
+                const { dataUrl } = await window.Capacitor.Plugins.UvcCamera.capture();
+                const img = new Image();
+                await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataUrl; });
+                source = img;
+                // UVC frames are not mirrored — draw without horizontal flip
+                const fW2 = img.naturalWidth  || img.width;
+                const fH2 = img.naturalHeight || img.height;
+                const scale2 = Math.max(slotW / fW2, slotH / fH2);
+                const srcW2  = Math.round(slotW / scale2);
+                const srcH2  = Math.round(slotH / scale2);
+                const srcX2  = Math.max(0, Math.round((fW2 - srcW2) / 2));
+                const srcY2  = Math.max(0, Math.round((fH2 - srcH2) / 2));
+                ctx.drawImage(img, srcX2, srcY2, srcW2, srcH2, x, y, slotW, slotH);
+                return; // skip the getUserMedia path below
+            } catch (e) {
+                console.warn('[drawPhoto] UVC capture failed, falling back to video frame:', e.message);
+                // Fall through to video frame path
+            }
+        }
 
         if (currentStream && typeof ImageCapture !== 'undefined') {
             try {
