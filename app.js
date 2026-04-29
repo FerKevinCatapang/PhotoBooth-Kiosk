@@ -1741,6 +1741,15 @@ $(document).ready(function() {
                 applyKioskViewfinderSize();
             }
 
+            // VG: stop the mic audio tracks immediately after kiosk launch.
+            // While getUserMedia({audio}) is live, Android holds MODE_IN_COMMUNICATION which
+            // routes audio output away from Bluetooth A2DP (JBL etc.) to the internal speaker.
+            // Stopping the tracks here releases that lock so countdown beeps and review playback
+            // reach the BT speaker. The mic is re-acquired fresh just before each recording.
+            if (appConfig.captureMode === 'videoguestbook' && currentStream) {
+                currentStream.getAudioTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+            }
+
             $('#admin-dashboard').hide();
             $('#kiosk-mode').fadeIn(400);
             _requestFullscreen();
@@ -2318,9 +2327,10 @@ $(document).ready(function() {
     let _vgMaxTimer = null;
     let _vgElapsed = 0;
 
-    let _vgFrameAnimId = null;    // rAF id for canvas compositing loop
-    let _vgSaving = false;        // guard: prevents saveVgVideo from running twice per session
+    let _vgFrameAnimId = null;      // rAF id for canvas compositing loop
+    let _vgSaving = false;          // guard: prevents saveVgVideo from running twice per session
     let _vgActivePromptText = null; // prompt from current/last recording, preserved for redo
+    let _vgLiveAudioTracks = [];    // mic tracks for the current recording; stopped in onstop to release Android COMMUNICATION mode
 
     function stopVgRecordingIfActive() {
         // Null out immediately so a second call (e.g. max-timer + user tap race)
@@ -2424,10 +2434,30 @@ $(document).ready(function() {
         cdEl.style.display = 'none';
         // Sidebar stays visible during recording (it's an HTML overlay — not burned into the video stream)
 
+        // Re-acquire the microphone now that the countdown is done.
+        // We stopped it at kiosk launch to keep Android in media audio mode (A2DP) so that
+        // beeps played above reached the Bluetooth speaker instead of the internal speaker.
+        _vgLiveAudioTracks = [];
+        try {
+            const _micConstraint = appConfig.vgSelectedMicId
+                ? { deviceId: { exact: appConfig.vgSelectedMicId } }
+                : true;
+            const _micStream = await navigator.mediaDevices.getUserMedia({ audio: _micConstraint });
+            _vgLiveAudioTracks = _micStream.getAudioTracks();
+        } catch (e) {
+            console.warn('[VG] Could not re-acquire preferred mic, trying default:', e.message);
+            try {
+                const _fallbackStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                _vgLiveAudioTracks = _fallbackStream.getAudioTracks();
+            } catch (e2) {
+                console.warn('[VG] No mic available for recording:', e2.message);
+            }
+        }
+
         // Build the stream to record.
         // If an overlay is configured, composite camera + overlay on a canvas
-        // and record the canvas stream (video) + audio from currentStream.
-        let recordStream = currentStream;
+        // and record the canvas stream (video) + audio from the freshly acquired mic tracks.
+        let recordStream = new MediaStream([...currentStream.getVideoTracks(), ..._vgLiveAudioTracks]);
         if (appConfig.vgOverlay) {
             const canvas = document.getElementById('vg-record-canvas');
             canvas.width  = 1920;
@@ -2449,10 +2479,9 @@ $(document).ready(function() {
             compositeFrame();
 
             const canvasVideoStream = canvas.captureStream(30);
-            const audioTracks = currentStream.getAudioTracks();
             const combinedStream = new MediaStream([
                 ...canvasVideoStream.getVideoTracks(),
-                ...audioTracks
+                ..._vgLiveAudioTracks
             ]);
             recordStream = combinedStream;
         }
@@ -2497,6 +2526,10 @@ $(document).ready(function() {
             // double-stop race between the max-duration timer and the Stop button).
             if (_vgSaving) return;
             _vgSaving = true;
+            // Stop mic tracks immediately so Android exits MODE_IN_COMMUNICATION.
+            // This restores A2DP Bluetooth routing before review playback begins.
+            _vgLiveAudioTracks.forEach(t => { try { t.stop(); } catch (e) {} });
+            _vgLiveAudioTracks = [];
             clearInterval(_vgTimerInterval);
             clearTimeout(_vgMaxTimer);
             if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
@@ -3173,6 +3206,14 @@ $(document).ready(function() {
             _sinkBeepCtx.close().catch(() => {});
         }
         _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
+        // Pre-warm the fallback AudioContext while the user-gesture (kiosk launch) is
+        // still active so countdown beeps are not blocked by autoplay policy later.
+        try {
+            if (!_audioCtx || _audioCtx.state === 'closed') {
+                _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (_audioCtx.state === 'suspended') _audioCtx.resume().catch(() => {});
+        } catch (e) { /* ignore */ }
         // Only set up special audio routing when a specific speaker is explicitly selected.
         // An empty sinkId means "default speaker" — let the browser handle native routing.
         if (!sinkId || typeof Audio === 'undefined' || typeof Audio.prototype.setSinkId === 'undefined') return;
