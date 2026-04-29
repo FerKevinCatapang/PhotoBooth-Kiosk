@@ -211,16 +211,6 @@ $(document).ready(function() {
         $(this).closest('.toggle-switch').toggleClass('is-on', appConfig.photoMode);
     });
 
-    // --- Social Share Toggle ---
-    $('#toggle-social-share').on('change', function() {
-        appConfig.socialShare = this.checked;
-        $('#toggle-social-label').text(this.checked ? 'ON' : 'OFF');
-        $(this).closest('.toggle-switch').toggleClass('is-on', this.checked);
-    });
-    // Initialize social share toggle state
-    $('#toggle-social-share').prop('checked', appConfig.socialShare).closest('.toggle-switch').toggleClass('is-on', appConfig.socialShare);
-    $('#toggle-social-label').text(appConfig.socialShare ? 'ON' : 'OFF');
-
     // --- Disclaimer — helpers ---
     const DEFAULT_DISCLAIMER_TEXT = appConfig.disclaimerText;
 
@@ -530,28 +520,6 @@ $(document).ready(function() {
             $('#btn-disclaimer-reject').one('click.disc', function() { cleanup(); resolve(false); });
         });
     }
-
-    // --- Share Button Handlers ---
-    $('#btn-share-done').on('click', hideShareOverlay);
-
-    $('#btn-share-download').on('click', function() {
-        const a = document.createElement('a');
-        a.href = $('#share-preview-img').attr('src');
-        a.download = makeFilename();
-        a.click();
-    });
-
-    $('#btn-share-native').on('click', async function() {
-        if (!_shareObjectUrl) return;
-        try {
-            const resp = await fetch(_shareObjectUrl);
-            const blob = await resp.blob();
-            const file = new File([blob], makeFilename(), { type: 'image/png' });
-            await navigator.share({ files: [file], title: 'My Photo Booth Picture' });
-        } catch (err) {
-            if (err.name !== 'AbortError') console.warn('Web Share failed:', err);
-        }
-    });
 
     // Keep template preview synced when layout changes
     $('input[name="layout"]').on('change', function() {
@@ -2118,92 +2086,7 @@ $(document).ready(function() {
     }
     // ===============================================================
 
-    // ==================== QR CODE OVERLAY ==========================
-    let _currentPbDriveLink = null;  // stores Drive link for current PB capture
-    let _currentVgDriveLink = null;  // stores Drive link for current VG capture
-    let _qrInstance = null;
-
-    function showQrOverlay(url, caption) {
-        const container = document.getElementById('qr-code-container');
-        container.innerHTML = '';
-        if (_qrInstance) { try { _qrInstance.clear(); } catch(e) {} }
-        $('#qr-modal-title').text(caption || 'Scan to get your copy');
-        $('#qr-modal-url').text(url);
-        _qrInstance = new QRCode(container, {
-            text: url,
-            width: 240,
-            height: 240,
-            colorDark: '#111827',
-            colorLight: '#ffffff',
-            correctLevel: QRCode.CorrectLevel.M
-        });
-        $('#qr-overlay').css('display', 'flex');
-    }
-
-    $('#btn-qr-close').on('click', function() {
-        $('#qr-overlay').hide();
-    });
-
-    // PB share overlay — QR button
-    $('#btn-share-qr').on('click', function() {
-        if (_currentPbDriveLink) {
-            showQrOverlay(_currentPbDriveLink, 'Scan to view your photos');
-        }
-    });
-
-    // VG preview overlay — QR button
-    $('#btn-vg-qr').on('click', function() {
-        if (_currentVgDriveLink) {
-            showQrOverlay(_currentVgDriveLink, 'Scan to view your captures');
-        }
-    });
     // ===============================================================
-
-    // ==================== SOCIAL SHARING ====================
-    let _shareObjectUrl = null;
-    let _shareCountdownTimer = null;
-
-    function showShareOverlay(canvas, dataUrl) {
-        // Reset QR state for this new capture
-        _currentPbDriveLink = null;
-        $('#btn-share-qr').hide();
-        $('#share-preview-img').attr('src', dataUrl);
-        // Build a blob URL for the Web Share API (file-level sharing)
-        canvas.toBlob(blob => {
-            if (_shareObjectUrl) URL.revokeObjectURL(_shareObjectUrl);
-            _shareObjectUrl = URL.createObjectURL(blob);
-        }, 'image/png', 1.0);
-        // Only show native share button when the browser supports it
-        $('#btn-share-native').toggle(typeof navigator.share === 'function');
-        $('#share-overlay').fadeIn(300);
-        // Auto-dismiss countdown (at least 8 s so user has time to act)
-        let remaining = Math.max(appConfig.reviewTime, 8);
-        $('#share-countdown').text(remaining);
-        clearInterval(_shareCountdownTimer);
-        _shareCountdownTimer = setInterval(() => {
-            remaining--;
-            $('#share-countdown').text(remaining);
-            if (remaining <= 0) { clearInterval(_shareCountdownTimer); hideShareOverlay(); }
-        }, 1000);
-    }
-
-    async function hideShareOverlay() {
-        clearInterval(_shareCountdownTimer);
-        await new Promise(resolve => {
-            $('#share-overlay').fadeOut(200, () => {
-                $('#share-preview-img').attr('src', '');
-                if (_shareObjectUrl) { URL.revokeObjectURL(_shareObjectUrl); _shareObjectUrl = null; }
-                resolve();
-            });
-        });
-        if (appConfig.vgThankYouEnabled) {
-            await showVgThankYou();
-        }
-        $('#processing-overlay h2').text('Processing...');
-        $('.spinner').show();
-        resetToWelcomeScreen();
-    }
-    // =========================================================
 
     async function triggerCaptureSequence(opts = {}) {
         try {
@@ -2269,7 +2152,7 @@ $(document).ready(function() {
             $(video).hide();
             $(previewCanvas).show();
 
-            await processAndSaveImage(stripCanvas);
+            await processAndSaveImage(stripCanvas, opts);
         } catch (err) {
             console.error('[Capture] Fatal error in capture sequence:', err);
             resetToWelcomeScreen();
@@ -2628,21 +2511,15 @@ $(document).ready(function() {
         }
 
         // Upload to Google Drive using VG-specific credentials if enabled
-        // Show QR for session folder (not individual file)
         if (appConfig.vgSaveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
             uploadVgToDrive(blob, filename).then(async result => {
                 // The session folder link is already set after creating the folder
                 if (currentSessionFolderLink) {
-                    _currentVgDriveLink = currentSessionFolderLink;
                     // Store session folder link in gallery for admin view
                     capturedVideoDriveLinks[0] = currentSessionFolderLink;
                     _appendGalleryQrBtn(0, 'video', currentSessionFolderLink);
                     // Notify live viewer peers
                     lvBroadcastDriveUpdate(filename, currentSessionFolderLink);
-                    // Show QR button if preview is still open
-                    if ($('#vg-preview-overlay').is(':visible')) {
-                        $('#btn-vg-qr').fadeIn(200);
-                    }
                 }
             }).catch(e => console.warn('[Drive] VG upload failed:', e.message));
         }
@@ -2690,9 +2567,9 @@ $(document).ready(function() {
             }
         }
 
-        // Show QR screen so guest can scan to get their video
-        if (appConfig.vgSaveDrive && currentSessionFolderLink) {
-            await showVgQrScreen('Scan to get your video!');
+        // Offer Drive QR code (VG mode: guest declined PB or PB not enabled)
+        if (appConfig.vgSaveDrive && appConfig._vgDriveAccessToken) {
+            await showDriveQrPrompt();
         }
 
         // Show VG thank-you then reset
@@ -2738,44 +2615,79 @@ $(document).ready(function() {
         });
     }
 
-    function showVgQrScreen(label) {
-        return new Promise(resolve => {
-            if (!currentSessionFolderLink) { resolve(); return; }
-            const overlay     = document.getElementById('vg-qr-screen');
-            const container   = document.getElementById('vg-qr-screen-container');
-            const countdownEl = document.getElementById('vg-qr-screen-countdown');
-            const doneBtn     = document.getElementById('btn-vg-qr-screen-done');
-            const labelEl     = document.getElementById('vg-qr-screen-label');
+    function showDriveQrPrompt() {
+        return new Promise(function(resolve) {
+            const askOverlay  = document.getElementById('vg-drive-qr-prompt');
+            const showOverlay = document.getElementById('vg-drive-qr-show');
+            const yesBtn      = document.getElementById('btn-vg-dqr-yes');
+            const noBtn       = document.getElementById('btn-vg-dqr-no');
+            const doneBtn     = document.getElementById('btn-vg-drive-qr-done');
+            const spinner     = document.getElementById('vg-drive-qr-spinner');
+            const qrContainer = document.getElementById('vg-drive-qr-code');
 
-            if (labelEl) labelEl.textContent = label || 'Scan to get your copy!';
+            // Reset state from previous session
+            qrContainer.innerHTML = '';
+            qrContainer.style.display = 'none';
+            spinner.style.display = 'flex';
+            askOverlay.style.display = 'flex';
 
-            container.innerHTML = '';
-            new QRCode(container, {
-                text: currentSessionFolderLink,
-                width: 260,
-                height: 260,
-                colorDark: '#111827',
-                colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.M
-            });
-
-            overlay.style.display = 'flex';
-            const SECS = 25;
-            let remaining = SECS;
-            countdownEl.textContent = remaining;
-            const timer = setInterval(function() {
-                remaining--;
-                countdownEl.textContent = remaining;
-                if (remaining <= 0) finish();
-            }, 1000);
-
-            function finish() {
-                clearInterval(timer);
-                overlay.style.display = 'none';
-                doneBtn.removeEventListener('click', finish);
-                resolve();
+            function cleanup() {
+                askOverlay.style.display = 'none';
+                showOverlay.style.display = 'none';
+                yesBtn.removeEventListener('click', onYes);
+                noBtn.removeEventListener('click', onNo);
+                doneBtn.removeEventListener('click', onDone);
             }
-            doneBtn.addEventListener('click', finish);
+
+            function onNo() { cleanup(); resolve(); }
+            function onDone() { cleanup(); resolve(); }
+
+            function onYes() {
+                askOverlay.style.display = 'none';
+                showOverlay.style.display = 'flex';
+                waitForLinkAndShowQr();
+            }
+
+            function waitForLinkAndShowQr() {
+                const MAX_WAIT_MS = 30000;
+                const POLL_MS     = 500;
+                let elapsed       = 0;
+
+                function poll() {
+                    if (currentSessionFolderLink) {
+                        qrContainer.innerHTML = '';
+                        try {
+                            new QRCode(qrContainer, {
+                                text: currentSessionFolderLink,
+                                width: 200,
+                                height: 200,
+                                colorDark: '#000000',
+                                colorLight: '#ffffff',
+                                correctLevel: QRCode.CorrectLevel.M
+                            });
+                        } catch (e) {
+                            console.warn('[QR] Drive QR generation failed:', e);
+                            qrContainer.innerHTML = '<div style="color:#9ca3af;font-size:0.85rem;padding:1rem;">Could not generate QR code.</div>';
+                        }
+                        spinner.style.display = 'none';
+                        qrContainer.style.display = 'block';
+                        return;
+                    }
+                    elapsed += POLL_MS;
+                    if (elapsed >= MAX_WAIT_MS) {
+                        spinner.style.display = 'none';
+                        qrContainer.innerHTML = '<div style="color:#9ca3af;font-size:0.85rem;padding:1rem;">Upload still in progress.<br>See the operator for your link.</div>';
+                        qrContainer.style.display = 'block';
+                        return;
+                    }
+                    setTimeout(poll, POLL_MS);
+                }
+                poll();
+            }
+
+            yesBtn.addEventListener('click', onYes);
+            noBtn.addEventListener('click', onNo);
+            doneBtn.addEventListener('click', onDone);
         });
     }
 
@@ -2823,10 +2735,6 @@ $(document).ready(function() {
             const muteBtn      = document.getElementById('btn-vg-mute');
             const timeDisplay  = document.getElementById('vg-time-display');
             let loopCount = 0;
-
-            // Reset QR state for this new recording
-            _currentVgDriveLink = null;
-            $('#btn-vg-qr').hide();
 
             // Helper: format seconds as M:SS
             function fmtTime(s) {
@@ -2991,7 +2899,7 @@ $(document).ready(function() {
         }
     }
 
-    async function processAndSaveImage(canvas) {
+    async function processAndSaveImage(canvas, opts = {}) {
         $('#processing-overlay').fadeIn(200);
 
         const filename = makeFilename();
@@ -3028,18 +2936,11 @@ $(document).ready(function() {
         lvBroadcastPhoto(photoDataUrl, filename);
 
         // --- Upload to Google Drive (fire-and-forget, non-blocking) ---
-        // Upload file to session folder and show QR for the folder (not individual file)
         if (appConfig.saveDrive && _getVgDriveClientId() && !_getVgDriveClientId().startsWith('YOUR_CLIENT')) {
             canvas.toBlob(async function(blob) {
                 try {
                     const result = await uploadToDrive(blob, filename);
                     console.log('[Drive] Uploaded:', filename);
-                    // The session folder link is already set after creating the folder
-                    // Show QR button in share overlay with the session folder link (if it's still open)
-                    if ($('#share-overlay').is(':visible') && currentSessionFolderLink) {
-                        _currentPbDriveLink = currentSessionFolderLink;
-                        $('#btn-share-qr').fadeIn(200);
-                    }
                     // Store session folder link in gallery for admin view
                     if (currentSessionFolderLink) {
                         capturedPhotoDriveLinks[0] = currentSessionFolderLink;
@@ -3054,19 +2955,19 @@ $(document).ready(function() {
 
         $('#processing-overlay').fadeOut(200);
 
-        if (appConfig.socialShare) {
-            showShareOverlay(canvas, photoDataUrl);
-        } else {
-            const previewMs = Math.max(appConfig.reviewTime * 1000, 1000);
-            setTimeout(async () => {
-                if (appConfig.vgThankYouEnabled) {
-                    await showVgThankYou();
-                }
-                $('#processing-overlay h2').text('Processing...');
-                $('.spinner').show();
-                resetToWelcomeScreen();
-            }, previewMs);
-        }
+        const previewMs = Math.max(appConfig.reviewTime * 1000, 1000);
+        setTimeout(async () => {
+            // Offer Drive QR code for VG→PB sessions (guest chose photo strip after video)
+            if (opts.continueSession && appConfig.vgSaveDrive && appConfig._vgDriveAccessToken) {
+                await showDriveQrPrompt();
+            }
+            if (appConfig.vgThankYouEnabled) {
+                await showVgThankYou();
+            }
+            $('#processing-overlay h2').text('Processing...');
+            $('.spinner').show();
+            resetToWelcomeScreen();
+        }, previewMs);
     }
 
     function updateTemplateSizeHint() {
@@ -3437,11 +3338,11 @@ $(document).ready(function() {
         _renderLightbox();
         $('#photo-lightbox').fadeIn(200);
     }
-    // QR button on gallery thumbnails — stop propagation so lightbox doesn't open
+    // QR button on gallery thumbnails — open Drive link directly
     $(document).on('click', '.gallery-qr-btn', function(e) {
         e.stopPropagation();
         const url = $(this).data('url');
-        if (url) showQrOverlay(url, 'Scan to download your copy');
+        if (url) window.open(url, '_blank', 'noopener');
     });
     $(document).on('click', '.gallery-item:not(.gallery-item-video)', function() {
         openLightbox(parseInt($(this).data('index')));
@@ -4005,11 +3906,6 @@ $(document).ready(function() {
         $('#toggle-photo-mode').prop('checked', appConfig.photoMode)
             .closest('.toggle-switch').toggleClass('is-on', appConfig.photoMode);
         $('#toggle-photo-label').text(appConfig.photoMode ? 'ON' : 'OFF');
-
-        // Social share toggle
-        $('#toggle-social-share').prop('checked', appConfig.socialShare)
-            .closest('.toggle-switch').toggleClass('is-on', appConfig.socialShare);
-        $('#toggle-social-label').text(appConfig.socialShare ? 'ON' : 'OFF');
 
         // Storage — Photo Booth
         $('#chk-save-local').prop('checked', appConfig.saveLocal);

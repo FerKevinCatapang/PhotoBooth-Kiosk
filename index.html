@@ -19,10 +19,11 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <!-- Google Identity Services (for Drive OAuth) -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <!-- QR Code generator -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
     <!-- PeerJS (WebRTC) — for Live Gallery Viewer feature -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js" defer></script>
+    <!-- QR Code generator (used by Live Viewer) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
 
@@ -382,28 +383,6 @@
 
                 <div id="photo-offer-config" style="display:none;">
 
-                <div class="settings-section">
-                    <div class="settings-card feature-toggle-row">
-                        <div class="feature-toggle-left">
-                            <div class="feature-icon">
-                                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#374151" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
-                                    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                                    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <div class="feature-title">Social media sharing</div>
-                                <div class="feature-subtitle">Show share buttons after each session (WhatsApp, Facebook, X, Email&hellip;)</div>
-                            </div>
-                        </div>
-                        <label class="toggle-switch is-on">
-                            <input type="checkbox" id="toggle-social-share" checked>
-                            <span class="toggle-slider"></span>
-                            <span class="toggle-label" id="toggle-social-label">ON</span>
-                        </label>
-                    </div>
-                </div>
 
                 <!-- Photo Booth Splash Screen -->
                 <div class="settings-section">
@@ -1426,10 +1405,6 @@
             <button id="btn-vg-preview-close" style="margin-top:1.25rem; padding:0.9rem 2.75rem; background:#be185d; color:#fff; border:none; border-radius:999px; font-size:1.1rem; font-weight:700; cursor:pointer; letter-spacing:0.03em; box-shadow:0 4px 18px rgba(190,24,93,0.45);">
                 <i class="fa-solid fa-check"></i> Close Preview
             </button>
-            <button id="btn-vg-qr" style="display:none; margin-top:0.75rem; padding:0.75rem 2rem; background:rgba(255,255,255,0.12); color:#fff; border:2px solid rgba(255,255,255,0.35); border-radius:999px; font-size:1rem; font-weight:600; cursor:pointer; letter-spacing:0.02em;">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle; margin-right:6px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="5" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="16" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="5" y="16" width="3" height="3" fill="currentColor" stroke="none"/></svg>
-                Get QR Code
-            </button>
         </div>
 
         <!-- ========== VG THANK YOU OVERLAY ========== -->
@@ -1454,56 +1429,37 @@
             </div>
         </div>
 
-        <!-- ========== VG QR SHARE SCREEN ========== -->
-        <div id="vg-qr-screen" style="display:none; position:absolute; inset:0; z-index:66; background:rgba(0,0,0,0.97); flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:1.25rem; padding:2rem;">
-            <i class="fa-solid fa-qrcode" style="font-size:3rem; color:#fff; opacity:0.85;"></i>
-            <div class="vg-pbo-title" id="vg-qr-screen-label">Scan to get your copy!</div>
-            <p style="color:#9ca3af; font-size:1rem; margin:0; max-width:480px;">Point your phone camera at the QR code to open your files from Google Drive.</p>
-            <div id="vg-qr-screen-container" style="background:#fff; padding:12px; border-radius:12px;"></div>
-            <button id="btn-vg-qr-screen-done" style="padding:0.9rem 2.75rem; background:#be185d; color:#fff; border:none; border-radius:999px; font-size:1.1rem; font-weight:700; cursor:pointer; letter-spacing:0.03em; box-shadow:0 4px 18px rgba(190,24,93,0.45);">
-                <i class="fa-solid fa-check"></i> Done
-                <span id="vg-qr-screen-countdown" style="margin-left:0.5rem; opacity:0.6; font-size:0.9rem; font-weight:500;"></span>
-            </button>
-        </div>
-        <!-- ============================================ -->
 
-        <!-- ========== SOCIAL SHARE OVERLAY ========== -->
-        <div id="share-overlay" style="display:none;">
-            <div class="share-inner">
-                <!-- Photo preview -->
-                <div class="share-photo-wrap">
-                    <img id="share-preview-img" src="" alt="Your photo">
-                </div>
-                <!-- Actions panel -->
-                <div class="share-panel">
-                    <div class="share-heading">
-                        <h2 class="share-title">Your photo is ready!</h2>
-                        <p class="share-sub">Share it with the world</p>
-                    </div>
-                    <div class="share-btn-grid">
-                        <!-- Native OS share sheet (tablets / phones) -->
-                        <button id="btn-share-native" class="share-btn share-btn-native">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                            <span>Share</span>
-                        </button>
-                        <!-- Download -->
-                        <button id="btn-share-download" class="share-btn share-btn-download">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                            <span>Save Photo</span>
-                        </button>
-                        <!-- QR Code (only shown when Drive is enabled) -->
-                        <button id="btn-share-qr" class="share-btn share-btn-qr" style="display:none;">
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="5" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="16" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="5" y="16" width="3" height="3" fill="currentColor" stroke="none"/></svg>
-                            <span>Get QR Code</span>
-                        </button>
-                    </div>
-                    <button id="btn-share-done" class="share-done-btn">
-                        Done
-                        <span id="share-countdown" class="share-countdown-badge">8</span>
-                    </button>
-                </div>
+
+        <!-- ========== VG DRIVE QR — ASK ========== -->
+        <div id="vg-drive-qr-prompt" style="display:none; position:absolute; inset:0; z-index:66; background:rgba(0,0,0,0.93); flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:1rem; padding:2rem;">
+            <i class="fa-brands fa-google-drive" style="font-size:3.5rem; color:#4ade80; opacity:0.85;"></i>
+            <div class="vg-pbo-title">Would you like a copy?</div>
+            <div class="vg-pbo-subtitle">Scan the QR code and get your session files from Google Drive</div>
+            <div class="vg-pbo-buttons">
+                <button id="btn-vg-dqr-yes" class="vg-pbo-btn vg-pbo-btn-yes">
+                    <i class="fa-solid fa-qrcode"></i> Yes, show me!
+                </button>
+                <button id="btn-vg-dqr-no" class="vg-pbo-btn vg-pbo-btn-no">
+                    No thanks
+                </button>
             </div>
         </div>
+
+        <!-- ========== VG DRIVE QR — SHOW ========== -->
+        <div id="vg-drive-qr-show" style="display:none; position:absolute; inset:0; z-index:66; background:rgba(0,0,0,0.96); flex-direction:column; align-items:center; justify-content:center; text-align:center; gap:1.25rem; padding:2rem;">
+            <i class="fa-brands fa-google-drive" style="font-size:2.5rem; color:#4ade80; opacity:0.9;"></i>
+            <div class="vg-pbo-title" style="font-size:2rem;">Your session is ready!</div>
+            <div class="vg-pbo-subtitle">Point your phone camera at the QR code to access your files</div>
+            <div id="vg-drive-qr-spinner" style="width:220px; height:220px; display:flex; align-items:center; justify-content:center;">
+                <div class="vg-dqr-spinner-ring"></div>
+            </div>
+            <div id="vg-drive-qr-code" style="display:none; background:#fff; border-radius:12px; padding:12px;"></div>
+            <button id="btn-vg-drive-qr-done" class="vg-pbo-btn vg-pbo-btn-yes" style="margin-top:0.5rem; background:rgba(255,255,255,0.12); border:2px solid rgba(255,255,255,0.3); box-shadow:none;">
+                <i class="fa-solid fa-check"></i> Done
+            </button>
+        </div>
+
         <!-- ============================================ -->
     </div>
 
@@ -1544,15 +1500,6 @@
         </div>
     </div>
 
-    <div id="qr-overlay" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.88); align-items:center; justify-content:center;">
-        <div class="qr-modal">
-            <h2 class="qr-modal-title" id="qr-modal-title">Scan to get your copy</h2>
-            <p class="qr-modal-sub">Point your phone camera at the QR code to open &amp; download your file from Google Drive.</p>
-            <div id="qr-code-container"></div>
-            <p class="qr-modal-url" id="qr-modal-url"></p>
-            <button id="btn-qr-close" class="qr-close-btn"><i class="fa-solid fa-xmark"></i> Close</button>
-        </div>
-    </div>
     <!-- ======================================= -->
 
     <script src="pb-constants.js"></script>
