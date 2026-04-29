@@ -1669,12 +1669,6 @@ $(document).ready(function() {
         _stopCameraTest();    // always release the test preview stream before launching
         _stopVgCameraTest(); // also release VG test preview stream
 
-        // Pre-prime the VG AudioContext synchronously here, while the click gesture is
-        // still active. Any 'await' below closes the gesture window; an AudioContext
-        // created after that starts in 'suspended' state on Android Chrome and produces
-        // no audio for countdown beeps or review playback.
-        if (appConfig.captureMode === 'videoguestbook') _primeVgAudioContext();
-
         try {
         // ── Normal getUserMedia path ─────────────────────────────────────
             // Build video constraints: specific device takes priority, then facingMode.
@@ -3169,26 +3163,6 @@ $(document).ready(function() {
         return _audioCtx;
     }
 
-    // Must be called SYNCHRONOUSLY (before any await) inside a user-gesture handler.
-    // Creates the VG AudioContext while the click gesture is still active so Android
-    // Chrome starts it in 'running' state. _setupSinkBeep reuses it when called later
-    // (after awaits, outside the gesture window).
-    function _primeVgAudioContext() {
-        if (_sinkBeepCtx && _sinkBeepCtx.state === 'running') return; // already primed
-        if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
-            _sinkBeepCtx.close().catch(() => {});
-            _sinkBeepCtx = null;
-        }
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        try {
-            _sinkBeepCtx = new AudioCtx({ latencyHint: 'playback' });
-            _sinkBeepCtx.resume().catch(() => {});
-        } catch (e) {
-            _sinkBeepCtx = null;
-        }
-    }
-
     // Call once from a user-gesture context (kiosk launch) to pre-wire beep audio to the
     // selected Bluetooth speaker. Keeps the Audio element playing silence so that subsequent
     // oscillator connections route instantly without needing another gesture.
@@ -3196,23 +3170,15 @@ $(document).ready(function() {
     // after getUserMedia(audio). Keeping this explicit graph active also for default output
     // improves countdown/review routing to the active Bluetooth A2DP route.
     function _setupSinkBeep(sinkId) {
-        // Reuse a context pre-primed by _primeVgAudioContext() (created synchronously
-        // inside the user gesture before any awaits). Closing and recreating it here
-        // would yield a suspended context on Android Chrome because we are now past
-        // the gesture window, which would silence all countdown and review audio.
-        const reuseCtx = _sinkBeepCtx && _sinkBeepCtx.state !== 'closed';
-        if (!reuseCtx) {
-            if (_sinkBeepCtx) _sinkBeepCtx.close().catch(() => {});
-            _sinkBeepCtx = null;
+        if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
+            _sinkBeepCtx.close().catch(() => {});
         }
-        _sinkBeepDest = null; _sinkBeepEl = null;
+        _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
         if (typeof Audio === 'undefined') return;
         try {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             if (!AudioCtx) return;
-            if (!reuseCtx) {
-                _sinkBeepCtx = new AudioCtx({ latencyHint: 'playback' });
-            }
+            _sinkBeepCtx  = new AudioCtx({ latencyHint: 'playback' });
             _sinkBeepDest = _sinkBeepCtx.createMediaStreamDestination();
             _sinkBeepEl   = new Audio();
             _sinkBeepEl.srcObject = _sinkBeepDest.stream;
@@ -3257,8 +3223,6 @@ $(document).ready(function() {
             // Route through the pre-wired Bluetooth sink when available; otherwise default output.
             const ctx  = (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') ? _sinkBeepCtx  : _getAudioCtx();
             const dest = (ctx === _sinkBeepCtx && _sinkBeepDest)           ? _sinkBeepDest : ctx.destination;
-            // Safety: resume if the context was suspended (e.g., audio focus temporarily lost).
-            if (ctx.state === 'suspended') ctx.resume().catch(() => {});
             const osc  = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
