@@ -3173,52 +3173,36 @@ $(document).ready(function() {
             _sinkBeepCtx.close().catch(() => {});
         }
         _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
-        if (typeof Audio === 'undefined') return;
-        const _AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!_AudioCtx) return;
+        // Only set up special audio routing when a specific speaker is explicitly selected.
+        // An empty sinkId means "default speaker" — let the browser handle native routing.
+        if (!sinkId || typeof Audio === 'undefined' || typeof Audio.prototype.setSinkId === 'undefined') return;
         try {
-            // Use latencyHint:'playback' so Android Chrome selects the media audio path
-            // (A2DP Bluetooth) rather than the communication path (earpiece/HFP) that the
-            // default 'interactive' hint can trigger when a getUserMedia audio track is active.
-            _sinkBeepCtx  = new _AudioCtx({ latencyHint: 'playback' });
+            _sinkBeepCtx  = new (window.AudioContext || window.webkitAudioContext)();
             _sinkBeepDest = _sinkBeepCtx.createMediaStreamDestination();
             _sinkBeepEl   = new Audio();
             _sinkBeepEl.srcObject = _sinkBeepDest.stream;
-
-            function _wireAudio() {
-                _sinkBeepEl.play().catch(() => {});
-                // Route the capture-review video through the same sink.
-                // createMediaElementSource silences the element's native output and
-                // sends audio through _sinkBeepDest → _sinkBeepEl → selected/default speaker,
-                // bypassing AudioContext.destination which routes to the communication stream
-                // (earpiece) on Android Chrome when a getUserMedia audio track is active.
-                const previewVid = document.getElementById('vg-preview-video');
-                if (previewVid && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
-                    try {
-                        _previewVideoSourceNode = _sinkBeepCtx.createMediaElementSource(previewVid);
-                        _previewVideoSourceNode.connect(_sinkBeepDest);
-                    } catch (e) {
-                        console.warn('[VG] Preview video audio routing error:', e.message);
+            _sinkBeepEl.setSinkId(sinkId)
+                .then(() => {
+                    _sinkBeepEl.play().catch(() => {});
+                    // Route the capture-review video through the same BT sink.
+                    // createMediaElementSource silences the element's native output and
+                    // sends audio through _sinkBeepDest → _sinkBeepEl → selected speaker,
+                    // bypassing the OS default output (which may be the USB mic device).
+                    const previewVid = document.getElementById('vg-preview-video');
+                    if (previewVid && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
+                        try {
+                            _previewVideoSourceNode = _sinkBeepCtx.createMediaElementSource(previewVid);
+                            _previewVideoSourceNode.connect(_sinkBeepDest);
+                        } catch (e) {
+                            console.warn('[VG] Preview video audio routing error:', e.message);
+                        }
                     }
-                }
-            }
-
-            if (sinkId && typeof _sinkBeepEl.setSinkId === 'function') {
-                // Route to the explicitly selected output device.
-                _sinkBeepEl.setSinkId(sinkId)
-                    .then(_wireAudio)
-                    .catch(() => {
-                        // Permission not granted for this deviceId — fall back to default output
-                        _sinkBeepCtx.close().catch(() => {});
-                        _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null; _previewVideoSourceNode = null;
-                    });
-            } else {
-                // No specific speaker selected (default output).
-                // Still route through the Audio element — on Android Chrome the Audio element
-                // reaches A2DP Bluetooth speakers, while AudioContext.destination alone does not
-                // when getUserMedia audio is active (communication mode reroutes to earpiece).
-                _wireAudio();
-            }
+                })
+                .catch(() => {
+                    // Permission not granted for this deviceId — fall back to default output
+                    _sinkBeepCtx.close().catch(() => {});
+                    _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null; _previewVideoSourceNode = null;
+                });
         } catch (e) {
             _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
         }
@@ -3236,8 +3220,6 @@ $(document).ready(function() {
             // Route through the pre-wired Bluetooth sink when available; otherwise default output.
             const ctx  = (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') ? _sinkBeepCtx  : _getAudioCtx();
             const dest = (ctx === _sinkBeepCtx && _sinkBeepDest)           ? _sinkBeepDest : ctx.destination;
-            // Resume if the context was suspended by the browser (common on mobile after idle).
-            if (ctx.state === 'suspended') { ctx.resume().catch(() => {}); }
             const osc  = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
