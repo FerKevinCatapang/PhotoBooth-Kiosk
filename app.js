@@ -1664,9 +1664,6 @@ $(document).ready(function() {
 
     $('#btn-launch-booth').on('click', async function() {
         appConfig.layout = $('input[name="layout"]:checked').val();
-            if (appConfig.captureMode === 'videoguestbook') {
-                _primeVgAudioContext();
-            }
         const launchBtn = $(this);
         launchBtn.prop('disabled', true).text('Initializing Hardware...');
         _stopCameraTest();    // always release the test preview stream before launching
@@ -1747,7 +1744,7 @@ $(document).ready(function() {
             $('#admin-dashboard').hide();
             $('#kiosk-mode').fadeIn(400);
             _requestFullscreen();
-            _setupSinkBeep(appConfig.vgSelectedSpeakerId, true);
+            _setupSinkBeep(appConfig.vgSelectedSpeakerId);
             resetToWelcomeScreen();
             
         } catch (err) {
@@ -3157,8 +3154,6 @@ $(document).ready(function() {
     let _sinkBeepDest = null;  // MediaStreamDestination connected to _sinkBeepEl
     let _sinkBeepEl   = null;  // hidden Audio element with setSinkId applied to the BT speaker
     let _previewVideoSourceNode = null; // MediaElementSource for #vg-preview-video, wired to _sinkBeepDest
-    let _sinkKeepAliveSource = null;
-    let _sinkKeepAliveGain   = null;
 
     function _getAudioCtx() {
         if (!_audioCtx || _audioCtx.state === 'closed') {
@@ -3168,101 +3163,50 @@ $(document).ready(function() {
         return _audioCtx;
     }
 
-    function _primeVgAudioContext() {
-        if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
-            if (_sinkBeepCtx.state === 'suspended') _sinkBeepCtx.resume().catch(() => {});
-            return;
-        }
-        if (typeof Audio === 'undefined') return;
-        try {
-            const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            if (!AudioCtx) return;
-            _sinkBeepCtx  = new AudioCtx({ latencyHint: 'playback' });
-            _sinkBeepDest = _sinkBeepCtx.createMediaStreamDestination();
-            _sinkBeepEl   = new Audio();
-            _sinkBeepEl.autoplay = true;
-            _sinkBeepEl.playsInline = true;
-            _sinkBeepEl.srcObject = _sinkBeepDest.stream;
-
-            // Keep the routed MediaStream active so Android does not tear down the
-            // audio path while waiting between countdown beeps and preview playback.
-            _sinkKeepAliveSource = _sinkBeepCtx.createConstantSource();
-            _sinkKeepAliveGain   = _sinkBeepCtx.createGain();
-            _sinkKeepAliveGain.gain.value = 0.00001;
-            _sinkKeepAliveSource.connect(_sinkKeepAliveGain);
-            _sinkKeepAliveGain.connect(_sinkBeepDest);
-            _sinkKeepAliveSource.start();
-
-            if (_sinkBeepCtx.state === 'suspended') _sinkBeepCtx.resume().catch(() => {});
-            _sinkBeepEl.play().catch(() => {});
-        } catch (e) {
-            _sinkBeepCtx = null;
-            _sinkBeepDest = null;
-            _sinkBeepEl = null;
-            _sinkKeepAliveSource = null;
-            _sinkKeepAliveGain = null;
-        }
-    }
-
     // Call once from a user-gesture context (kiosk launch) to pre-wire beep audio to the
     // selected Bluetooth speaker. Keeps the Audio element playing silence so that subsequent
     // oscillator connections route instantly without needing another gesture.
-    // On Android Chrome, MODE_IN_COMMUNICATION can route default media to the wrong device
-    // after getUserMedia(audio). Keeping this explicit graph active also for default output
-    // improves countdown/review routing to the active Bluetooth A2DP route.
-    function _setupSinkBeep(sinkId, reuseCtx) {
-        if (!reuseCtx && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
+    function _setupSinkBeep(sinkId) {
+        if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
             _sinkBeepCtx.close().catch(() => {});
-            _sinkBeepCtx = null;
-            _sinkBeepDest = null;
-            _sinkBeepEl = null;
-            _previewVideoSourceNode = null;
-            _sinkKeepAliveSource = null;
-            _sinkKeepAliveGain = null;
         }
-        _primeVgAudioContext();
-        if (!_sinkBeepCtx || !_sinkBeepDest || !_sinkBeepEl) return;
+        _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
+        if (!sinkId || typeof Audio === 'undefined' || typeof Audio.prototype.setSinkId === 'undefined') return;
         try {
-            if (_sinkBeepCtx.state === 'suspended') _sinkBeepCtx.resume().catch(() => {});
-
-            // Route the capture-review video through the same sink graph.
-            // createMediaElementSource silences the element's native output and
-            // sends audio through _sinkBeepDest -> _sinkBeepEl -> speaker route.
-            const previewVid = document.getElementById('vg-preview-video');
-            if (previewVid && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed' && !_previewVideoSourceNode) {
-                try {
-                    _previewVideoSourceNode = _sinkBeepCtx.createMediaElementSource(previewVid);
-                    _previewVideoSourceNode.connect(_sinkBeepDest);
-                } catch (e) {
-                    console.warn('[VG] Preview video audio routing error:', e.message);
-                }
-            }
-
-            const _startSinkEl = () => {
-                _sinkBeepEl.play().catch(() => {});
-            };
-
-            // Prefer explicit sink routing when available, but keep graph alive on failure.
-            if (sinkId && typeof _sinkBeepEl.setSinkId === 'function') {
-                _sinkBeepEl.setSinkId(sinkId).then(_startSinkEl).catch(_startSinkEl);
-            } else {
-                _startSinkEl();
-            }
+            _sinkBeepCtx  = new (window.AudioContext || window.webkitAudioContext)();
+            _sinkBeepDest = _sinkBeepCtx.createMediaStreamDestination();
+            _sinkBeepEl   = new Audio();
+            _sinkBeepEl.srcObject = _sinkBeepDest.stream;
+            _sinkBeepEl.setSinkId(sinkId)
+                .then(() => {
+                    _sinkBeepEl.play().catch(() => {});
+                    // Route the capture-review video through the same BT sink.
+                    // createMediaElementSource silences the element's native output and
+                    // sends audio through _sinkBeepDest → _sinkBeepEl → JBL speaker,
+                    // bypassing the OS default output (which may be the USB mic device).
+                    const previewVid = document.getElementById('vg-preview-video');
+                    if (previewVid && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
+                        try {
+                            _previewVideoSourceNode = _sinkBeepCtx.createMediaElementSource(previewVid);
+                            _previewVideoSourceNode.connect(_sinkBeepDest);
+                        } catch (e) {
+                            console.warn('[VG] Preview video audio routing error:', e.message);
+                        }
+                    }
+                })
+                .catch(() => {
+                    // Permission not granted for this deviceId — fall back to default output
+                    _sinkBeepCtx.close().catch(() => {});
+                    _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null; _previewVideoSourceNode = null;
+                });
         } catch (e) {
-            _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null; _previewVideoSourceNode = null;
+            _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
         }
     }
 
     function _teardownSinkBeep() {
         if (_previewVideoSourceNode) { try { _previewVideoSourceNode.disconnect(); } catch (_) {} }
         _previewVideoSourceNode = null;
-        if (_sinkKeepAliveSource) {
-            try { _sinkKeepAliveSource.stop(); } catch (_) {}
-            try { _sinkKeepAliveSource.disconnect(); } catch (_) {}
-        }
-        if (_sinkKeepAliveGain) { try { _sinkKeepAliveGain.disconnect(); } catch (_) {} }
-        _sinkKeepAliveSource = null;
-        _sinkKeepAliveGain = null;
         if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') _sinkBeepCtx.close().catch(() => {});
         _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
     }
@@ -3272,7 +3216,6 @@ $(document).ready(function() {
             // Route through the pre-wired Bluetooth sink when available; otherwise default output.
             const ctx  = (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') ? _sinkBeepCtx  : _getAudioCtx();
             const dest = (ctx === _sinkBeepCtx && _sinkBeepDest)           ? _sinkBeepDest : ctx.destination;
-            if (ctx.state === 'suspended') ctx.resume().catch(() => {});
             const osc  = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
@@ -3325,7 +3268,6 @@ $(document).ready(function() {
     });
 
     $('#btn-grant-audio-output').on('click', async function() {
-        _setupSinkBeep(appConfig.vgSelectedSpeakerId, true);
         if (typeof navigator.mediaDevices.selectAudioOutput !== 'function') {
             $(this).hide();
             return;
@@ -3354,7 +3296,6 @@ $(document).ready(function() {
     });
     // =========================================================
 
-            _setupSinkBeep(appConfig.vgSelectedSpeakerId, true);
     function runCountdown(seconds) {
         return new Promise(resolve => {
             let count = seconds;
