@@ -2331,6 +2331,51 @@ $(document).ready(function() {
     let _vgSaving = false;          // guard: prevents saveVgVideo from running twice per session
     let _vgActivePromptText = null; // prompt from current/last recording, preserved for redo
     let _vgLiveAudioTracks = [];    // mic tracks for the current recording; stopped in onstop to release Android COMMUNICATION mode
+    let _vgRecAudioCtx = null;      // AudioContext used to apply recording-time A/V sync delay
+    let _vgRecAudioSource = null;   // MediaStreamSource node for the mic stream
+    let _vgRecAudioDelay = null;    // DelayNode used to offset audio vs video
+    let _vgRecAudioDest = null;     // MediaStreamDestination exposing delayed audio track
+
+    function _cleanupVgRecordingAudioGraph() {
+        if (_vgRecAudioSource) { try { _vgRecAudioSource.disconnect(); } catch (_) {} }
+        if (_vgRecAudioDelay)  { try { _vgRecAudioDelay.disconnect(); } catch (_) {} }
+        _vgRecAudioSource = null;
+        _vgRecAudioDelay = null;
+        _vgRecAudioDest = null;
+        if (_vgRecAudioCtx && _vgRecAudioCtx.state !== 'closed') {
+            _vgRecAudioCtx.close().catch(() => {});
+        }
+        _vgRecAudioCtx = null;
+    }
+
+    async function _buildVgRecordingAudioTracks(rawAudioTracks) {
+        _cleanupVgRecordingAudioGraph();
+        if (!rawAudioTracks || rawAudioTracks.length === 0) return [];
+
+        const delayMs = Math.max(0, Number(appConfig.vgAvSyncAudioDelayMs) || 0);
+        if (delayMs === 0) return rawAudioTracks;
+
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return rawAudioTracks;
+
+        try {
+            _vgRecAudioCtx = new AudioCtx();
+            if (_vgRecAudioCtx.state === 'suspended') {
+                await _vgRecAudioCtx.resume().catch(() => {});
+            }
+            _vgRecAudioDest = _vgRecAudioCtx.createMediaStreamDestination();
+            _vgRecAudioSource = _vgRecAudioCtx.createMediaStreamSource(new MediaStream(rawAudioTracks));
+            _vgRecAudioDelay = _vgRecAudioCtx.createDelay(1.0);
+            _vgRecAudioDelay.delayTime.setValueAtTime(Math.min(1.0, delayMs / 1000), _vgRecAudioCtx.currentTime);
+            _vgRecAudioSource.connect(_vgRecAudioDelay);
+            _vgRecAudioDelay.connect(_vgRecAudioDest);
+            return _vgRecAudioDest.stream.getAudioTracks();
+        } catch (e) {
+            console.warn('[VG] Audio delay graph failed, using raw mic track:', e.message);
+            _cleanupVgRecordingAudioGraph();
+            return rawAudioTracks;
+        }
+    }
 
     function stopVgRecordingIfActive() {
         // Null out immediately so a second call (e.g. max-timer + user tap race)
@@ -2350,6 +2395,9 @@ $(document).ready(function() {
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
+        _vgLiveAudioTracks.forEach(t => { try { t.stop(); } catch (e) {} });
+        _vgLiveAudioTracks = [];
+        _cleanupVgRecordingAudioGraph();
         const ol = document.getElementById('vg-overlay-live');
         if (ol) { ol.style.display = 'none'; }
     }
@@ -2453,11 +2501,12 @@ $(document).ready(function() {
                 console.warn('[VG] No mic available for recording:', e2.message);
             }
         }
+        const _recordAudioTracks = await _buildVgRecordingAudioTracks(_vgLiveAudioTracks);
 
         // Build the stream to record.
         // If an overlay is configured, composite camera + overlay on a canvas
         // and record the canvas stream (video) + audio from the freshly acquired mic tracks.
-        let recordStream = new MediaStream([...currentStream.getVideoTracks(), ..._vgLiveAudioTracks]);
+        let recordStream = new MediaStream([...currentStream.getVideoTracks(), ..._recordAudioTracks]);
         if (appConfig.vgOverlay) {
             const canvas = document.getElementById('vg-record-canvas');
             canvas.width  = 1920;
@@ -2481,7 +2530,7 @@ $(document).ready(function() {
             const canvasVideoStream = canvas.captureStream(30);
             const combinedStream = new MediaStream([
                 ...canvasVideoStream.getVideoTracks(),
-                ..._vgLiveAudioTracks
+                ..._recordAudioTracks
             ]);
             recordStream = combinedStream;
         }
@@ -2530,6 +2579,7 @@ $(document).ready(function() {
             // This restores A2DP Bluetooth routing before review playback begins.
             _vgLiveAudioTracks.forEach(t => { try { t.stop(); } catch (e) {} });
             _vgLiveAudioTracks = [];
+            _cleanupVgRecordingAudioGraph();
             clearInterval(_vgTimerInterval);
             clearTimeout(_vgMaxTimer);
             if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
