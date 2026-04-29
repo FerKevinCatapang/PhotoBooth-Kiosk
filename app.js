@@ -2320,6 +2320,7 @@ $(document).ready(function() {
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
+        _vgDetachMicTracksFromCurrentStream();
         const ol = document.getElementById('vg-overlay-live');
         if (ol) { ol.style.display = 'none'; }
     }
@@ -2345,10 +2346,15 @@ $(document).ready(function() {
                 : true;
             micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
         } catch (e) {
-            const micErr = new Error('Selected microphone is unavailable.');
-            micErr.code = 'VG_MIC_REQUIRED';
-            micErr.cause = e;
-            throw micErr;
+            // Fallback to default mic if the selected device is unavailable.
+            try {
+                micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (fallbackErr) {
+                const micErr = new Error('No microphone is available.');
+                micErr.code = 'VG_MIC_REQUIRED';
+                micErr.cause = fallbackErr;
+                throw micErr;
+            }
         }
 
         const track = micStream.getAudioTracks()[0];
@@ -2440,14 +2446,8 @@ $(document).ready(function() {
         cdEl.style.display = 'none';
         // Sidebar stays visible during recording (it's an HTML overlay — not burned into the video stream)
 
-        // Mic is required for VG recording; acquire it only now to avoid Android output rerouting
-        // during idle/countdown/review playback.
-        await _vgEnsureMicTrackForRecording();
-
-        // Build the stream to record.
-        // If an overlay is configured, composite camera + overlay on a canvas
-        // and record the canvas stream (video) + audio from currentStream.
-        let recordStream = currentStream;
+        // Build the video stream first; mic is acquired at the last possible moment below.
+        let recordStream = new MediaStream(currentStream.getVideoTracks());
         if (appConfig.vgOverlay) {
             const canvas = document.getElementById('vg-record-canvas');
             canvas.width  = 1920;
@@ -2469,13 +2469,18 @@ $(document).ready(function() {
             compositeFrame();
 
             const canvasVideoStream = canvas.captureStream(30);
-            const audioTracks = currentStream.getAudioTracks();
-            const combinedStream = new MediaStream([
-                ...canvasVideoStream.getVideoTracks(),
-                ...audioTracks
-            ]);
-            recordStream = combinedStream;
+            recordStream = new MediaStream(canvasVideoStream.getVideoTracks());
         }
+
+        // Acquire mic right before recorder setup so Android stays out of COMMUNICATION
+        // mode during idle/countdown and switches only for active recording.
+        _vgDetachMicTracksFromCurrentStream();
+        await _vgEnsureMicTrackForRecording();
+        currentStream.getAudioTracks().forEach(track => {
+            if (track.readyState === 'live') {
+                try { recordStream.addTrack(track); } catch (_) {}
+            }
+        });
 
         // Start recording
         _vgChunks = [];
@@ -2706,11 +2711,7 @@ $(document).ready(function() {
                         await pbFeedEl.play();
                     } catch (e) {
                         // Playback can be momentarily blocked while transitioning overlays.
-                        if (err && err.code === 'VG_MIC_REQUIRED') {
-                                alert('Microphone is required for Video Guestbook recording. Please reconnect/select the microphone and try again.');
-                        }
                     }
-                        _vgDetachMicTracksFromCurrentStream();
                 }
                 $('#photo-canvas').hide();
                 $('#camera-feed').show();
