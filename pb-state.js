@@ -38,6 +38,7 @@ let appConfig = {
     vgSelectedMicId: '',      // VG-specific microphone device ID ('' = browser default)
     vgSelectedSpeakerId: '',  // VG-specific audio output device ID ('' = browser default)
     vgAvSyncAudioDelayMs: 300, // Delay mic audio in recording to align A/V on Android (0 disables)
+    vgAutoCalibrateAv: true,  // Auto-adjust A/V delay per take using embedded calibration markers
     vgSaveLocal: true,        // VG: save to local folder
     vgSaveDrive: false,       // VG: upload to Google Drive (uses VG-specific Drive config below)
     vgOverlay: null,          // { objectUrl, img } or null — PNG overlay burned into recordings
@@ -109,6 +110,7 @@ const PERSISTED_KEYS = [
     'reviewTime', 'welcomeBg', 'welcomeTitle', 'welcomeSubtitle', 'photoMode',
     'captureMode', 'vgMaxDuration', 'vgPromptText', 'vgCountdown',
     'vgSelectedCameraId', 'vgFacingMode', 'vgSelectedMicId', 'vgSelectedSpeakerId', 'vgAvSyncAudioDelayMs',
+    'vgSelectedCameraId', 'vgFacingMode', 'vgSelectedMicId', 'vgSelectedSpeakerId', 'vgAvSyncAudioDelayMs', 'vgAutoCalibrateAv',
     'vgSaveLocal', 'vgSaveDrive', 'socialShare', 'eventName',
     'selectedCameraId', 'facingMode',
     'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',

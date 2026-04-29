@@ -2381,12 +2381,153 @@ $(document).ready(function() {
         }
     }
 
+    function _scheduleVgCalibrationTone(atPerfMs) {
+        if (!_vgRecAudioCtx || !_vgRecAudioDest) return;
+        try {
+            const secondsUntil = Math.max(0, (atPerfMs - performance.now()) / 1000);
+            const when = _vgRecAudioCtx.currentTime + secondsUntil;
+            const osc = _vgRecAudioCtx.createOscillator();
+            const gain = _vgRecAudioCtx.createGain();
+            osc.type = 'square';
+            osc.frequency.value = 1750;
+            gain.gain.setValueAtTime(0.0001, when);
+            gain.gain.exponentialRampToValueAtTime(0.65, when + 0.004);
+            gain.gain.exponentialRampToValueAtTime(0.0001, when + 0.05);
+            osc.connect(gain);
+            gain.connect(_vgRecAudioDest);
+            osc.start(when);
+            osc.stop(when + 0.06);
+        } catch (e) {
+            console.warn('[VG][Calib] Tone schedule failed:', e.message);
+        }
+    }
+
+    function _seekVideo(videoEl, t) {
+        return new Promise(function(resolve, reject) {
+            const onSeeked = function() {
+                videoEl.removeEventListener('seeked', onSeeked);
+                videoEl.removeEventListener('error', onError);
+                resolve();
+            };
+            const onError = function() {
+                videoEl.removeEventListener('seeked', onSeeked);
+                videoEl.removeEventListener('error', onError);
+                reject(new Error('Video seek failed'));
+            };
+            videoEl.addEventListener('seeked', onSeeked, { once: true });
+            videoEl.addEventListener('error', onError, { once: true });
+            videoEl.currentTime = Math.max(0, t);
+        });
+    }
+
+    function _estimateCalibrationClickTime(audioBuffer, maxSeconds) {
+        const channel = audioBuffer.getChannelData(0);
+        const sampleRate = audioBuffer.sampleRate;
+        const maxSamples = Math.min(channel.length, Math.floor(sampleRate * maxSeconds));
+        if (maxSamples <= 0) return null;
+
+        let peak = 0;
+        let peakIndex = 0;
+        for (let i = 0; i < maxSamples; i++) {
+            const v = Math.abs(channel[i]);
+            if (v > peak) {
+                peak = v;
+                peakIndex = i;
+            }
+        }
+        if (peak < 0.04) return null;
+        return peakIndex / sampleRate;
+    }
+
+    async function _estimateCalibrationFlashTime(blob, maxSeconds) {
+        const blobUrl = URL.createObjectURL(blob);
+        const video = document.createElement('video');
+        video.preload = 'auto';
+        video.muted = true;
+        video.playsInline = true;
+        video.src = blobUrl;
+
+        try {
+            await new Promise(function(resolve, reject) {
+                video.onloadedmetadata = function() { resolve(); };
+                video.onerror = function() { reject(new Error('Video metadata load failed')); };
+            });
+
+            const end = Math.min(maxSeconds, Math.max(0.5, video.duration || maxSeconds));
+            const canvas = document.createElement('canvas');
+            canvas.width = 48;
+            canvas.height = 27;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) return null;
+
+            const samples = [];
+            for (let t = 0; t <= end; t += 1 / 30) {
+                await _seekVideo(video, t);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                let total = 0;
+                for (let i = 0; i < data.length; i += 4) {
+                    total += (0.2126 * data[i]) + (0.7152 * data[i + 1]) + (0.0722 * data[i + 2]);
+                }
+                samples.push({ t: t, luma: total / (data.length / 4) });
+            }
+
+            if (samples.length < 5) return null;
+            const baseCount = Math.max(3, Math.floor(samples.length * 0.2));
+            const baseline = samples.slice(0, baseCount).reduce(function(sum, s) { return sum + s.luma; }, 0) / baseCount;
+            const threshold = baseline + 18;
+            const hit = samples.find(function(s) { return s.luma >= threshold; });
+            return hit ? hit.t : null;
+        } finally {
+            URL.revokeObjectURL(blobUrl);
+            video.src = '';
+        }
+    }
+
+    async function _autoCalibrateVgDelayFromTake(blob) {
+        if (!appConfig.vgAutoCalibrateAv) return;
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+
+        try {
+            const arr = await blob.arrayBuffer();
+            const audioCtx = new AudioCtx();
+            const decoded = await audioCtx.decodeAudioData(arr.slice(0));
+            await audioCtx.close().catch(() => {});
+
+            const audioTime = _estimateCalibrationClickTime(decoded, 2.2);
+            const videoTime = await _estimateCalibrationFlashTime(blob, 2.2);
+            if (audioTime == null || videoTime == null) {
+                console.warn('[VG][Calib] Could not detect calibration markers; keeping delay at', appConfig.vgAvSyncAudioDelayMs, 'ms');
+                return;
+            }
+
+            const offsetMs = Math.round((audioTime - videoTime) * 1000);
+            const oldDelay = Math.max(0, Number(appConfig.vgAvSyncAudioDelayMs) || 0);
+            const targetDelay = Math.max(0, Math.min(900, oldDelay - offsetMs));
+            const smoothed = Math.round((oldDelay * 0.6) + (targetDelay * 0.4));
+            const bounded = Math.max(0, Math.min(900, oldDelay + Math.max(-120, Math.min(120, smoothed - oldDelay))));
+
+            if (Math.abs(bounded - oldDelay) < 8) {
+                console.log('[VG][Calib] Offset', offsetMs, 'ms; delay unchanged at', oldDelay, 'ms');
+                return;
+            }
+
+            appConfig.vgAvSyncAudioDelayMs = bounded;
+            _scheduleSave();
+            console.log('[VG][Calib] Offset', offsetMs, 'ms; delay', oldDelay, '->', bounded, 'ms');
+        } catch (e) {
+            console.warn('[VG][Calib] Auto-calibration failed:', e.message);
+        }
+    }
+
     async function _buildVgRecordingAudioTracks(rawAudioTracks) {
         _cleanupVgRecordingAudioGraph();
         if (!rawAudioTracks || rawAudioTracks.length === 0) return [];
 
         const delayMs = Math.max(0, Number(appConfig.vgAvSyncAudioDelayMs) || 0);
-        if (delayMs === 0) return rawAudioTracks;
+        const useCalibrationGraph = !!appConfig.vgAutoCalibrateAv;
+        if (delayMs === 0 && !useCalibrationGraph) return rawAudioTracks;
 
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return rawAudioTracks;
@@ -2398,10 +2539,14 @@ $(document).ready(function() {
             }
             _vgRecAudioDest = _vgRecAudioCtx.createMediaStreamDestination();
             _vgRecAudioSource = _vgRecAudioCtx.createMediaStreamSource(new MediaStream(rawAudioTracks));
-            _vgRecAudioDelay = _vgRecAudioCtx.createDelay(1.0);
-            _vgRecAudioDelay.delayTime.setValueAtTime(Math.min(1.0, delayMs / 1000), _vgRecAudioCtx.currentTime);
-            _vgRecAudioSource.connect(_vgRecAudioDelay);
-            _vgRecAudioDelay.connect(_vgRecAudioDest);
+            if (delayMs > 0) {
+                _vgRecAudioDelay = _vgRecAudioCtx.createDelay(1.0);
+                _vgRecAudioDelay.delayTime.setValueAtTime(Math.min(1.0, delayMs / 1000), _vgRecAudioCtx.currentTime);
+                _vgRecAudioSource.connect(_vgRecAudioDelay);
+                _vgRecAudioDelay.connect(_vgRecAudioDest);
+            } else {
+                _vgRecAudioSource.connect(_vgRecAudioDest);
+            }
             return _vgRecAudioDest.stream.getAudioTracks();
         } catch (e) {
             console.warn('[VG] Audio delay graph failed, using raw mic track:', e.message);
@@ -2544,36 +2689,52 @@ $(document).ready(function() {
         const _recordAudioTracks = await _buildVgRecordingAudioTracks(_vgLiveAudioTracks);
 
         // Build the stream to record.
-        // If an overlay is configured, composite camera + overlay on a canvas
-        // and record the canvas stream (video) + audio from the freshly acquired mic tracks.
-        let recordStream = new MediaStream([...currentStream.getVideoTracks(), ..._recordAudioTracks]);
-        if (appConfig.vgOverlay) {
-            const canvas = document.getElementById('vg-record-canvas');
-            canvas.width  = 1920;
-            canvas.height = 1080;
-            const ctx = canvas.getContext('2d');
-            const overlayImg = appConfig.vgOverlay.img;
+        // Always composite through canvas so each take can include a hidden visual marker.
+        const canvas = document.getElementById('vg-record-canvas');
+        canvas.width  = 1920;
+        canvas.height = 1080;
+        const ctx = canvas.getContext('2d');
+        const overlayImg = appConfig.vgOverlay ? appConfig.vgOverlay.img : null;
+        const doCalibrate = !!appConfig.vgAutoCalibrateAv;
+        const calibAtPerf = performance.now() + 350;
+        const calibFlashDurationMs = 120;
 
-            // rAF loop: draw camera frame then overlay
-            function compositeFrame() {
+        function compositeFrame() {
+            const shouldMirror = !!overlayImg;
+            if (shouldMirror) {
                 ctx.save();
                 // Mirror horizontally to match how selfie cameras appear on screen
                 ctx.translate(1920, 0);
                 ctx.scale(-1, 1);
                 ctx.drawImage(videoEl, 0, 0, 1920, 1080);
                 ctx.restore();
-                ctx.drawImage(overlayImg, 0, 0, 1920, 1080);
-                _vgFrameAnimId = requestAnimationFrame(compositeFrame);
+            } else {
+                ctx.drawImage(videoEl, 0, 0, 1920, 1080);
             }
-            compositeFrame();
 
-            const canvasVideoStream = canvas.captureStream(30);
-            const combinedStream = new MediaStream([
-                ...canvasVideoStream.getVideoTracks(),
-                ..._recordAudioTracks
-            ]);
-            recordStream = combinedStream;
+            if (overlayImg) {
+                ctx.drawImage(overlayImg, 0, 0, 1920, 1080);
+            }
+
+            // Marker is encoded into recording only (not shown in the live preview element).
+            if (doCalibrate) {
+                const delta = performance.now() - calibAtPerf;
+                if (delta >= 0 && delta <= calibFlashDurationMs) {
+                    const alpha = 0.93 - (delta / calibFlashDurationMs) * 0.15;
+                    ctx.fillStyle = 'rgba(255,255,255,' + Math.max(0.7, alpha) + ')';
+                    ctx.fillRect(0, 0, 1920, 1080);
+                }
+            }
+
+            _vgFrameAnimId = requestAnimationFrame(compositeFrame);
         }
+        compositeFrame();
+
+        const canvasVideoStream = canvas.captureStream(30);
+        const recordStream = new MediaStream([
+            ...canvasVideoStream.getVideoTracks(),
+            ..._recordAudioTracks
+        ]);
 
         // Start recording
         _vgChunks = [];
@@ -2630,10 +2791,14 @@ $(document).ready(function() {
             $('#vg-processing-overlay').fadeIn(200);
             const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
             const blob = new Blob(_vgChunks, { type: mimeType });
+            _autoCalibrateVgDelayFromTake(blob);
             saveVgVideo(blob, ext);
         };
 
         _vgMediaRecorder.start(500); // collect chunks every 500ms
+        if (doCalibrate) {
+            _scheduleVgCalibrationTone(calibAtPerf);
+        }
         $('#vg-hud').show();
         $('#vg-controls').show();
         // Re-assert prompt sidebar visibility during recording (DOM overlay — not in the recorded stream)
