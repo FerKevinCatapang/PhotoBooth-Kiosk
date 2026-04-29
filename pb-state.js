@@ -2,6 +2,14 @@
 let currentStream = null;
 let directoryHandle = null;  // shared save folder for both photos and videos
 
+// ─── UVC camera state (DJI Osmo Action 5 via USB-C OTG on Android) ────────────
+// When uvcActive is true the kiosk is using the native UVC plugin instead of
+// getUserMedia.  uvcImgEl points to the <img> element that shows the live feed.
+let uvcActive = false;
+let uvcImgEl  = null;
+let uvcFrameListener = null;
+let uvcStateListener = null;
+
 let capturedPhotos = [];           // In-memory database of captured session photos
 let capturedPhotoDriveLinks = [];  // parallel: Drive share URL for each photo, or null
 let capturedVideos = [];           // In-memory database of captured video guestbook blob URLs

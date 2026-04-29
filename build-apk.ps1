@@ -120,8 +120,20 @@ if (-not (Test-Path "android")) {
 }
 
 # ─────────────────────────────────────────────────────────────
-# 4. Sync web assets into the native project
+# 4. Copy web assets to www/ then sync into the native project
 # ─────────────────────────────────────────────────────────────
+Write-Step "Copying web assets to www/"
+$webFiles = @("index.html","app.js","styles.css","manifest.json","pb-constants.js","pb-state.js","pb-stitch.js")
+if (-not (Test-Path "www")) { New-Item -ItemType Directory -Path "www" | Out-Null }
+foreach ($f in $webFiles) {
+    if (Test-Path $f) { Copy-Item $f "www\$f" -Force }
+}
+# Copy any sub-folders that belong to the web layer (icons, fonts, etc.)
+foreach ($d in (Get-ChildItem -Directory | Where-Object { $_.Name -notin @("android","node_modules","www","plugin-src",".git") })) {
+    Copy-Item $d.FullName "www\$($d.Name)" -Recurse -Force -ErrorAction SilentlyContinue
+}
+Write-Ok "Web assets copied to www/"
+
 Write-Step "Syncing web assets to Android project"
 npx cap sync android
 if ($LASTEXITCODE -ne 0) { Write-Fail "cap sync failed." }
@@ -172,6 +184,108 @@ if ($manifest -notmatch 'screenOrientation') {
         '$1' + "`n            android:screenOrientation=`"sensorLandscape`""
     $manifest | Set-Content $manifestPath -Encoding UTF8
     Write-Ok "Set screenOrientation = sensorLandscape"
+}
+
+# Add USB device intent-filter to MainActivity for auto-launch on camera attach (idempotent)
+$manifest = Get-Content $manifestPath -Raw
+if ($manifest -notmatch 'android.hardware.usb.action.USB_DEVICE_ATTACHED') {
+    $usbFilter = @"
+
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
+"@
+    $manifest = $manifest -replace '(<activity[^>]*android:name="MainActivity"[^>]*>)', "`$1$usbFilter"
+    $manifest | Set-Content $manifestPath -Encoding UTF8
+    Write-Ok "Added USB_DEVICE_ATTACHED intent-filter to MainActivity"
+}
+
+# ─────────────────────────────────────────────────────────────
+# 5b. Add UVC camera plugin files
+# ─────────────────────────────────────────────────────────────
+Write-Step "Installing UVC camera plugin files"
+
+# device_filter.xml — tells Android which USB devices to route to this app
+$xmlDir = "android\app\src\main\res\xml"
+if (-not (Test-Path $xmlDir)) { New-Item -ItemType Directory -Path $xmlDir | Out-Null }
+$deviceFilter = @'
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Matches UVC (USB Video Class) devices: class=0x0E (Video), any subclass/protocol -->
+<resources>
+    <usb-device class="14" />
+</resources>
+'@
+Set-Content "$xmlDir\device_filter.xml" $deviceFilter -Encoding UTF8
+Write-Ok "Written: device_filter.xml"
+
+# UvcCameraPlugin.kt
+$pluginDir = "android\app\src\main\java\com\photobooth\kiosk\plugins"
+if (-not (Test-Path $pluginDir)) { New-Item -ItemType Directory -Path $pluginDir | Out-Null }
+$pluginSrc = Get-Content "plugin-src\UvcCameraPlugin.kt" -Raw -ErrorAction SilentlyContinue
+if (-not $pluginSrc) {
+    Write-Warn "plugin-src\UvcCameraPlugin.kt not found — skipping copy"
+} else {
+    Copy-Item "plugin-src\UvcCameraPlugin.kt" "$pluginDir\UvcCameraPlugin.kt" -Force
+    Write-Ok "Copied UvcCameraPlugin.kt"
+}
+# Patch android/app/build.gradle — add JitPack + AndroidUSBCamera library
+$appGradlePath = "android\app\build.gradle"
+if (Test-Path $appGradlePath) {
+    $appGradle = Get-Content $appGradlePath -Raw
+    if ($appGradle -notmatch 'AndroidUSBCamera') {
+        $appGradle = $appGradle -replace '(dependencies\s*\{)', "`$1`n    implementation 'com.github.jiangdongguo.AndroidUSBCamera:libausbc:3.3.3'"
+        $appGradle | Set-Content $appGradlePath -Encoding UTF8
+        Write-Ok "Added AndroidUSBCamera dependency to app/build.gradle"
+    } else {
+        Write-Ok "AndroidUSBCamera dependency already present"
+    }
+} else {
+    Write-Warn "android\app\build.gradle not found — cannot add UVC library (run cap add android first)"
+}
+
+# Patch android/build.gradle — add JitPack maven repository
+$rootGradlePath = "android\build.gradle"
+if (Test-Path $rootGradlePath) {
+    $rootGradle = Get-Content $rootGradlePath -Raw
+    if ($rootGradle -notmatch 'jitpack.io') {
+        $rootGradle = $rootGradle -replace "(allprojects\s*\{[^}]*repositories\s*\{)", "`$1`n        maven { url 'https://jitpack.io' }"
+        $rootGradle | Set-Content $rootGradlePath -Encoding UTF8
+        Write-Ok "Added JitPack repository to root build.gradle"
+    } else {
+        Write-Ok "JitPack repository already present"
+    }
+} else {
+    Write-Warn "android\build.gradle not found — cannot add JitPack repo (run cap add android first)"
+}
+
+# Patch MainActivity.kt — register UvcCameraPlugin (idempotent)
+$mainActivityPath = "android\app\src\main\java\com\photobooth\kiosk\MainActivity.kt"
+if (Test-Path $mainActivityPath) {
+    $mainActivity = Get-Content $mainActivityPath -Raw
+    if ($mainActivity -notmatch 'UvcCameraPlugin') {
+        # Add import
+        $mainActivity = $mainActivity -replace '(import com\.getcapacitor\.BridgeActivity)',
+            "import com.photobooth.kiosk.plugins.UvcCameraPlugin`n`$1"
+        # Register in onCreate or via @CapacitorPlugin annotation list
+        if ($mainActivity -match 'registerPlugin\(') {
+            # Already has registerPlugin calls — append ours
+            $mainActivity = $mainActivity -replace '(registerPlugin\([^)]+\))',
+                "`$1`n        registerPlugin(UvcCameraPlugin::class.java)"
+        } else {
+            # Minimal MainActivity — inject override onCreate
+            $mainActivity = $mainActivity -replace '(class MainActivity : BridgeActivity\(\)\s*\{)',
+                "`$1`n    override fun onCreate(savedInstanceState: android.os.Bundle?) {`n        registerPlugin(UvcCameraPlugin::class.java)`n        super.onCreate(savedInstanceState)`n    }"
+        }
+        $mainActivity | Set-Content $mainActivityPath -Encoding UTF8
+        Write-Ok "Registered UvcCameraPlugin in MainActivity.kt"
+    } else {
+        Write-Ok "UvcCameraPlugin already registered"
+    }
+} else {
+    Write-Warn "MainActivity.kt not found at expected path — skipping plugin registration"
 }
 
 # ─────────────────────────────────────────────────────────────
