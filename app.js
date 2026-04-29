@@ -1696,30 +1696,10 @@ $(document).ready(function() {
                 }
             }
             if (isVgMode) {
-                // Two separate getUserMedia calls: Android Chrome ignores audio.deviceId
-                // when paired with a video.deviceId in a single call (the camera's built-in
-                // audio wins). Splitting them forces the browser to honour the mic selection.
+                // Keep VG live preview as video-only during idle/countdown/review.
+                // Mic is acquired only at record start and released right after stop.
                 const videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
-                let audioTracks = [];
-                try {
-                    const audioConstraint = appConfig.vgSelectedMicId
-                        ? { deviceId: { exact: appConfig.vgSelectedMicId } }
-                        : true;
-                    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
-                    audioTracks = audioStream.getAudioTracks();
-                } catch (audioErr) {
-                    console.warn('[VG] Requested mic unavailable, trying default:', audioErr.message);
-                    try {
-                        const fallback = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        audioTracks = fallback.getAudioTracks();
-                    } catch (e2) {
-                        console.warn('[VG] No audio track available:', e2.message);
-                    }
-                }
-                currentStream = new MediaStream([
-                    ...videoStream.getVideoTracks(),
-                    ...audioTracks
-                ]);
+                currentStream = new MediaStream(videoStream.getVideoTracks());
             } else {
                 currentStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
             }
@@ -2344,6 +2324,42 @@ $(document).ready(function() {
         if (ol) { ol.style.display = 'none'; }
     }
 
+    function _vgDetachMicTracksFromCurrentStream() {
+        if (!currentStream) return;
+        const audioTracks = currentStream.getAudioTracks();
+        audioTracks.forEach(track => {
+            try { track.stop(); } catch (_) {}
+            try { currentStream.removeTrack(track); } catch (_) {}
+        });
+    }
+
+    async function _vgEnsureMicTrackForRecording() {
+        if (!currentStream) throw new Error('VG stream is not initialized.');
+        const existingLive = currentStream.getAudioTracks().filter(t => t.readyState === 'live');
+        if (existingLive.length > 0) return;
+
+        let micStream = null;
+        try {
+            const audioConstraint = appConfig.vgSelectedMicId
+                ? { deviceId: { exact: appConfig.vgSelectedMicId } }
+                : true;
+            micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
+        } catch (e) {
+            const micErr = new Error('Selected microphone is unavailable.');
+            micErr.code = 'VG_MIC_REQUIRED';
+            micErr.cause = e;
+            throw micErr;
+        }
+
+        const track = micStream.getAudioTracks()[0];
+        if (!track) {
+            const micErr = new Error('No microphone track available.');
+            micErr.code = 'VG_MIC_REQUIRED';
+            throw micErr;
+        }
+        currentStream.addTrack(track);
+    }
+
     const SPLASH_FADE_OUT_DURATION_MS = 400;  // must match CSS @keyframes splash-fade-out duration
 
     async function triggerVgSequence(opts = {}) {
@@ -2423,6 +2439,10 @@ $(document).ready(function() {
         }
         cdEl.style.display = 'none';
         // Sidebar stays visible during recording (it's an HTML overlay — not burned into the video stream)
+
+        // Mic is required for VG recording; acquire it only now to avoid Android output rerouting
+        // during idle/countdown/review playback.
+        await _vgEnsureMicTrackForRecording();
 
         // Build the stream to record.
         // If an overlay is configured, composite camera + overlay on a canvas
@@ -2505,6 +2525,7 @@ $(document).ready(function() {
             $('#vg-hud').hide();
             $('#vg-controls').hide();
             $('#vg-processing-overlay').fadeIn(200);
+            _vgDetachMicTracksFromCurrentStream();
             const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
             const blob = new Blob(_vgChunks, { type: mimeType });
             saveVgVideo(blob, ext);
@@ -2536,11 +2557,15 @@ $(document).ready(function() {
         _vgMaxTimer = setTimeout(function() {
             stopVgRecordingIfActive();
         }, appConfig.vgMaxDuration * 1000);
-      } catch (err) {
-        console.error('[VG] Fatal error in VG sequence:', err);
-        stopVgRecordingIfActive();
-        resetToWelcomeScreen();
-      }
+            } catch (err) {
+                console.error('[VG] Fatal error in VG sequence:', err);
+                if (err && err.code === 'VG_MIC_REQUIRED') {
+                        alert('Microphone is required for Video Guestbook recording. Please reconnect/select the microphone and try again.');
+                }
+                stopVgRecordingIfActive();
+                _vgDetachMicTracksFromCurrentStream();
+                resetToWelcomeScreen();
+            }
     }
 
     $('#btn-vg-stop').on('click', function() {
@@ -2555,6 +2580,7 @@ $(document).ready(function() {
             recorder.onstop = null; // prevent the save handler from firing
             try { recorder.stop(); } catch(e) {}
         }
+        _vgDetachMicTracksFromCurrentStream();
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
@@ -2680,7 +2706,11 @@ $(document).ready(function() {
                         await pbFeedEl.play();
                     } catch (e) {
                         // Playback can be momentarily blocked while transitioning overlays.
+                        if (err && err.code === 'VG_MIC_REQUIRED') {
+                                alert('Microphone is required for Video Guestbook recording. Please reconnect/select the microphone and try again.');
+                        }
                     }
+                        _vgDetachMicTracksFromCurrentStream();
                 }
                 $('#photo-canvas').hide();
                 $('#camera-feed').show();
