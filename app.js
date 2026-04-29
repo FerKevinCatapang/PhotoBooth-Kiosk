@@ -3243,7 +3243,6 @@ $(document).ready(function() {
             }
 
             const _startSinkEl = () => {
-                _ensureSinkGraphActive();
                 _sinkBeepEl.play().catch(() => {});
             };
 
