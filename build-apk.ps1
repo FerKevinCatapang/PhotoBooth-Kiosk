@@ -110,8 +110,16 @@ Write-Ok "npm dependencies installed"
 # ─────────────────────────────────────────────────────────────
 # 3. Add Android platform (only needed on first run)
 # ─────────────────────────────────────────────────────────────
-if (-not (Test-Path "android")) {
-    Write-Step "Adding Android platform"
+$manifestPath = "android\app\src\main\AndroidManifest.xml"
+if (-not (Test-Path $manifestPath)) {
+    # The android/ folder may exist as an empty shell from a previous partial run.
+    # Cap add android won't overwrite it, so remove the shell first.
+    if (Test-Path "android") {
+        Write-Step "Removing incomplete Android platform folder and re-initializing"
+        Remove-Item -Recurse -Force "android"
+    } else {
+        Write-Step "Adding Android platform"
+    }
     npx cap add android
     if ($LASTEXITCODE -ne 0) { Write-Fail "cap add android failed." }
     Write-Ok "Android platform added"
@@ -144,7 +152,8 @@ Write-Ok "Web assets synced"
 # ─────────────────────────────────────────────────────────────
 Write-Step "Patching AndroidManifest.xml"
 
-$manifestPath = "android\app\src\main\AndroidManifest.xml"
+# $manifestPath was set in step 3 above; guard in case someone runs this section standalone
+if (-not $manifestPath) { $manifestPath = "android\app\src\main\AndroidManifest.xml" }
 if (-not (Test-Path $manifestPath)) {
     Write-Fail "AndroidManifest.xml not found at $manifestPath"
 }

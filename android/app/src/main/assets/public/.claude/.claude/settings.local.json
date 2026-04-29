@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(du -sh .git)",
+      "Bash(du -sh node_modules)",
+      "Bash(git add *)"
+    ]
+  }
+}
