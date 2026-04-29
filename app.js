@@ -3166,45 +3166,48 @@ $(document).ready(function() {
     // Call once from a user-gesture context (kiosk launch) to pre-wire beep audio to the
     // selected Bluetooth speaker. Keeps the Audio element playing silence so that subsequent
     // oscillator connections route instantly without needing another gesture.
-    // When sinkId is empty (default speaker), skip special routing to allow the browser to use
-    // its native audio output (fixes Android Chrome routing to BT when internal speaker is desired).
+    // On Android Chrome, MODE_IN_COMMUNICATION can route default media to the wrong device
+    // after getUserMedia(audio). Keeping this explicit graph active also for default output
+    // improves countdown/review routing to the active Bluetooth A2DP route.
     function _setupSinkBeep(sinkId) {
         if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
             _sinkBeepCtx.close().catch(() => {});
         }
         _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
-        // Only set up special audio routing when a specific speaker is explicitly selected.
-        // An empty sinkId means "default speaker" — let the browser handle native routing.
-        if (!sinkId || typeof Audio === 'undefined' || typeof Audio.prototype.setSinkId === 'undefined') return;
+        if (typeof Audio === 'undefined') return;
         try {
-            _sinkBeepCtx  = new (window.AudioContext || window.webkitAudioContext)();
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return;
+            _sinkBeepCtx  = new AudioCtx({ latencyHint: 'playback' });
             _sinkBeepDest = _sinkBeepCtx.createMediaStreamDestination();
             _sinkBeepEl   = new Audio();
             _sinkBeepEl.srcObject = _sinkBeepDest.stream;
-            _sinkBeepEl.setSinkId(sinkId)
-                .then(() => {
-                    _sinkBeepEl.play().catch(() => {});
-                    // Route the capture-review video through the same BT sink.
-                    // createMediaElementSource silences the element's native output and
-                    // sends audio through _sinkBeepDest → _sinkBeepEl → selected speaker,
-                    // bypassing the OS default output (which may be the USB mic device).
-                    const previewVid = document.getElementById('vg-preview-video');
-                    if (previewVid && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
-                        try {
-                            _previewVideoSourceNode = _sinkBeepCtx.createMediaElementSource(previewVid);
-                            _previewVideoSourceNode.connect(_sinkBeepDest);
-                        } catch (e) {
-                            console.warn('[VG] Preview video audio routing error:', e.message);
-                        }
-                    }
-                })
-                .catch(() => {
-                    // Permission not granted for this deviceId — fall back to default output
-                    _sinkBeepCtx.close().catch(() => {});
-                    _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null; _previewVideoSourceNode = null;
-                });
+
+            // Route the capture-review video through the same sink graph.
+            // createMediaElementSource silences the element's native output and
+            // sends audio through _sinkBeepDest -> _sinkBeepEl -> speaker route.
+            const previewVid = document.getElementById('vg-preview-video');
+            if (previewVid && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
+                try {
+                    _previewVideoSourceNode = _sinkBeepCtx.createMediaElementSource(previewVid);
+                    _previewVideoSourceNode.connect(_sinkBeepDest);
+                } catch (e) {
+                    console.warn('[VG] Preview video audio routing error:', e.message);
+                }
+            }
+
+            const _startSinkEl = () => {
+                _sinkBeepEl.play().catch(() => {});
+            };
+
+            // Prefer explicit sink routing when available, but keep graph alive on failure.
+            if (sinkId && typeof _sinkBeepEl.setSinkId === 'function') {
+                _sinkBeepEl.setSinkId(sinkId).then(_startSinkEl).catch(_startSinkEl);
+            } else {
+                _startSinkEl();
+            }
         } catch (e) {
-            _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
+            _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null; _previewVideoSourceNode = null;
         }
     }
 
