@@ -44,8 +44,6 @@ let appConfig = {
     templateBg: null,
     // Video Guestbook frame/background image (overlaid on the recording)
     vgFrameBg: null,
-    // Show social sharing overlay after each capture
-    socialShare: true,
     // Event name used as filename prefix (e.g. "Smiths_Wedding")
     eventName: '',
     selectedCameraId: '', // deviceId chosen in Capture Settings
@@ -108,7 +106,7 @@ const PERSISTED_KEYS = [
     'reviewTime', 'welcomeBg', 'welcomeTitle', 'welcomeSubtitle', 'photoMode',
     'captureMode', 'vgMaxDuration', 'vgPromptText', 'vgCountdown',
     'vgSelectedCameraId', 'vgFacingMode', 'vgSelectedMicId', 'vgSelectedSpeakerId',
-    'vgSaveLocal', 'vgSaveDrive', 'socialShare', 'eventName',
+    'vgSaveLocal', 'vgSaveDrive', 'eventName',
     'selectedCameraId', 'facingMode',
     'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
     'driveFolderName', 'vgDriveFolderName', 'vgDriveClientId',
