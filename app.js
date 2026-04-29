@@ -1741,15 +1741,6 @@ $(document).ready(function() {
                 applyKioskViewfinderSize();
             }
 
-            // VG: stop the mic audio tracks immediately after kiosk launch.
-            // While getUserMedia({audio}) is live, Android holds MODE_IN_COMMUNICATION which
-            // routes audio output away from Bluetooth A2DP (JBL etc.) to the internal speaker.
-            // Stopping the tracks here releases that lock so countdown beeps and review playback
-            // reach the BT speaker. The mic is re-acquired fresh just before each recording.
-            if (appConfig.captureMode === 'videoguestbook' && currentStream) {
-                currentStream.getAudioTracks().forEach(t => { try { t.stop(); } catch (e) {} });
-            }
-
             $('#admin-dashboard').hide();
             $('#kiosk-mode').fadeIn(400);
             _requestFullscreen();
@@ -2348,6 +2339,48 @@ $(document).ready(function() {
         _vgRecAudioCtx = null;
     }
 
+    function _getVgVideoConstraints() {
+        const constraints = {
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 },
+            frameRate: { ideal: 30, max: 30 }
+        };
+        if (appConfig.vgSelectedCameraId && appConfig.vgFacingMode === '') {
+            constraints.deviceId = { exact: appConfig.vgSelectedCameraId };
+        } else if (appConfig.vgFacingMode) {
+            constraints.facingMode = { ideal: appConfig.vgFacingMode };
+        }
+        return constraints;
+    }
+
+    async function _refreshVgVideoTrackForRecording(videoEl) {
+        try {
+            const freshVideoStream = await navigator.mediaDevices.getUserMedia({ video: _getVgVideoConstraints() });
+            const freshVideoTrack = freshVideoStream.getVideoTracks()[0];
+            if (!freshVideoTrack) throw new Error('No video track returned');
+
+            if (currentStream) {
+                currentStream.getVideoTracks().forEach(function(t) { try { t.stop(); } catch (_) {} });
+                currentStream.getAudioTracks().forEach(function(t) { try { t.stop(); } catch (_) {} });
+            }
+
+            currentStream = new MediaStream([freshVideoTrack]);
+            if (videoEl) {
+                videoEl.srcObject = currentStream;
+                try { await videoEl.play(); } catch (_) {}
+                if (appConfig.vgSelectedSpeakerId && typeof videoEl.setSinkId === 'function') {
+                    try {
+                        await videoEl.setSinkId(appConfig.vgSelectedSpeakerId);
+                    } catch (e) {
+                        console.warn('[VG] setSinkId failed while refreshing video stream:', e.message);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[VG] Could not refresh video track before recording, using current track:', e.message);
+        }
+    }
+
     async function _buildVgRecordingAudioTracks(rawAudioTracks) {
         _cleanupVgRecordingAudioGraph();
         if (!rawAudioTracks || rawAudioTracks.length === 0) return [];
@@ -2411,6 +2444,13 @@ $(document).ready(function() {
 
         $('#vg-booth').show();
         const videoEl = $('#vg-camera-feed')[0];
+
+        // Re-arm explicit speaker routing for beeps/review on every sequence start.
+        _setupSinkBeep(appConfig.vgSelectedSpeakerId);
+
+        // Android/Bluetooth clocks can drift if the same long-running camera track is reused
+        // across takes. Refresh the video track per take to reset the timing baseline.
+        await _refreshVgVideoTrackForRecording(videoEl);
 
         // Show live overlay image on viewfinder during recording
         const overlayLive = document.getElementById('vg-overlay-live');
@@ -2641,6 +2681,9 @@ $(document).ready(function() {
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
+        _vgLiveAudioTracks.forEach(function(t) { try { t.stop(); } catch (_) {} });
+        _vgLiveAudioTracks = [];
+        _cleanupVgRecordingAudioGraph();
 
         // Reset recording state
         _vgChunks = [];
