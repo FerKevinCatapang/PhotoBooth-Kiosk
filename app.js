@@ -3157,6 +3157,8 @@ $(document).ready(function() {
     let _sinkBeepDest = null;  // MediaStreamDestination connected to _sinkBeepEl
     let _sinkBeepEl   = null;  // hidden Audio element with setSinkId applied to the BT speaker
     let _previewVideoSourceNode = null; // MediaElementSource for #vg-preview-video, wired to _sinkBeepDest
+    let _sinkKeepAliveSource = null;
+    let _sinkKeepAliveGain   = null;
 
     function _getAudioCtx() {
         if (!_audioCtx || _audioCtx.state === 'closed') {
@@ -3178,13 +3180,27 @@ $(document).ready(function() {
             _sinkBeepCtx  = new AudioCtx({ latencyHint: 'playback' });
             _sinkBeepDest = _sinkBeepCtx.createMediaStreamDestination();
             _sinkBeepEl   = new Audio();
+            _sinkBeepEl.autoplay = true;
+            _sinkBeepEl.playsInline = true;
             _sinkBeepEl.srcObject = _sinkBeepDest.stream;
+
+            // Keep the routed MediaStream active so Android does not tear down the
+            // audio path while waiting between countdown beeps and preview playback.
+            _sinkKeepAliveSource = _sinkBeepCtx.createConstantSource();
+            _sinkKeepAliveGain   = _sinkBeepCtx.createGain();
+            _sinkKeepAliveGain.gain.value = 0.00001;
+            _sinkKeepAliveSource.connect(_sinkKeepAliveGain);
+            _sinkKeepAliveGain.connect(_sinkBeepDest);
+            _sinkKeepAliveSource.start();
+
             if (_sinkBeepCtx.state === 'suspended') _sinkBeepCtx.resume().catch(() => {});
             _sinkBeepEl.play().catch(() => {});
         } catch (e) {
             _sinkBeepCtx = null;
             _sinkBeepDest = null;
             _sinkBeepEl = null;
+            _sinkKeepAliveSource = null;
+            _sinkKeepAliveGain = null;
         }
     }
 
@@ -3200,8 +3216,10 @@ $(document).ready(function() {
             _sinkBeepCtx = null;
             _sinkBeepDest = null;
             _sinkBeepEl = null;
+            _previewVideoSourceNode = null;
+            _sinkKeepAliveSource = null;
+            _sinkKeepAliveGain = null;
         }
-        _previewVideoSourceNode = null;
         _primeVgAudioContext();
         if (!_sinkBeepCtx || !_sinkBeepDest || !_sinkBeepEl) return;
         try {
@@ -3211,7 +3229,7 @@ $(document).ready(function() {
             // createMediaElementSource silences the element's native output and
             // sends audio through _sinkBeepDest -> _sinkBeepEl -> speaker route.
             const previewVid = document.getElementById('vg-preview-video');
-            if (previewVid && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
+            if (previewVid && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed' && !_previewVideoSourceNode) {
                 try {
                     _previewVideoSourceNode = _sinkBeepCtx.createMediaElementSource(previewVid);
                     _previewVideoSourceNode.connect(_sinkBeepDest);
@@ -3238,6 +3256,13 @@ $(document).ready(function() {
     function _teardownSinkBeep() {
         if (_previewVideoSourceNode) { try { _previewVideoSourceNode.disconnect(); } catch (_) {} }
         _previewVideoSourceNode = null;
+        if (_sinkKeepAliveSource) {
+            try { _sinkKeepAliveSource.stop(); } catch (_) {}
+            try { _sinkKeepAliveSource.disconnect(); } catch (_) {}
+        }
+        if (_sinkKeepAliveGain) { try { _sinkKeepAliveGain.disconnect(); } catch (_) {} }
+        _sinkKeepAliveSource = null;
+        _sinkKeepAliveGain = null;
         if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') _sinkBeepCtx.close().catch(() => {});
         _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
     }
@@ -3300,6 +3325,7 @@ $(document).ready(function() {
     });
 
     $('#btn-grant-audio-output').on('click', async function() {
+        _setupSinkBeep(appConfig.vgSelectedSpeakerId, true);
         if (typeof navigator.mediaDevices.selectAudioOutput !== 'function') {
             $(this).hide();
             return;
@@ -3328,6 +3354,7 @@ $(document).ready(function() {
     });
     // =========================================================
 
+            _setupSinkBeep(appConfig.vgSelectedSpeakerId, true);
     function runCountdown(seconds) {
         return new Promise(resolve => {
             let count = seconds;
