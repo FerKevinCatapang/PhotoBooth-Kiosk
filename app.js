@@ -1664,6 +1664,9 @@ $(document).ready(function() {
 
     $('#btn-launch-booth').on('click', async function() {
         appConfig.layout = $('input[name="layout"]:checked').val();
+            if (appConfig.captureMode === 'videoguestbook') {
+                _primeVgAudioContext();
+            }
         const launchBtn = $(this);
         launchBtn.prop('disabled', true).text('Initializing Hardware...');
         _stopCameraTest();    // always release the test preview stream before launching
@@ -1744,7 +1747,7 @@ $(document).ready(function() {
             $('#admin-dashboard').hide();
             $('#kiosk-mode').fadeIn(400);
             _requestFullscreen();
-            _setupSinkBeep(appConfig.vgSelectedSpeakerId);
+            _setupSinkBeep(appConfig.vgSelectedSpeakerId, true);
             resetToWelcomeScreen();
             
         } catch (err) {
@@ -3163,17 +3166,11 @@ $(document).ready(function() {
         return _audioCtx;
     }
 
-    // Call once from a user-gesture context (kiosk launch) to pre-wire beep audio to the
-    // selected Bluetooth speaker. Keeps the Audio element playing silence so that subsequent
-    // oscillator connections route instantly without needing another gesture.
-    // On Android Chrome, MODE_IN_COMMUNICATION can route default media to the wrong device
-    // after getUserMedia(audio). Keeping this explicit graph active also for default output
-    // improves countdown/review routing to the active Bluetooth A2DP route.
-    function _setupSinkBeep(sinkId) {
+    function _primeVgAudioContext() {
         if (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
-            _sinkBeepCtx.close().catch(() => {});
+            if (_sinkBeepCtx.state === 'suspended') _sinkBeepCtx.resume().catch(() => {});
+            return;
         }
-        _sinkBeepCtx = null; _sinkBeepDest = null; _sinkBeepEl = null;
         if (typeof Audio === 'undefined') return;
         try {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -3182,6 +3179,33 @@ $(document).ready(function() {
             _sinkBeepDest = _sinkBeepCtx.createMediaStreamDestination();
             _sinkBeepEl   = new Audio();
             _sinkBeepEl.srcObject = _sinkBeepDest.stream;
+            if (_sinkBeepCtx.state === 'suspended') _sinkBeepCtx.resume().catch(() => {});
+            _sinkBeepEl.play().catch(() => {});
+        } catch (e) {
+            _sinkBeepCtx = null;
+            _sinkBeepDest = null;
+            _sinkBeepEl = null;
+        }
+    }
+
+    // Call once from a user-gesture context (kiosk launch) to pre-wire beep audio to the
+    // selected Bluetooth speaker. Keeps the Audio element playing silence so that subsequent
+    // oscillator connections route instantly without needing another gesture.
+    // On Android Chrome, MODE_IN_COMMUNICATION can route default media to the wrong device
+    // after getUserMedia(audio). Keeping this explicit graph active also for default output
+    // improves countdown/review routing to the active Bluetooth A2DP route.
+    function _setupSinkBeep(sinkId, reuseCtx) {
+        if (!reuseCtx && _sinkBeepCtx && _sinkBeepCtx.state !== 'closed') {
+            _sinkBeepCtx.close().catch(() => {});
+            _sinkBeepCtx = null;
+            _sinkBeepDest = null;
+            _sinkBeepEl = null;
+        }
+        _previewVideoSourceNode = null;
+        _primeVgAudioContext();
+        if (!_sinkBeepCtx || !_sinkBeepDest || !_sinkBeepEl) return;
+        try {
+            if (_sinkBeepCtx.state === 'suspended') _sinkBeepCtx.resume().catch(() => {});
 
             // Route the capture-review video through the same sink graph.
             // createMediaElementSource silences the element's native output and
@@ -3223,6 +3247,7 @@ $(document).ready(function() {
             // Route through the pre-wired Bluetooth sink when available; otherwise default output.
             const ctx  = (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') ? _sinkBeepCtx  : _getAudioCtx();
             const dest = (ctx === _sinkBeepCtx && _sinkBeepDest)           ? _sinkBeepDest : ctx.destination;
+            if (ctx.state === 'suspended') ctx.resume().catch(() => {});
             const osc  = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
