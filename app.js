@@ -2910,6 +2910,7 @@ $(document).ready(function() {
             closeBtn.addEventListener('click', doClose);
 
             const _startPreviewPlay = () => {
+                _ensureSinkGraphActive();
                 video.play().catch(() => {
                     msg.textContent = 'Tap play to preview your message.';
                     playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i>';
@@ -3155,6 +3156,20 @@ $(document).ready(function() {
     let _sinkBeepEl   = null;  // hidden Audio element with setSinkId applied to the BT speaker
     let _previewVideoSourceNode = null; // MediaElementSource for #vg-preview-video, wired to _sinkBeepDest
 
+    function _ensureSinkGraphActive() {
+        try {
+            if (_sinkBeepCtx && _sinkBeepCtx.state === 'suspended') {
+                _sinkBeepCtx.resume().catch(() => {});
+            }
+            if (_sinkBeepEl && _sinkBeepEl.paused) {
+                _sinkBeepEl.play().catch(() => {});
+            }
+            if (_sinkBeepCtx) {
+                console.log('[VG audio] sink graph state:', _sinkBeepCtx.state, 'sinkElPaused:', !!(_sinkBeepEl && _sinkBeepEl.paused));
+            }
+        } catch (_) {}
+    }
+
     function _getAudioCtx() {
         if (!_audioCtx || _audioCtx.state === 'closed') {
             _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -3197,6 +3212,7 @@ $(document).ready(function() {
             }
 
             const _startSinkEl = () => {
+                _ensureSinkGraphActive();
                 _sinkBeepEl.play().catch(() => {});
             };
 
@@ -3223,6 +3239,8 @@ $(document).ready(function() {
             // Route through the pre-wired Bluetooth sink when available; otherwise default output.
             const ctx  = (_sinkBeepCtx && _sinkBeepCtx.state !== 'closed') ? _sinkBeepCtx  : _getAudioCtx();
             const dest = (ctx === _sinkBeepCtx && _sinkBeepDest)           ? _sinkBeepDest : ctx.destination;
+            if (ctx === _sinkBeepCtx) _ensureSinkGraphActive();
+            if (ctx.state === 'suspended') ctx.resume().catch(() => {});
             const osc  = ctx.createOscillator();
             const gain = ctx.createGain();
             osc.connect(gain);
