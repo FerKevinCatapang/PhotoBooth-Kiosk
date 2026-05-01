@@ -400,7 +400,7 @@ input[type="color"] { border: none; width: 40px; height: 40px; border-radius: 4p
 .hidden-exit-btn:hover { opacity: 1; background: rgba(0,0,0,0.5); color: white;}
 
 /* VG mode right panel */
-.welcome-vg-panel { position: absolute; right: 0; top: 0; height: 100%; width: 20%; background: #fff; z-index: 2; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 3rem 2.5rem 5rem; text-align: center; }
+.welcome-vg-panel { position: absolute; right: 0; top: 0; height: 100%; width: 30%; background: #fff; z-index: 2; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 3rem 2.5rem 5rem; text-align: center; }
 .vg-panel-title { font-size: clamp(1.6rem, 4vw, 3rem); font-weight: 800; color: #111827; margin-bottom: 0.75rem; line-height: 1.15; word-break: break-word; }
 .vg-panel-subtitle { font-size: 1rem; color: #374151; margin-bottom: 2rem; line-height: 1.5; max-width: 320px; }
 .vg-ok-btn { width: 120px; height: 120px; border-radius: 50%; background: #3b4b28; border: 2px solid #ffffff; color: #ffffff; font-size: 1.15rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-bottom: 2.5rem; transition: transform 0.2s, box-shadow 0.2s; flex-shrink: 0; }
