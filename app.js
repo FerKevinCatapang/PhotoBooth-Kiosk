@@ -2491,17 +2491,45 @@ $(document).ready(function() {
                 _splashEl.style.display = 'none';
                 _splashEl.classList.remove('splash-fade-out');
 
-                const _secs = Math.max(3, Math.min(10, Math.round(_activePromptText.trim().split(/\s+/).length / 3.3)));
-                const _qEl  = document.getElementById('vg-question-overlay');
-                const _bar  = document.getElementById('vg-question-timer-bar');
-                document.getElementById('vg-question-text').textContent = _activePromptText;
-                _bar.style.transition = 'none';
-                _bar.style.width = '100%';
+                // Prompt card — guest taps "Let's Go!" to proceed; "Try another" re-rolls (max 3)
+                const VG_MAX_REROLLS = 3;
+                const _qEl    = document.getElementById('vg-question-overlay');
+                const _qTxt   = document.getElementById('vg-question-text');
+                const _dots   = _qEl.querySelectorAll('.vg-reroll-dot');
+                let _rerolls  = 0;
+
+                function _updateRerollState() {
+                    _dots.forEach(function(d, i) { d.classList.toggle('used', i >= (VG_MAX_REROLLS - _rerolls)); });
+                    const freshBtn = document.getElementById('btn-vg-reroll');
+                    if (freshBtn) freshBtn.disabled = (_rerolls >= VG_MAX_REROLLS);
+                }
+
+                _qTxt.textContent = _activePromptText;
+                _updateRerollState();
                 _qEl.style.display = 'flex';
-                await new Promise(r => setTimeout(r, 60)); // allow paint before transition starts
-                _bar.style.transition = 'width ' + _secs + 's linear';
-                _bar.style.width = '0%';
-                await new Promise(r => setTimeout(r, _secs * 1000));
+
+                await new Promise(function(resolve) {
+                    // Clone buttons to clear any stale listeners from a previous redo
+                    const oldReroll = document.getElementById('btn-vg-reroll');
+                    const newReroll = oldReroll.cloneNode(true);
+                    oldReroll.replaceWith(newReroll);
+
+                    const oldGo = document.getElementById('btn-vg-letsgo');
+                    const newGo = oldGo.cloneNode(true);
+                    oldGo.replaceWith(newGo);
+
+                    newReroll.addEventListener('click', function() {
+                        if (_rerolls >= VG_MAX_REROLLS) return;
+                        _rerolls++;
+                        _activePromptText = _prompts[Math.floor(Math.random() * _prompts.length)];
+                        _vgActivePromptText = _activePromptText;
+                        _qTxt.textContent = _activePromptText;
+                        _updateRerollState();
+                    });
+
+                    newGo.addEventListener('click', function() { resolve(); }, { once: true });
+                });
+
                 _qEl.style.display = 'none';
             }
         }
@@ -2511,6 +2539,7 @@ $(document).ready(function() {
         const _sidebarTxt = document.getElementById('vg-prompt-sidebar-text');
         if (_activePromptText && _sidebarEl) {
             _sidebarTxt.textContent = _activePromptText;
+            _sidebarEl.classList.remove('collapsed'); // always start expanded
             _sidebarEl.style.display = 'flex';
         }
 
@@ -2685,6 +2714,12 @@ $(document).ready(function() {
 
     $('#btn-vg-stop').on('click', function() {
         stopVgRecordingIfActive();
+    });
+
+    // Collapse / expand the prompt reminder card during recording
+    $(document).on('click', '#btn-vg-prompt-collapse', function() {
+        const sidebar = document.getElementById('vg-prompt-sidebar');
+        if (sidebar) sidebar.classList.toggle('collapsed');
     });
 
     $('#btn-vg-redo').on('click', function() {

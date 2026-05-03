@@ -1321,16 +1321,36 @@
                 </div>
 
                 <!-- Pre-recording question prompt -->
-                <div id="vg-question-overlay" style="display:none; flex-direction:column; align-items:center; justify-content:center; position:absolute; inset:0; z-index:30;">
-                    <div class="vg-question-badge"><i class="fa-regular fa-comment-dots"></i> Your Prompt</div>
-                    <p id="vg-question-text" class="vg-question-text"></p>
-                    <div class="vg-question-timer-wrap">
-                        <div id="vg-question-timer-bar" class="vg-question-timer-bar"></div>
+                <div id="vg-question-overlay" style="display:none; position:absolute; inset:0; z-index:30;">
+                    <!-- Left: dark prompt panel -->
+                    <div class="vg-qs-left">
+                        <div class="vg-question-badge"><i class="fa-regular fa-comment-dots"></i> Your Prompt</div>
+                        <div class="vg-question-quote">&ldquo;</div>
+                        <p id="vg-question-text" class="vg-question-text"></p>
+                        <div class="vg-reroll-wrap">
+                            <div class="vg-reroll-dots">
+                                <span class="vg-reroll-dot"></span>
+                                <span class="vg-reroll-dot"></span>
+                                <span class="vg-reroll-dot"></span>
+                            </div>
+                            <button id="btn-vg-reroll" class="vg-reroll-btn-qs">
+                                <i class="fa-solid fa-shuffle"></i> Try another
+                            </button>
+                        </div>
+                        <p class="vg-reroll-hint">These are just a guide — speak naturally!</p>
+                    </div>
+                    <!-- Right: action panel -->
+                    <div class="vg-qs-right">
+                        <h2 class="vg-qs-cta-title">Speak from<br>the heart</h2>
+                        <button id="btn-vg-letsgo" class="vg-letsgo-btn">Let's Go!</button>
                     </div>
                 </div>
 
-                <!-- Prompt reminder sidebar shown during countdown -->
+                <!-- Prompt reminder shown during countdown & recording -->
                 <div id="vg-prompt-sidebar" style="display:none;">
+                    <button id="btn-vg-prompt-collapse" class="vg-prompt-collapse-btn" aria-label="Toggle prompt">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
                     <div class="vg-prompt-sidebar-label"><i class="fa-regular fa-comment-dots"></i> Remember to answer</div>
                     <p id="vg-prompt-sidebar-text" class="vg-prompt-sidebar-text"></p>
                 </div>
