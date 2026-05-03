@@ -972,20 +972,12 @@ $(document).ready(function() {
         setDiag('<span style="color:#9ca3af;">Scanning for cameras…</span>');
 
         try {
-            // getUserMedia must be called first so the browser reveals device labels.
-            // Try both front and environment to unlock labels for all physical cameras
-            // (some Android tablets require a separate permission call per camera group).
-            const permResults = await Promise.allSettled([
-                navigator.mediaDevices.getUserMedia({ video: true }),
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-            ]);
-            permResults.forEach(r => {
-                if (r.status === 'fulfilled') r.value.getTracks().forEach(t => t.stop());
-            });
-            const allDenied = permResults.every(r => r.status === 'rejected');
-            if (allDenied) {
-                const err = permResults[0].reason;
-                setDiag(`<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Camera permission denied (${err.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
+            // Request camera permission so the browser reveals device labels.
+            try {
+                const permStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                permStream.getTracks().forEach(t => t.stop());
+            } catch (permErr) {
+                setDiag(`<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Camera permission denied (${permErr.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
                 document.getElementById('camera-select').innerHTML = '<option value="">— permission denied —</option>';
                 return;
             }
@@ -997,7 +989,7 @@ $(document).ready(function() {
             sel.innerHTML = '';
             if (videoInputs.length === 0) {
                 sel.innerHTML = '<option value="">No cameras found</option>';
-                setDiag('<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> No cameras detected. Plug in the camera, make sure it is in UVC mode, then tap Refresh.</span>');
+                setDiag('<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> No cameras detected. Plug in your camera, then tap Refresh.</span>');
                 return;
             }
 
@@ -1014,31 +1006,6 @@ $(document).ready(function() {
                 }
                 sel.appendChild(opt);
             });
-
-            // ── UVC plugin camera (Android only, DJI/GoPro in Webcam mode via USB-C OTG) ──
-            // If the native UVC plugin is available and sees a connected camera, add it as
-            // a special option.  It is auto-selected when no other camera matched above.
-            const UvcCamera = window.Capacitor?.Plugins?.UvcCamera;
-            if (UvcCamera) {
-                try {
-                    const uvcInfo = await UvcCamera.checkCamera();
-                    if (uvcInfo.connected) {
-                        const uvcOpt = document.createElement('option');
-                        uvcOpt.value = 'uvc:direct';
-                        uvcOpt.textContent = `[USB Direct] ${uvcInfo.deviceName || 'UVC Camera'}`;
-                        sel.appendChild(uvcOpt);
-                        // Auto-select if nothing better was found
-                        if (!appConfig.selectedCameraId ||
-                            [...sel.options].every(o => o.value !== appConfig.selectedCameraId)) {
-                            uvcOpt.selected = true;
-                        }
-                        const diagExtra = `<span style="display:block; color:#22c55e; margin-top:3px;"><i class="fa-solid fa-plug"></i> USB Direct camera detected: <strong>${uvcInfo.deviceName || 'UVC'}</strong> — will bypass Chrome camera API.</span>`;
-                        setDiag((diag?.innerHTML || '') + diagExtra);
-                    }
-                } catch (uvcErr) {
-                    console.warn('[UVC] checkCamera error:', uvcErr);
-                }
-            }
 
             // Restore previously chosen camera if still available
             if (prevValue && [...sel.options].some(o => o.value === prevValue)) {
@@ -1088,7 +1055,7 @@ $(document).ready(function() {
             const deviceId = appConfig.selectedCameraId;
             const constraints = deviceId
                 ? { video: { deviceId: { exact: deviceId } } }
-                : { video: appConfig.facingMode ? { facingMode: appConfig.facingMode } : true };
+                : { video: true };
 
             _testStream = await navigator.mediaDevices.getUserMedia(constraints);
             const pv = document.getElementById('camera-test-preview');
@@ -1131,17 +1098,11 @@ $(document).ready(function() {
         setDiag('<span style="color:#9ca3af;">Scanning for cameras…</span>');
 
         try {
-            const permResults = await Promise.allSettled([
-                navigator.mediaDevices.getUserMedia({ video: true }),
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-            ]);
-            permResults.forEach(r => {
-                if (r.status === 'fulfilled') r.value.getTracks().forEach(t => t.stop());
-            });
-            const allDenied = permResults.every(r => r.status === 'rejected');
-            if (allDenied) {
-                const err = permResults[0].reason;
-                setDiag(`<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Camera permission denied (${err.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
+            try {
+                const permStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                permStream.getTracks().forEach(t => t.stop());
+            } catch (permErr) {
+                setDiag(`<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Camera permission denied (${permErr.name}). Grant camera access in browser settings, then tap Refresh.</span>`);
                 document.getElementById('vg-camera-select').innerHTML = '<option value="">— permission denied —</option>';
                 return;
             }
@@ -1154,7 +1115,7 @@ $(document).ready(function() {
             sel.innerHTML = '';
             if (videoInputs.length === 0) {
                 sel.innerHTML = '<option value="">No cameras found</option>';
-                setDiag('<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> No cameras detected. Plug in the camera, make sure it is in UVC mode, then tap Refresh.</span>');
+                setDiag('<span style="color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> No cameras detected. Plug in your camera, then tap Refresh.</span>');
                 return;
             }
 
@@ -1195,11 +1156,6 @@ $(document).ready(function() {
         appConfig.vgSelectedCameraId = this.value;
     });
 
-    $('input[name="vg-facing-mode"]').on('change', function() {
-        appConfig.vgFacingMode = this.value;
-        $('#vg-camera-specific-card').toggle(this.value === '');
-    });
-
     $('#btn-refresh-vg-cameras').on('click', function() {
         const btn = $(this);
         btn.prop('disabled', true).text('Refreshing…');
@@ -1225,9 +1181,9 @@ $(document).ready(function() {
         const diag = document.getElementById('vg-camera-diag');
         try {
             const deviceId = appConfig.vgSelectedCameraId;
-            const constraints = deviceId && appConfig.vgFacingMode === ''
+            const constraints = deviceId
                 ? { video: { deviceId: { exact: deviceId } } }
-                : { video: appConfig.vgFacingMode ? { facingMode: appConfig.vgFacingMode } : true };
+                : { video: true };
 
             _vgTestStream = await navigator.mediaDevices.getUserMedia(constraints);
             const pv = document.getElementById('vg-camera-test-preview');
@@ -1637,11 +1593,6 @@ $(document).ready(function() {
     });
 
 
-    $('input[name="facing-mode"]').on('change', function() {
-        appConfig.facingMode = this.value;
-        $('#camera-specific-card').toggle(this.value === '');
-    });
-
     $('#btn-refresh-cameras').on('click', function() {
         const btn = $(this);
         btn.prop('disabled', true).text('Refreshing…');
@@ -1663,63 +1614,8 @@ $(document).ready(function() {
         _stopVgCameraTest(); // also release VG test preview stream
 
         try {
-        // ── UVC direct path (Android: DJI/GoPro in Webcam mode via USB-C OTG) ─────
-        // Chrome on Android cannot access UVC webcams via getUserMedia — the native
-        // plugin bypasses this by reading frames directly from the USB device.
-        const isUvcSelected = (appConfig.selectedCameraId === 'uvc:direct') &&
-                              !!(window.Capacitor?.Plugins?.UvcCamera);
-        if (isUvcSelected && appConfig.captureMode !== 'videoguestbook') {
-            const UvcCamera = window.Capacitor.Plugins.UvcCamera;
-
-            // Request USB permission if not already granted
-            const permResult = await UvcCamera.requestPermission();
-            if (!permResult.granted) {
-                throw Object.assign(new Error('USB camera permission denied.'), { name: 'UVCPermissionError' });
-            }
-
-            // Start the UVC camera (opens device, begins frame streaming)
-            await UvcCamera.startPreview({ previewWidth: 1920, previewHeight: 1080, fps: 15 });
-
-            // Inject an <img> element into the camera-feed container to show live frames.
-            // The existing <video id="camera-feed"> is hidden and replaced visually.
-            const feedContainer = document.getElementById('camera-feed')?.parentElement
-                               || document.getElementById('kiosk-mode');
-            const existingVideo = document.getElementById('camera-feed');
-            if (existingVideo) existingVideo.style.display = 'none';
-
-            const img = document.createElement('img');
-            img.id = 'uvc-camera-feed';
-            img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;';
-            if (feedContainer) feedContainer.style.position = 'relative';
-            if (feedContainer) feedContainer.appendChild(img);
-            uvcImgEl = img;
-
-            // Subscribe to frame events — update the <img> on each frame
-            uvcFrameListener = await UvcCamera.addListener('uvcFrame', ({ dataUrl }) => {
-                if (uvcImgEl) uvcImgEl.src = dataUrl;
-            });
-
-            // Subscribe to disconnect events — fall back gracefully
-            uvcStateListener = await UvcCamera.addListener('uvcCameraState', ({ connected }) => {
-                if (!connected) {
-                    console.warn('[UVC] Camera disconnected — stopping preview');
-                    _stopUvcPreview();
-                }
-            });
-
-            uvcActive = true;
-            applyKioskViewfinderSize();
-            $('#admin-dashboard').hide();
-            $('#kiosk-mode').fadeIn(400);
-            _requestFullscreen();
-            _setupSinkBeep(appConfig.vgSelectedSpeakerId);
-            resetToWelcomeScreen();
-            launchBtn.prop('disabled', false).text('Launch Kiosk');
-            return;
-        }
-
-        // ── Normal getUserMedia path ─────────────────────────────────────
-            // Build video constraints: specific device takes priority, then facingMode.
+        // ── getUserMedia path ─────────────────────────────────────────────
+            // Build video constraints: specific device takes priority.
             // Video Guestbook uses a lower resolution (1080p max) to prevent encoder
             // lag and stuttering; PhotoBooth uses the highest available for still quality.
             const isVgMode = appConfig.captureMode === 'videoguestbook';
@@ -1728,25 +1624,19 @@ $(document).ready(function() {
                 // 1920×1080 for the live preview stream; ImageCapture.takePhoto() still uses the
                 // camera's full sensor resolution for actual captures, so capture quality is unaffected.
                 : { width: { ideal: 1920 }, height: { ideal: 1080 } };
-            if (appConfig.selectedCameraId && appConfig.facingMode === '') {
+            if (appConfig.selectedCameraId) {
                 videoConstraints.deviceId = { exact: appConfig.selectedCameraId };
-            } else if (appConfig.facingMode) {
-                videoConstraints.facingMode = { ideal: appConfig.facingMode };
             }
             // For VG mode, override with VG-specific camera settings
             if (isVgMode) {
                 delete videoConstraints.deviceId;
-                delete videoConstraints.facingMode;
-                if (appConfig.vgSelectedCameraId && appConfig.vgFacingMode === '') {
+                if (appConfig.vgSelectedCameraId) {
                     videoConstraints.deviceId = { exact: appConfig.vgSelectedCameraId };
-                } else if (appConfig.vgFacingMode) {
-                    videoConstraints.facingMode = { ideal: appConfig.vgFacingMode };
                 }
             }
             if (isVgMode) {
-                // Two separate getUserMedia calls: Android Chrome ignores audio.deviceId
-                // when paired with a video.deviceId in a single call (the camera's built-in
-                // audio wins). Splitting them forces the browser to honour the mic selection.
+                // Two separate getUserMedia calls to ensure the mic selection is honoured
+                // independently of the video device.
                 const videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
                 let audioTracks = [];
                 try {
@@ -1799,9 +1689,9 @@ $(document).ready(function() {
             console.error("Camera error:", err);
             let hint = '';
             if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-                hint = 'The selected camera was not found. Unplug and replug the USB cable, confirm UVC mode is active on the camera, then tap Refresh in Camera Settings.';
+                hint = 'The selected camera was not found. Unplug and replug the USB cable, then tap Refresh in Camera Settings.';
             } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-                hint = 'Camera permission was denied. Go to Settings → Apps → Chrome → Permissions → Camera → Allow, then try again.';
+                hint = 'Camera permission was denied. Grant camera access in your browser settings, then try again.';
             } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
                 hint = 'The camera is in use by another app, or the USB connection dropped. Unplug and replug, close other camera apps, then try again.';
             } else {
@@ -1869,24 +1759,9 @@ $(document).ready(function() {
         if (fn) fn.call(document).catch(() => {});
     }
 
-    // ── UVC cleanup helper ────────────────────────────────────────────────────
-    function _stopUvcPreview() {
-        if (!uvcActive) return;
-        uvcActive = false;
-        try { uvcFrameListener?.remove(); } catch (_) {}
-        try { uvcStateListener?.remove(); } catch (_) {}
-        uvcFrameListener = null;
-        uvcStateListener = null;
-        if (uvcImgEl) { uvcImgEl.remove(); uvcImgEl = null; }
-        const vid = document.getElementById('camera-feed');
-        if (vid) vid.style.display = '';
-        try { window.Capacitor?.Plugins?.UvcCamera?.stopPreview(); } catch (_) {}
-    }
-
     function _doExitKiosk() {
         stopVgRecordingIfActive();
         if (currentStream) { currentStream.getTracks().forEach(track => track.stop()); currentStream = null; }
-        _stopUvcPreview();
         _teardownSinkBeep();
         _exitFullscreen();
         $('#kiosk-mode').hide();
@@ -2941,29 +2816,6 @@ $(document).ready(function() {
     async function drawPhoto(ctx, video, x, y, slotW, slotH) {
         let source = null;
         let usedImageCapture = false;
-
-        // ── UVC direct path: capture a still from the USB camera plugin ──────
-        if (uvcActive && window.Capacitor?.Plugins?.UvcCamera) {
-            try {
-                const { dataUrl } = await window.Capacitor.Plugins.UvcCamera.capture();
-                const img = new Image();
-                await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = dataUrl; });
-                source = img;
-                // UVC frames are not mirrored — draw without horizontal flip
-                const fW2 = img.naturalWidth  || img.width;
-                const fH2 = img.naturalHeight || img.height;
-                const scale2 = Math.max(slotW / fW2, slotH / fH2);
-                const srcW2  = Math.round(slotW / scale2);
-                const srcH2  = Math.round(slotH / scale2);
-                const srcX2  = Math.max(0, Math.round((fW2 - srcW2) / 2));
-                const srcY2  = Math.max(0, Math.round((fH2 - srcH2) / 2));
-                ctx.drawImage(img, srcX2, srcY2, srcW2, srcH2, x, y, slotW, slotH);
-                return; // skip the getUserMedia path below
-            } catch (e) {
-                console.warn('[drawPhoto] UVC capture failed, falling back to video frame:', e.message);
-                // Fall through to video frame path
-            }
-        }
 
         if (currentStream && typeof ImageCapture !== 'undefined') {
             try {
@@ -4030,9 +3882,7 @@ $(document).ready(function() {
         $('#chk-save-drive').prop('checked', appConfig.saveDrive);
 
         // Camera — Photo Booth
-        const fmVal = appConfig.facingMode || 'user';
-        $('input[name="facing-mode"][value="' + fmVal + '"]').prop('checked', true);
-        $('#camera-specific-card').toggle(appConfig.facingMode === '');
+        $('#camera-specific-card').toggle(true);
         if (appConfig.selectedCameraId) $('#camera-select').val(appConfig.selectedCameraId);
 
         // VG settings
@@ -4041,9 +3891,7 @@ $(document).ready(function() {
         $('#setting-vg-countdown').val(appConfig.vgCountdown);
         $('#val-vg-countdown').text(appConfig.vgCountdown);
         $('#setting-vg-prompt').val(appConfig.vgPromptText);
-        const vgFmVal = appConfig.vgFacingMode || 'user';
-        $('input[name="vg-facing-mode"][value="' + vgFmVal + '"]').prop('checked', true);
-        $('#vg-camera-specific-card').toggle(appConfig.vgFacingMode === '');
+        $('#vg-camera-specific-card').show();
         if (appConfig.vgSelectedCameraId) $('#vg-camera-select').val(appConfig.vgSelectedCameraId);
 
         // VG storage

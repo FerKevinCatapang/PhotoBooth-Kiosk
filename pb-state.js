@@ -2,14 +2,6 @@
 let currentStream = null;
 let directoryHandle = null;  // shared save folder for both photos and videos
 
-// ─── UVC camera state (DJI Osmo Action 5 via USB-C OTG on Android) ────────────
-// When uvcActive is true the kiosk is using the native UVC plugin instead of
-// getUserMedia.  uvcImgEl points to the <img> element that shows the live feed.
-let uvcActive = false;
-let uvcImgEl  = null;
-let uvcFrameListener = null;
-let uvcStateListener = null;
-
 let capturedPhotos = [];           // In-memory database of captured session photos
 let capturedPhotoDriveLinks = [];  // parallel: Drive share URL for each photo, or null
 let capturedVideos = [];           // In-memory database of captured video guestbook blob URLs
@@ -42,7 +34,6 @@ let appConfig = {
     vgPromptText: '',
     vgCountdown: 3,           // countdown before recording starts
     vgSelectedCameraId: '',   // VG-specific camera device ID
-    vgFacingMode: 'user',     // VG-specific facing mode
     vgSelectedMicId: '',      // VG-specific microphone device ID ('' = browser default)
     vgSelectedSpeakerId: '',  // VG-specific audio output device ID ('' = browser default)
     vgSaveLocal: true,        // VG: save to local folder
@@ -55,7 +46,6 @@ let appConfig = {
     // Event name used as filename prefix (e.g. "Smiths_Wedding")
     eventName: '',
     selectedCameraId: '', // deviceId chosen in Capture Settings
-    facingMode: 'user',   // 'user' = front cam, 'environment' = rear cam, '' = specific device
 
     // Disclaimer (shared for Photo Booth and Video Guestbook)
     disclaimerEnabled: false,
@@ -113,9 +103,9 @@ const PERSISTED_KEYS = [
     'layout', 'saveLocal', 'saveDrive', 'countdownFirst', 'countdownOthers',
     'reviewTime', 'welcomeBg', 'welcomeTitle', 'welcomeSubtitle', 'photoMode',
     'captureMode', 'vgMaxDuration', 'vgPromptText', 'vgCountdown',
-    'vgSelectedCameraId', 'vgFacingMode', 'vgSelectedMicId', 'vgSelectedSpeakerId',
+    'vgSelectedCameraId', 'vgSelectedMicId', 'vgSelectedSpeakerId',
     'vgSaveLocal', 'vgSaveDrive', 'eventName',
-    'selectedCameraId', 'facingMode',
+    'selectedCameraId',
     'disclaimerEnabled', 'disclaimerHeader', 'disclaimerOrg', 'disclaimerText',
     'driveFolderName', 'vgDriveFolderName', 'vgDriveClientId',
     'vgPromptsEnabled', 'vgPromptCategory', 'vgCustomPrompts', 'vgDisabledTemplatePrompts', 'vgSplashDuration',
