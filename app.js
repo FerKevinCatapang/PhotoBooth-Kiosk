@@ -1455,82 +1455,42 @@ $(document).ready(function() {
             // Video Guestbook uses a lower resolution (1080p max) to prevent encoder
             // lag and stuttering; PhotoBooth uses the highest available for still quality.
             const isVgMode = appConfig.captureMode === 'videoguestbook';
-            const videoConstraints = isVgMode
-                ? { width: { ideal: 1920, max: 1920 }, height: { ideal: 1080, max: 1080 }, frameRate: { ideal: 30, max: 30 } }
-                // 1920×1080 for the live preview stream; ImageCapture.takePhoto() still uses the
-                // camera's full sensor resolution for actual captures, so capture quality is unaffected.
-                : { width: { ideal: 1920 }, height: { ideal: 1080 } };
-            if (appConfig.selectedCameraId) {
-                videoConstraints.deviceId = { exact: appConfig.selectedCameraId };
-            }
-            // For VG mode, override with VG-specific camera settings
-            if (isVgMode) {
-                delete videoConstraints.deviceId;
-                if (appConfig.vgSelectedCameraId) {
-                    videoConstraints.deviceId = { exact: appConfig.vgSelectedCameraId };
-                }
-            }
-            if (isVgMode) {
-                // Two separate getUserMedia calls to ensure the mic selection is honoured
-                // independently of the video device.
-                const videoStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
-                let audioTracks = [];
-                try {
-                    const audioConstraint = appConfig.vgSelectedMicId
-                        ? { deviceId: { exact: appConfig.vgSelectedMicId } }
-                        : true;
-                    const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
-                    audioTracks = audioStream.getAudioTracks();
-                } catch (audioErr) {
-                    console.warn('[VG] Requested mic unavailable, trying default:', audioErr.message);
-                    try {
-                        const fallback = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        audioTracks = fallback.getAudioTracks();
-                    } catch (e2) {
-                        console.warn('[VG] No audio track available:', e2.message);
-                    }
-                }
-                currentStream = new MediaStream([
-                    ...videoStream.getVideoTracks(),
-                    ...audioTracks
-                ]);
-            } else {
-                currentStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
-            }
 
-            if (appConfig.captureMode === 'videoguestbook') {
-                const vgFeedEl = $('#vg-camera-feed')[0];
-                vgFeedEl.srcObject = currentStream;
-                // Route playback audio to the selected Bluetooth speaker (setSinkId is
-                // not universally supported — silently ignore if unavailable).
-                if (appConfig.vgSelectedSpeakerId && typeof vgFeedEl.setSinkId === 'function') {
-                    try {
-                        await vgFeedEl.setSinkId(appConfig.vgSelectedSpeakerId);
-                    } catch (e) {
-                        console.warn('[VG] setSinkId failed (speaker not available):', e.message);
-                    }
-                }
+            if (isVgMode) {
+                // ── Video Guestbook: defer stream acquisition to per-session start ──
+                // Camera and mic will be opened inside triggerVgSequence() only when
+                // a guest actually begins recording, and released when they return to
+                // the welcome screen.  This keeps the OS indicator light off while idle.
+                $('#admin-dashboard').hide();
+                $('#kiosk-mode').fadeIn(400);
+                _requestFullscreen();
+                _setupSinkBeep(appConfig.vgSelectedSpeakerId);
+                resetToWelcomeScreen();
             } else {
+                // ── Photo Booth: acquire stream now for the live welcome viewfinder ──
+                const videoConstraints = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+                if (appConfig.selectedCameraId) {
+                    videoConstraints.deviceId = { exact: appConfig.selectedCameraId };
+                }
+                currentStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
                 $('#camera-feed')[0].srcObject = currentStream;
                 applyKioskViewfinderSize();
+
+                $('#admin-dashboard').hide();
+                $('#kiosk-mode').fadeIn(400);
+                _requestFullscreen();
+                _setupSinkBeep(appConfig.vgSelectedSpeakerId);
+                resetToWelcomeScreen();
+
+                // Camera-lost watchdog for photo booth
+                currentStream.getVideoTracks().forEach(function(track) {
+                    track.onended = function() {
+                        console.warn('[PB] Camera track ended unexpectedly.');
+                        stopVgRecordingIfActive();
+                        _showCameraLost();
+                    };
+                });
             }
-
-            $('#admin-dashboard').hide();
-            $('#kiosk-mode').fadeIn(400);
-            _requestFullscreen();
-            _setupSinkBeep(appConfig.vgSelectedSpeakerId);
-            resetToWelcomeScreen();
-
-            // ── Camera-lost watchdog ───────────────────────────────────────
-            // If the video track ends unexpectedly (USB unplugged, OS revokes access),
-            // stop any active recording and surface the recovery overlay.
-            currentStream.getVideoTracks().forEach(function(track) {
-                track.onended = function() {
-                    console.warn('[VG] Camera track ended unexpectedly.');
-                    stopVgRecordingIfActive();
-                    _showCameraLost();
-                };
-            });
             
         } catch (err) {
             console.error("Camera error:", err);
@@ -1793,6 +1753,13 @@ $(document).ready(function() {
         const kv = $('#ws-video-bg')[0];
         if (kv && appConfig.welcomeMedia && appConfig.welcomeMedia.type === 'video' && kv.paused) {
             kv.play();
+        }
+
+        // Release camera + mic for VG mode so the OS indicator light goes off
+        // while the kiosk is idle.  The stream is re-acquired per session inside
+        // triggerVgSequence().
+        if (isVg) {
+            _releaseVgStream();
         }
     }
 
@@ -2116,6 +2083,61 @@ $(document).ready(function() {
         }
     }
 
+    // ── VG stream lifecycle ────────────────────────────────────────────────────
+    // Camera and microphone are acquired only for the duration of an active
+    // recording session.  _acquireVgStream() opens the devices; _releaseVgStream()
+    // stops every track and clears the video element's srcObject so the OS
+    // indicator light goes off while the kiosk is idle on the welcome screen.
+
+    async function _acquireVgStream() {
+        // Reuse the existing stream if it is already live (e.g. during redo).
+        if (currentStream && currentStream.getVideoTracks().some(function(t) { return t.readyState === 'live'; })) {
+            return;
+        }
+        // Release any stale/ended tracks before opening new ones.
+        if (currentStream) {
+            currentStream.getTracks().forEach(function(t) { try { t.stop(); } catch (_) {} });
+            currentStream = null;
+        }
+        const vgConstraints = {
+            width:     { ideal: 1920, max: 1920 },
+            height:    { ideal: 1080, max: 1080 },
+            frameRate: { ideal: 30,   max: 30   }
+        };
+        if (appConfig.vgSelectedCameraId) {
+            vgConstraints.deviceId = { exact: appConfig.vgSelectedCameraId };
+        }
+        const videoStream = await navigator.mediaDevices.getUserMedia({ video: vgConstraints });
+        let audioTracks = [];
+        try {
+            const audioConstraint = appConfig.vgSelectedMicId
+                ? { deviceId: { exact: appConfig.vgSelectedMicId } }
+                : true;
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
+            audioTracks = audioStream.getAudioTracks();
+        } catch (audioErr) {
+            console.warn('[VG] Requested mic unavailable, trying default:', audioErr.message);
+            try {
+                const fallback = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioTracks = fallback.getAudioTracks();
+            } catch (e2) {
+                console.warn('[VG] No audio track available:', e2.message);
+            }
+        }
+        currentStream = new MediaStream([...videoStream.getVideoTracks(), ...audioTracks]);
+    }
+
+    function _releaseVgStream() {
+        if (currentStream) {
+            currentStream.getTracks().forEach(function(t) { try { t.stop(); } catch (_) {} });
+            currentStream = null;
+        }
+        const vgFeedEl = document.getElementById('vg-camera-feed');
+        if (vgFeedEl) { vgFeedEl.srcObject = null; }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
     function stopVgRecordingIfActive() {
         // Null out immediately so a second call (e.g. max-timer + user tap race)
         // cannot call .stop() on the same recorder again.
@@ -2123,6 +2145,11 @@ $(document).ready(function() {
         _vgMediaRecorder = null;
         if (recorder && recorder.state !== 'inactive') {
             try {
+                // Flush the final partial chunk before stopping so no audio/video
+                // data is lost if the last timeslice hasn't fired yet.
+                if (recorder.state === 'recording') {
+                    try { recorder.requestData(); } catch (_) {}
+                }
                 recorder.stop();
             } catch (e) {
                 // If stop() throws (e.g. InvalidStateError), restore the reference
@@ -2207,7 +2234,7 @@ $(document).ready(function() {
 
     function _showVgRecordError(err) {
         // Re-purpose the processing overlay to surface the error inline so the
-        // guest can tap OK and continue without getting stuck.
+        // guest can choose to try again or return to the welcome screen.
         const ol = document.getElementById('vg-processing-overlay');
         if (!ol) { resetToWelcomeScreen(); return; }
         ol.innerHTML =
@@ -2216,13 +2243,26 @@ $(document).ready(function() {
             + '<p style="color:#9ca3af;font-size:0.95rem;max-width:300px;text-align:center;">'
             + ((err && (err.message || err.name)) || 'An unexpected error occurred.')
             + '</p>'
-            + '<button id="btn-vg-record-error-ok" style="margin-top:1.25rem;padding:0.8rem 2.5rem;'
-            + 'background:#be185d;color:#fff;border:none;border-radius:999px;font-size:1rem;font-weight:700;cursor:pointer;">'
-            + 'OK</button>';
+            + '<div style="display:flex;gap:1rem;margin-top:1.25rem;flex-wrap:wrap;justify-content:center;">'
+            + '<button id="btn-vg-record-error-retry" style="padding:0.8rem 1.75rem;background:#1d4ed8;'
+            + 'color:#fff;border:none;border-radius:999px;font-size:1rem;font-weight:700;cursor:pointer;">'
+            + '<i class="fa-solid fa-rotate-right"></i> Try Again</button>'
+            + '<button id="btn-vg-record-error-ok" style="padding:0.8rem 1.75rem;background:#374151;'
+            + 'color:#fff;border:none;border-radius:999px;font-size:1rem;font-weight:700;cursor:pointer;">'
+            + 'Return to Start</button>'
+            + '</div>';
         ol.style.display = 'flex';
-        document.getElementById('btn-vg-record-error-ok').addEventListener('click', function() {
+
+        var _resetOl = function() {
             ol.style.display = 'none';
             ol.innerHTML = '<div class="spinner"></div><h2>Saving video\u2026</h2>';
+        };
+        document.getElementById('btn-vg-record-error-retry').addEventListener('click', function() {
+            _resetOl();
+            triggerVgSequence({ continueSession: true, promptText: _vgActivePromptText });
+        }, { once: true });
+        document.getElementById('btn-vg-record-error-ok').addEventListener('click', function() {
+            _resetOl();
             resetToWelcomeScreen();
         }, { once: true });
     }
@@ -2291,8 +2331,28 @@ $(document).ready(function() {
         // Start a new guest session (skip on redo to preserve session folder and prompt)
         if (!opts.continueSession) startNewSession();
 
+        // ── Acquire camera + mic (no-op if stream is already live during redo) ──
+        _stage = 'stream-acquire';
+        await _acquireVgStream();
+
+        // Show booth and wire the live viewfinder
         $('#vg-booth').show();
         const videoEl = $('#vg-camera-feed')[0];
+        videoEl.srcObject = currentStream;
+        // Route audio output to the configured speaker
+        if (appConfig.vgSelectedSpeakerId && typeof videoEl.setSinkId === 'function') {
+            try { await videoEl.setSinkId(appConfig.vgSelectedSpeakerId); } catch (_) {}
+        }
+        try { await videoEl.play(); } catch (_) {}
+
+        // Camera-lost watchdog — re-registered each time a fresh stream is acquired
+        currentStream.getVideoTracks().forEach(function(track) {
+            track.onended = function() {
+                console.warn('[VG] Camera track ended unexpectedly.');
+                stopVgRecordingIfActive();
+                _showCameraLost();
+            };
+        });
 
         // Show live overlay image on viewfinder during recording
         const overlayLive = document.getElementById('vg-overlay-live');
@@ -2491,6 +2551,19 @@ $(document).ready(function() {
             $('#vg-processing-overlay').fadeIn(200);
             const ext = mimeType.startsWith('video/mp4') ? 'mp4' : 'webm';
             const blob = new Blob(_vgChunks, { type: mimeType });
+
+            // Guard against a silent encoder failure that produces an empty file.
+            // A real recording is always larger than a few KB; anything smaller
+            // means no data was captured and the file would be unplayable.
+            const VG_MIN_BLOB_BYTES = 10240; // 10 KB
+            if (blob.size < VG_MIN_BLOB_BYTES) {
+                $('#vg-processing-overlay').css('display', 'none');
+                _showVgRecordError(new Error(
+                    'No video data was captured (the encoder may have stalled). Please try again.'
+                ));
+                return;
+            }
+
             saveVgVideo(blob, ext);
         };
 
@@ -2540,6 +2613,18 @@ $(document).ready(function() {
         stopVgRecordingIfActive();
         if (err && err.message && err.message.startsWith('Camera is no longer available')) {
             _showCameraLost();
+        } else if (_stage === 'stream-acquire') {
+            // Camera or mic could not be opened — surface a clear error so the
+            // guest (or operator) knows what went wrong.
+            _showVgRecordError(new Error(
+                (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')
+                    ? 'Camera permission was denied. Please grant access in browser settings.'
+                    : (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError')
+                    ? 'Camera not found. Check the connection and try again.'
+                    : (err.name === 'NotReadableError' || err.name === 'TrackStartError')
+                    ? 'Camera is in use by another app. Close it and try again.'
+                    : (err.message || err.name || 'Could not open camera.')
+            ));
         } else if (_stage === 'recorder-setup' || _stage === 'recording') {
             _showVgRecordError(err);
         } else {
@@ -2549,6 +2634,42 @@ $(document).ready(function() {
     }
 
     $('#btn-vg-stop').on('click', function() {
+        const VG_MIN_DURATION_WARN_S = 3;
+        const elapsed = _vgRecordStartTime
+            ? Math.floor((Date.now() - _vgRecordStartTime) / 1000)
+            : 0;
+
+        if (elapsed > 0 && elapsed < VG_MIN_DURATION_WARN_S) {
+            // Recording is very short — ask the guest before discarding.
+            const ol = document.getElementById('vg-processing-overlay');
+            ol.innerHTML =
+                '<i class="fa-solid fa-clock" style="font-size:3rem;color:#fca5a5;margin-bottom:0.75rem;"></i>'
+                + '<h2 style="color:#fff;margin:0 0 0.5rem;">Short Message</h2>'
+                + '<p style="color:#9ca3af;font-size:0.95rem;max-width:300px;text-align:center;">'
+                + 'Your recording is only ' + elapsed + ' second' + (elapsed === 1 ? '' : 's') + ' long.'
+                + ' Would you like to keep recording?</p>'
+                + '<div style="display:flex;gap:1rem;margin-top:1.25rem;">'
+                + '<button id="btn-vg-short-keep" style="padding:0.8rem 1.5rem;background:#374151;color:#fff;'
+                + 'border:none;border-radius:999px;font-size:1rem;font-weight:700;cursor:pointer;">Keep Recording</button>'
+                + '<button id="btn-vg-short-stop" style="padding:0.8rem 1.5rem;background:#be185d;color:#fff;'
+                + 'border:none;border-radius:999px;font-size:1rem;font-weight:700;cursor:pointer;">Stop Anyway</button>'
+                + '</div>';
+            ol.style.display = 'flex';
+
+            var _resetOl = function() {
+                ol.style.display = 'none';
+                ol.innerHTML = '<div class="spinner"></div><h2>Saving video\u2026</h2>';
+            };
+            document.getElementById('btn-vg-short-keep').addEventListener('click', function() {
+                _resetOl();
+            }, { once: true });
+            document.getElementById('btn-vg-short-stop').addEventListener('click', function() {
+                _resetOl();
+                stopVgRecordingIfActive();
+            }, { once: true });
+            return;
+        }
+
         stopVgRecordingIfActive();
     });
 
