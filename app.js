@@ -1684,6 +1684,17 @@ $(document).ready(function() {
             _requestFullscreen();
             _setupSinkBeep(appConfig.vgSelectedSpeakerId);
             resetToWelcomeScreen();
+
+            // ── Camera-lost watchdog ───────────────────────────────────────
+            // If the video track ends unexpectedly (USB unplugged, OS revokes access),
+            // stop any active recording and surface the recovery overlay.
+            currentStream.getVideoTracks().forEach(function(track) {
+                track.onended = function() {
+                    console.warn('[VG] Camera track ended unexpectedly.');
+                    stopVgRecordingIfActive();
+                    _showCameraLost();
+                };
+            });
             
         } catch (err) {
             console.error("Camera error:", err);
@@ -2171,9 +2182,103 @@ $(document).ready(function() {
     let _vgMaxTimer = null;
     let _vgElapsed = 0;
 
-    let _vgFrameAnimId = null;    // rAF id for canvas compositing loop
-    let _vgSaving = false;        // guard: prevents saveVgVideo from running twice per session
+    let _vgFrameAnimId = null;      // rAF id for canvas compositing loop
+    let _vgCurrentSessionToken = 0; // incremented each attempt; stale onstop events check against this
+    let _vgRecordStartTime = 0;     // wall-clock ms at which .start() was called
     let _vgActivePromptText = null; // prompt from current/last recording, preserved for redo
+
+    // Mic monitor state (reset each recording)
+    let _vgMicAudioCtx = null;
+    let _vgMicAnalyserRaf = null;
+    let _vgMicSilenceStart = null;
+    const VG_MIC_SILENCE_THRESHOLD = 0.01; // RMS below this is treated as silence
+    const VG_MIC_SILENCE_GRACE_MS  = 3000; // ms of silence before badge shows muted
+
+    function _setMicBadge(state) {
+        // state: 'ok' | 'muted' | 'none'
+        const badge = document.getElementById('vg-mic-badge');
+        const icon  = document.getElementById('vg-mic-icon');
+        const label = document.getElementById('vg-mic-label');
+        if (!badge) return;
+        badge.style.display = 'flex';
+        badge.className = state === 'ok' ? 'mic-ok' : state === 'muted' ? 'mic-muted' : 'mic-none';
+        if (state === 'ok') {
+            icon.className  = 'fa-solid fa-microphone';
+            label.textContent = 'Mic';
+        } else if (state === 'muted') {
+            icon.className  = 'fa-solid fa-microphone-slash';
+            label.textContent = 'Muted';
+        } else {
+            icon.className  = 'fa-solid fa-microphone-slash';
+            label.textContent = 'No mic';
+        }
+    }
+
+    function _stopMicMonitor() {
+        if (_vgMicAnalyserRaf) { cancelAnimationFrame(_vgMicAnalyserRaf); _vgMicAnalyserRaf = null; }
+        if (_vgMicAudioCtx)    { try { _vgMicAudioCtx.close(); } catch(e) {} _vgMicAudioCtx = null; }
+        _vgMicSilenceStart = null;
+        const badge = document.getElementById('vg-mic-badge');
+        if (badge) badge.style.display = 'none';
+    }
+
+    function _startMicMonitor(recordStream) {
+        // ── 1. Track-level checks (readyState + muted) ───────────────────
+        const audioTracks = recordStream.getAudioTracks();
+        if (audioTracks.length === 0) {
+            _setMicBadge('none');
+            return; // no audio — nothing more to monitor
+        }
+        const track = audioTracks[0];
+        if (track.readyState !== 'live' || track.muted) {
+            _setMicBadge('muted');
+        } else {
+            _setMicBadge('ok');
+        }
+
+        // System-level mute events (browser fires these when hardware disconnects
+        // or the OS mutes the device on some platforms)
+        track.onmute   = function() { _setMicBadge('muted'); };
+        track.onunmute = function() {
+            // Give the analyser a beat to confirm signal is back before going green
+            _vgMicSilenceStart = null;
+            _setMicBadge('ok');
+        };
+
+        // ── 2. Silence detection via Web Audio API ────────────────────────
+        try {
+            _vgMicAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const source   = _vgMicAudioCtx.createMediaStreamSource(recordStream);
+            const analyser = _vgMicAudioCtx.createAnalyser();
+            analyser.fftSize = 512;
+            source.connect(analyser);
+            const buffer = new Float32Array(analyser.fftSize);
+
+            function checkLevel() {
+                if (!_vgMicAudioCtx) return; // monitor was stopped
+                analyser.getFloatTimeDomainData(buffer);
+                let sum = 0;
+                for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
+                const rms = Math.sqrt(sum / buffer.length);
+
+                if (rms < VG_MIC_SILENCE_THRESHOLD) {
+                    if (_vgMicSilenceStart === null) _vgMicSilenceStart = Date.now();
+                    if (Date.now() - _vgMicSilenceStart >= VG_MIC_SILENCE_GRACE_MS) {
+                        _setMicBadge('muted');
+                    }
+                } else {
+                    _vgMicSilenceStart = null;
+                    // Only flip back to OK if the track itself isn't hardware-muted
+                    if (!track.muted && track.readyState === 'live') _setMicBadge('ok');
+                }
+                _vgMicAnalyserRaf = requestAnimationFrame(checkLevel);
+            }
+            checkLevel();
+        } catch (e) {
+            // Web Audio not available — track-level badge is already set above
+            console.warn('[VG] Mic analyser unavailable:', e.message);
+        }
+    }
 
     function stopVgRecordingIfActive() {
         // Null out immediately so a second call (e.g. max-timer + user tap race)
@@ -2193,14 +2298,160 @@ $(document).ready(function() {
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
+        _stopMicMonitor();
+        _vgRecordStartTime = 0;
         const ol = document.getElementById('vg-overlay-live');
         if (ol) { ol.style.display = 'none'; }
     }
 
+    // ── VG Error-recovery helpers ─────────────────────────────────────────────
+
+    function _showCameraLost() {
+        const ol = document.getElementById('kiosk-camera-lost');
+        if (ol) ol.style.display = 'flex';
+    }
+    function _hideCameraLost() {
+        const ol = document.getElementById('kiosk-camera-lost');
+        if (ol) ol.style.display = 'none';
+        const statusEl = document.getElementById('camera-lost-status');
+        if (statusEl) statusEl.textContent = '';
+        const btn = document.getElementById('btn-camera-lost-reconnect');
+        if (btn) btn.disabled = false;
+    }
+    async function _tryReacquireCameraForVg() {
+        const btnReconnect = document.getElementById('btn-camera-lost-reconnect');
+        const statusEl     = document.getElementById('camera-lost-status');
+        if (btnReconnect) btnReconnect.disabled = true;
+        if (statusEl) statusEl.textContent = 'Reconnecting\u2026';
+        try {
+            if (currentStream) {
+                currentStream.getTracks().forEach(function(t) { try { t.stop(); } catch (_) {} });
+                currentStream = null;
+            }
+            const vgConstraints = {
+                width: { ideal: 1920, max: 1920 },
+                height: { ideal: 1080, max: 1080 },
+                frameRate: { ideal: 30, max: 30 }
+            };
+            if (appConfig.vgSelectedCameraId) {
+                vgConstraints.deviceId = { exact: appConfig.vgSelectedCameraId };
+            }
+            const videoStream = await navigator.mediaDevices.getUserMedia({ video: vgConstraints });
+            let audioTracks = [];
+            try {
+                const audioConstraint = appConfig.vgSelectedMicId
+                    ? { deviceId: { exact: appConfig.vgSelectedMicId } }
+                    : true;
+                const audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraint });
+                audioTracks = audioStream.getAudioTracks();
+            } catch (_audioErr) {
+                try {
+                    const fb = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    audioTracks = fb.getAudioTracks();
+                } catch (_) {}
+            }
+            currentStream = new MediaStream([...videoStream.getVideoTracks(), ...audioTracks]);
+            const vgFeedEl = document.getElementById('vg-camera-feed');
+            if (vgFeedEl) vgFeedEl.srcObject = currentStream;
+            // Re-attach track-ended watchdog on the fresh stream
+            currentStream.getVideoTracks().forEach(function(track) {
+                track.onended = function() {
+                    console.warn('[VG] Camera track ended unexpectedly (reconnected stream).');
+                    stopVgRecordingIfActive();
+                    _showCameraLost();
+                };
+            });
+            _hideCameraLost();
+            resetToWelcomeScreen();
+        } catch (err) {
+            if (statusEl) statusEl.textContent = 'Could not reconnect: ' + (err.message || err.name) + '. Check the cable and try again.';
+            if (btnReconnect) btnReconnect.disabled = false;
+        }
+    }
+
+    function _showVgRecordError(err) {
+        // Re-purpose the processing overlay to surface the error inline so the
+        // guest can tap OK and continue without getting stuck.
+        const ol = document.getElementById('vg-processing-overlay');
+        if (!ol) { resetToWelcomeScreen(); return; }
+        ol.innerHTML =
+            '<i class="fa-solid fa-triangle-exclamation" style="font-size:3rem;color:#fca5a5;margin-bottom:0.75rem;"></i>'
+            + '<h2 style="color:#fff;margin:0 0 0.5rem;">Recording Error</h2>'
+            + '<p style="color:#9ca3af;font-size:0.95rem;max-width:300px;text-align:center;">'
+            + ((err && (err.message || err.name)) || 'An unexpected error occurred.')
+            + '</p>'
+            + '<button id="btn-vg-record-error-ok" style="margin-top:1.25rem;padding:0.8rem 2.5rem;'
+            + 'background:#be185d;color:#fff;border:none;border-radius:999px;font-size:1rem;font-weight:700;cursor:pointer;">'
+            + 'OK</button>';
+        ol.style.display = 'flex';
+        document.getElementById('btn-vg-record-error-ok').addEventListener('click', function() {
+            ol.style.display = 'none';
+            ol.innerHTML = '<div class="spinner"></div><h2>Saving video\u2026</h2>';
+            resetToWelcomeScreen();
+        }, { once: true });
+    }
+
+    let _vgSaveErrBlob = null;
+    let _vgSaveErrExt  = '';
+
+    function _showVgSaveError(blob, ext, errMsg) {
+        _vgSaveErrBlob = blob;
+        _vgSaveErrExt  = ext;
+        const overlay = document.getElementById('vg-save-error-overlay');
+        if (!overlay) { console.error('[VG] Save error:', errMsg); return Promise.resolve(); }
+        const msgEl = document.getElementById('vg-save-error-msg');
+        if (msgEl) msgEl.textContent = errMsg || 'The recording could not be written to disk.';
+        overlay.style.display = 'flex';
+        return new Promise(function(resolve) {
+            document.getElementById('btn-vg-save-error-continue').addEventListener('click', function() {
+                overlay.style.display = 'none';
+                _vgSaveErrBlob = null;
+                resolve();
+            }, { once: true });
+        });
+    }
+
+    // Wire recovery-overlay buttons (DOM is ready — we're inside document.ready)
+    (function() {
+        var dlBtn = document.getElementById('btn-vg-save-error-download');
+        if (dlBtn) {
+            dlBtn.addEventListener('click', function() {
+                if (!_vgSaveErrBlob) return;
+                const url = URL.createObjectURL(_vgSaveErrBlob);
+                const a   = document.createElement('a');
+                a.href     = url;
+                a.download = 'recording_recovery.' + (_vgSaveErrExt || 'webm');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                setTimeout(function() { URL.revokeObjectURL(url); }, 8000);
+            });
+        }
+        var reconnectBtn = document.getElementById('btn-camera-lost-reconnect');
+        if (reconnectBtn) reconnectBtn.addEventListener('click', function() { _tryReacquireCameraForVg(); });
+        var exitBtn = document.getElementById('btn-camera-lost-exit');
+        if (exitBtn) {
+            exitBtn.addEventListener('click', function() {
+                _hideCameraLost();
+                if (currentStream) {
+                    currentStream.getTracks().forEach(function(t) { try { t.stop(); } catch (_) {} });
+                    currentStream = null;
+                }
+                _teardownSinkBeep();
+                _exitFullscreen();
+                document.getElementById('kiosk-mode').style.display = 'none';
+                document.getElementById('admin-dashboard').style.removeProperty('display');
+            });
+        }
+    })();
+
     const SPLASH_FADE_OUT_DURATION_MS = 400;  // must match CSS @keyframes splash-fade-out duration
 
     async function triggerVgSequence(opts = {}) {
+      const myToken = ++_vgCurrentSessionToken; // unique per attempt; stale onstop events are discarded
+      let _stage = 'init';
       try {
+        _stage = 'session-start';
         // Start a new guest session (skip on redo to preserve session folder and prompt)
         if (!opts.continueSession) startNewSession();
 
@@ -2310,10 +2561,20 @@ $(document).ready(function() {
             recordStream = combinedStream;
         }
 
+        // Verify the camera track is still live — the stream is opened once at kiosk
+        // launch, so it can go stale if the camera disconnects during the prompt or
+        // countdown phases.
+        _stage = 'liveness-check';
+        const _camTracks = currentStream ? currentStream.getVideoTracks() : [];
+        if (_camTracks.length === 0 || _camTracks[0].readyState !== 'live') {
+            throw new Error('Camera is no longer available (readyState: '
+                + (_camTracks[0] ? _camTracks[0].readyState : 'none') + ')');
+        }
+
         // Start recording
+        _stage = 'recorder-setup';
         _vgChunks = [];
         _vgElapsed = 0;
-        _vgSaving = false; // reset save guard for this new recording session (also guards against a stale true from a previous session)
         // Prefer mp4 (H.264+AAC) — widest compatibility for saved files.
         // Fall back to webm on browsers that don't support mp4 recording.
         const mimeType = MediaRecorder.isTypeSupported('video/mp4')
@@ -2345,11 +2606,16 @@ $(document).ready(function() {
             if (e.data && e.data.size > 0) _vgChunks.push(e.data);
         };
 
+        // Per-recording save guard — closure-scoped so a stale onstop from a previous
+        // recorder (e.g. triggered by redo) cannot save into the new session.
+        let _saved = false;
         _vgMediaRecorder.onstop = function() {
-            // Guard against onstop firing more than once (mobile browser quirk or
-            // double-stop race between the max-duration timer and the Stop button).
-            if (_vgSaving) return;
-            _vgSaving = true;
+            // Token check: if redo started a new triggerVgSequence since this recorder
+            // was created, discard (onstop fires asynchronously after .stop()).
+            if (myToken !== _vgCurrentSessionToken) return;
+            // Guard against onstop firing more than once (mobile browser quirk).
+            if (_saved) return;
+            _saved = true;
             clearInterval(_vgTimerInterval);
             clearTimeout(_vgMaxTimer);
             if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
@@ -2363,7 +2629,16 @@ $(document).ready(function() {
             saveVgVideo(blob, ext);
         };
 
+        // Bail out gracefully if the encoder signals an unrecoverable error.
+        _vgMediaRecorder.onerror = function(recErr) {
+            console.error('[VG] MediaRecorder error:', recErr.error || recErr);
+            stopVgRecordingIfActive();
+            _showVgRecordError(recErr.error || new Error('Encoder error'));
+        };
+
         _vgMediaRecorder.start(500); // collect chunks every 500ms
+        _startMicMonitor(recordStream); // begin mic activity + silence monitoring
+        _stage = 'recording';
         $('#vg-hud').show();
         $('#vg-controls').show();
         // Re-assert prompt sidebar visibility during recording (DOM overlay — not in the recorded stream)
@@ -2372,27 +2647,39 @@ $(document).ready(function() {
             if (_sEl) _sEl.style.display = 'flex';
         }
 
-        // Update HUD timer every second
+        // Update HUD timer — wall-clock anchored to avoid drift on backgrounded tabs.
+        _vgRecordStartTime = Date.now();
+        _playBeep(880, 0.08, 0.35); // recording-start cue (distinct from countdown beeps)
         _vgTimerInterval = setInterval(function() {
-            _vgElapsed++;
-            const mins = Math.floor(_vgElapsed / 60);
-            const secs = _vgElapsed % 60;
+            const elapsed = Math.floor((Date.now() - _vgRecordStartTime) / 1000);
+            const mins = Math.floor(elapsed / 60);
+            const secs = elapsed % 60;
             $('#vg-timer').text(mins + ':' + String(secs).padStart(2, '0'));
-            const left = appConfig.vgMaxDuration - _vgElapsed;
+            const left = appConfig.vgMaxDuration - elapsed;
             const mLeft = Math.floor(left / 60);
             const sLeft = left % 60;
             const leftTxt = mLeft > 0 ? mLeft + ':' + String(sLeft).padStart(2, '0') + ' left' : left + 's left';
             $('#vg-time-left').text(leftTxt).css('color', left <= 10 ? '#fca5a5' : '#fff');
-        }, 1000);
+        }, 500); // 500 ms tick for better wall-clock fidelity
 
-        // Auto-stop at max duration
+        // Auto-stop at max duration, wall-clock anchored to survive tab suspension.
+        const _maxMs = appConfig.vgMaxDuration * 1000;
         _vgMaxTimer = setTimeout(function() {
+            // Verify wall-clock elapsed to guard against premature fires on browsers
+            // that resume suspended timers early.
+            if (_vgRecordStartTime && (Date.now() - _vgRecordStartTime) < _maxMs - 500) return;
             stopVgRecordingIfActive();
-        }, appConfig.vgMaxDuration * 1000);
+        }, _maxMs);
       } catch (err) {
-        console.error('[VG] Fatal error in VG sequence:', err);
+        console.error('[VG] Fatal error in VG sequence [stage: ' + _stage + ']:', err);
         stopVgRecordingIfActive();
-        resetToWelcomeScreen();
+        if (err && err.message && err.message.startsWith('Camera is no longer available')) {
+            _showCameraLost();
+        } else if (_stage === 'recorder-setup' || _stage === 'recording') {
+            _showVgRecordError(err);
+        } else {
+            resetToWelcomeScreen();
+        }
       }
     }
 
@@ -2405,17 +2692,18 @@ $(document).ready(function() {
         const recorder = _vgMediaRecorder;
         _vgMediaRecorder = null;
         if (recorder && recorder.state !== 'inactive') {
-            recorder.onstop = null; // prevent the save handler from firing
+            recorder.onstop = null;         // prevent the save handler from firing
+            recorder.ondataavailable = null; // prevent stale chunks from leaking into the next session
             try { recorder.stop(); } catch(e) {}
         }
         clearInterval(_vgTimerInterval);
         clearTimeout(_vgMaxTimer);
         if (_vgFrameAnimId) { cancelAnimationFrame(_vgFrameAnimId); _vgFrameAnimId = null; }
+        _stopMicMonitor();
 
         // Reset recording state
         _vgChunks = [];
         _vgElapsed = 0;
-        _vgSaving = false;
 
         // Reset UI back to pre-recording state
         $('#vg-hud').hide();
@@ -2476,7 +2764,7 @@ $(document).ready(function() {
                     setTimeout(() => URL.revokeObjectURL(dlUrl), 5000);
                 }
             } catch (err) {
-                console.error('[VG] Save error:', err);
+                await _showVgSaveError(blob, ext, err.message || 'Could not write file: ' + err.name);
             }
         }
 
