@@ -53,7 +53,6 @@
                 <a href="#" class="nav-item" id="nav-vg-thankyou" data-target="panel-vg-thankyou"><span class="icon"><i class="fa-solid fa-champagne-glasses"></i></span> Thank You Screen</a>
                 <a href="#" class="nav-item" id="nav-vg-prompts" data-target="panel-vg-prompts"><span class="icon"><i class="fa-regular fa-comment-dots"></i></span> Pre-Recording Prompts</a>
                 <a href="#" class="nav-item" id="nav-disclaimer" data-target="panel-disclaimer"><span class="icon"><i class="fa-solid fa-file-lines"></i></span> Disclaimer</a>
-                <a href="#" class="nav-item" id="nav-stitch" data-target="panel-stitch"><span class="icon"><i class="fa-solid fa-clapperboard"></i></span> Stitch Videos</a>
                 <a href="#" class="nav-item" id="nav-live-viewer" data-target="panel-live-viewer"><span class="icon"><i class="fa-solid fa-video"></i></span> Live Gallery Viewer</a>
             </nav>
             
@@ -849,70 +848,6 @@
                 </div>
             </div>
 
-            <!-- PANEL: STITCH VIDEOS -->
-            <div id="panel-stitch" class="admin-panel" style="display: none;">
-                <div class="content-header flex-between">
-                    <h1><i class="fa-solid fa-clapperboard"></i> Stitch Videos</h1>
-                </div>
-
-                <div class="settings-section">
-                    <h3 class="section-title">Select Clips to Stitch</h3>
-                    <p style="color:#6b7280; font-size:0.9rem; margin-bottom:1rem;">
-                        Select two or more Video Guestbook recordings below. They will be joined in the order shown (most recent first) and saved as a single MP4 file with <strong>_Final</strong> appended to the filename.
-                    </p>
-
-                    <!-- Empty state -->
-                    <div id="stitch-empty" class="settings-card" style="text-align:center; padding:2rem; color:#9ca3af;">
-                        <p style="font-size:2rem; margin:0 0 0.5rem;"><i class="fa-solid fa-clapperboard"></i></p>
-                        <p style="margin:0; font-weight:600;">No recordings yet</p>
-                        <p style="margin:0.25rem 0 0; font-size:0.85rem;">Switch to Video Guestbook mode and record some clips first.</p>
-                    </div>
-
-                    <!-- Video selection grid -->
-                    <div id="stitch-grid" class="stitch-grid" style="display:none;"></div>
-
-                    <!-- Controls -->
-                    <div id="stitch-controls" style="display:none; margin-top:1.25rem; display:none;">
-                        <div style="display:flex; align-items:center; gap:1rem; flex-wrap:wrap;">
-                            <button id="btn-stitch-select-all" class="btn-outline"><i class="fa-solid fa-square-check"></i> Select All</button>
-                            <button id="btn-stitch-clear" class="btn-outline"><i class="fa-solid fa-xmark"></i> Clear Selection</button>
-                            <span id="stitch-selected-count" style="color:#6b7280; font-size:0.88rem;"></span>
-                        </div>
-                        <div style="margin-top:1rem;">
-                            <button id="btn-stitch-run" class="btn-primary" style="padding:0.85rem 2.5rem; font-size:1rem;" disabled>
-                                <i class="fa-solid fa-clapperboard"></i> Stitch Selected Clips
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Progress / status -->
-                <div id="stitch-progress-wrap" class="settings-card" style="display:none; margin-top:0;">
-                    <div style="display:flex; align-items:center; gap:1rem;">
-                        <div class="spinner" style="width:24px; height:24px; border-width:3px;"></div>
-                        <div style="flex:1;">
-                            <div style="font-weight:600; color:#374151;" id="stitch-status-text">Stitching clips…</div>
-                            <div style="margin-top:0.35rem; background:#f3f4f6; border-radius:999px; height:6px; overflow:hidden;">
-                                <div id="stitch-progress-bar" style="height:100%; width:0%; background:#be185d; border-radius:999px; transition:width 0.3s;"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Result -->
-                <div id="stitch-result" class="settings-card" style="display:none; border-color:#10b981; margin-top:0;">
-                    <div style="display:flex; align-items:center; gap:0.75rem;">
-                        <span style="font-size:1.5rem; color:#16a34a;"><i class="fa-solid fa-circle-check"></i></span>
-                        <div>
-                            <div style="font-weight:700; color:#065f46;">Stitch complete!</div>
-                            <div id="stitch-result-filename" style="font-size:0.82rem; color:#374151; margin-top:0.2rem;"></div>
-                        </div>
-                        <button id="btn-stitch-download" class="btn-outline" style="margin-left:auto;"><i class="fa-solid fa-download"></i> Download</button>
-                    </div>
-                </div>
-            </div>
-
-
             <!-- ========== LIVE VIEWER PANEL (admin) ========== -->
             <div id="panel-live-viewer" class="admin-panel" style="display:none;">
                 <div class="content-header">
@@ -1229,6 +1164,7 @@
             <div class="welcome-vg-panel" id="welcome-vg-panel" style="display:none;">
                 <div class="vg-panel-accent-bar"></div>
                 <div class="vg-panel-inner">
+                    <img src="Assets/gunita%20logo.png" alt="Gunita" class="brand-logo">
                     <h1 class="vg-panel-title" id="live-ws-title-vg"></h1>
                     <p class="vg-panel-subtitle" id="live-ws-subtitle-vg"></p>
                     <button id="btn-start-vg-session" class="vg-ok-btn">Leave a message</button>
@@ -1540,7 +1476,6 @@
 
     <script src="pb-constants.js"></script>
     <script src="pb-state.js"></script>
-    <script src="pb-stitch.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="app.js"></script>
 
