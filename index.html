@@ -1209,6 +1209,8 @@
         <div id="guest-welcome" class="welcome-overlay">
             <img id="ws-image-bg" class="ws-media-bg" style="display:none;" alt="">
             <video id="ws-video-bg" class="ws-media-bg" autoplay loop muted playsinline style="display:none;"></video>
+            <!-- Dark gradient scrim over the left/media area for depth and readability -->
+            <div class="ws-scrim"></div>
             <button id="btn-exit-kiosk" class="hidden-exit-btn">Exit Kiosk</button>
 
             <!-- Photo mode: centered layout -->
@@ -1225,12 +1227,15 @@
 
             <!-- VG mode: right side panel -->
             <div class="welcome-vg-panel" id="welcome-vg-panel" style="display:none;">
-                <h1 class="vg-panel-title" id="live-ws-title-vg"></h1>
-                <p class="vg-panel-subtitle" id="live-ws-subtitle-vg"></p>
-                <button id="btn-start-vg-session" class="vg-ok-btn">Leave a message</button>
-                <button id="btn-show-prompts-preview" class="prompts-preview-link" style="display:none;">
-                    What Q's will be asked?
-                </button>
+                <div class="vg-panel-accent-bar"></div>
+                <div class="vg-panel-inner">
+                    <h1 class="vg-panel-title" id="live-ws-title-vg"></h1>
+                    <p class="vg-panel-subtitle" id="live-ws-subtitle-vg"></p>
+                    <button id="btn-start-vg-session" class="vg-ok-btn">Leave a message</button>
+                    <button id="btn-show-prompts-preview" class="prompts-preview-link" style="display:none;">
+                        What Q's will be asked?
+                    </button>
+                </div>
             </div>
 
             <!-- Recent captures shortcut (bottom-left corner) -->
